@@ -82,9 +82,9 @@ def test(config):
 
 if __name__ == "__main__":
   init()
-  #generate("Debug")
+  generate("Debug")
   generate("Release")
-  #build("Debug")
+  build("Debug")
   build("Release")
-  #test("Debug")
+  test("Debug")
   test("Release")
