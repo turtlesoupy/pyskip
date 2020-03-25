@@ -3,7 +3,7 @@
 #include <catch2/catch.hpp>
 #include <optional>
 
-#include "skimpy/detail/utils.hpp"
+#include <skimpy/detail/utils.hpp>
 
 using namespace skimpy;
 
