@@ -9,21 +9,28 @@
 #include "errors.hpp"
 #include "utils.hpp"
 
-namespace skimpy {
+namespace skimpy::detail {
 
 // Utility class for storing sorted ranges associated with values.
 template <typename Pos, typename Val>
 struct RangeStore {
+  size_t size;
+  // std::unique_ptr<std::pair<Pos, Val>[]> ranges;
   std::vector<std::pair<Pos, Val>> ranges;
 
-  explicit RangeStore(std::vector<std::pair<Pos, Val>> ranges)
-      : ranges(std::move(ranges)) {}
+  // explicit RangeStore(size_t size, std::unique_ptr<std::pair<Pos, Val>>
+  // ranges)
+  //    : size(size), ranges(std::move(ranges)) {}
+  explicit RangeStore(size_t size, std::vector<std::pair<Pos, Val>> ranges)
+      : size(size), ranges(std::move(ranges)) {}
 
   auto find(const Pos& pos) {
-    CHECK_STATE(ranges.size() && ranges[0].first <= pos);
+    CHECK_STATE(size && ranges[0].first <= pos);
     auto iter = std::upper_bound(
         ranges.begin(),
         ranges.end(),
+        // ranges.get(),
+        // ranges.get() + size,
         pos,
         [](const Pos& pos, const std::pair<Pos, Val>& range) {
           return std::less<Pos>()(pos, range.first);
@@ -163,9 +170,29 @@ struct RangeMap {
 
 template <typename Pos, typename Val>
 inline RangeMap<Pos, Val> make_range_map(Pos size, Val fill) {
+  auto data = make_array_ptr({std::pair(0, fill)});
   auto store = std::make_shared<RangeStore<Pos, Val>>(
-      std::vector<std::pair<Pos, Val>>{std::pair(0, std::move(fill))});
+      1, std::vector<std::pair<Pos, Val>>{std::pair(0, std::move(fill))});
   return RangeMap<Pos, Val>(std::move(store), 0, std::move(size));
 }
 
-}  // namespace skimpy
+template <typename Val>
+inline RangeMap<size_t, Val> make_range_map(const std::vector<Val>& values) {
+  CHECK_ARGUMENT(!values.empty());
+
+  // Initialize the ranges store from the values vector.
+  using StoreVector = std::vector<std::pair<size_t, Val>>;
+  StoreVector ranges{std::pair(0, values[0])};
+  ranges.reserve(values.size());
+  for (int i = 1; i < values.size(); i += 1) {
+    if (values[i] != ranges.back().second) {
+      ranges.emplace_back(i, values[i]);
+    }
+  }
+
+  auto store = std::make_shared<RangeStore<size_t, Val>>(
+      values.size(), std::move(ranges));
+  return RangeMap<size_t, Val>(std::move(store), 0, values.size());
+}
+
+}  // namespace skimpy::detail

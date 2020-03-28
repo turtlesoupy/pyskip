@@ -3,11 +3,12 @@
 
 #include <fmt/format.h>
 #include <catch2/catch.hpp>
+#include <cmath>
 
 #include <skimpy/detail/core.hpp>
 
 TEST_CASE("Test range map scanning", "[range_map_scan]") {
-  auto rm = skimpy::make_range_map(9, 'a');
+  auto rm = skimpy::detail::make_range_map(9, 'a');
 
   {
     auto gen = rm.scan(0);
@@ -31,7 +32,7 @@ TEST_CASE("Test range map scanning", "[range_map_scan]") {
 }
 
 TEST_CASE("Test range map sets", "[range_map_sets]") {
-  auto rm = skimpy::make_range_map(9, 'a');
+  auto rm = skimpy::detail::make_range_map(9, 'a');
   rm.set(0, 'b');
   rm.set(3, 'b');
   rm.set(4, 'c');
@@ -91,7 +92,7 @@ TEST_CASE("Test range map sets", "[range_map_sets]") {
 }
 
 TEST_CASE("Test range map slices", "[range_map_slices]") {
-  auto rm = skimpy::make_range_map(5, 'a');
+  auto rm = skimpy::detail::make_range_map(5, 'a');
 
   rm.set(0, 'a');
   rm.set(1, 'b');
@@ -127,7 +128,7 @@ TEST_CASE("Test range map slices", "[range_map_slices]") {
 }
 
 TEST_CASE("Test range map assigns", "[range_map_assigns]") {
-  auto rm = skimpy::make_range_map(9, 0);
+  auto rm = skimpy::detail::make_range_map(9, 0);
 
   rm.slice(3, 7).assign(1);
 
@@ -173,19 +174,4 @@ TEST_CASE("Test range map assigns", "[range_map_assigns]") {
     REQUIRE(gen.next() == std::tuple(8, 9, 5));
     REQUIRE(gen.done());
   }
-}
-
-TEST_CASE("Benchmark range map assigns", "[range_map_benchmark]") {
-  auto n = 100;
-  auto rm = skimpy::make_range_map(n, 0);
-
-  BENCHMARK(fmt::format("Value assign [n={}]", n)) {
-    for (int i = 0; i < n; i += 1) {
-      rm.set(i, (i + 1) % 2);
-    }
-  };
-
-  BENCHMARK(fmt::format("Range assign [n={}]", n)) {
-    rm.slice(0, n - 1).assign(rm.slice(1, n));
-  };
 }
