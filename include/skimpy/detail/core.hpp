@@ -1,3 +1,4 @@
+/*
 #pragma once
 
 #include <algorithm>
@@ -196,3 +197,4 @@ inline RangeMap<size_t, Val> make_range_map(const std::vector<Val>& values) {
 }
 
 }  // namespace skimpy::detail
+*/
