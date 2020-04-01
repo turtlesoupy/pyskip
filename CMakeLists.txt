@@ -12,6 +12,8 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX512")
+
 #== BUILD TARGETS ==#
 
 # Add third-party dependencies.
@@ -22,6 +24,12 @@ add_library(skimpy INTERFACE)
 target_include_directories(skimpy INTERFACE "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(skimpy INTERFACE fmt::fmt)
 target_compile_features(skimpy INTERFACE cxx_std_17)
+
+# Build with OpenMP support if available.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(skimpy INTERFACE OpenMP::OpenMP_CXX)
+endif()
 
 # Add python extension targets.
 if(SKIMPY_ENABLE_PYTHON)

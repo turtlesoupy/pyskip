@@ -7,6 +7,7 @@
 
 using namespace skimpy::detail;
 
+/*
 TEST_CASE("Test generator pattern with no elements", "[generator_empty]") {
   auto gen = make_generator<int>([]() -> std::optional<int> { return {}; });
 
@@ -43,3 +44,4 @@ TEST_CASE("Test generator pattern with finite elements", "[generator_empty]") {
   REQUIRE_THROWS(gen.get());
   REQUIRE_THROWS(gen.next());
 }
+*/

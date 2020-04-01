@@ -1,9 +1,233 @@
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
 
+#include <algorithm>
 #include <catch2/catch.hpp>
 
 #include <skimpy/detail/utils.hpp>
+
+static void exec_plan_1(
+    int n,
+    std::unique_ptr<int[]>& ends_1,
+    std::unique_ptr<int[]>& vals_1,
+    std::unique_ptr<int[]>& ends_2,
+    std::unique_ptr<int[]>& vals_2,
+    std::unique_ptr<int[]>& ends_3,
+    std::unique_ptr<int[]>& vals_3) {
+  // TODO: Figure out how to handle the source sentinels. One option is to add
+  // a range to the end of every array that always loses (max_array_size + 1).
+
+  // Initialize source op 1.
+  auto s1_end_ptr = ends_1.get();
+  auto s1_val_ptr = vals_1.get();
+  auto s1_end = ends_1[0];
+  auto s1_val = vals_1[0];
+
+  // Initialize source op 2.
+  auto s2_end_ptr = ends_2.get();
+  auto s2_val_ptr = vals_2.get();
+  auto s2_end = ends_2[0];
+  auto s2_val = vals_2[0];
+
+  // Initialize binary op 1.
+  auto b1_val = 0;
+  auto b1_end = 0;
+
+  // Initialize binary op 1.
+  auto out_val = 0;
+  auto out_end = 0;
+  auto out_end_ptr = ends_3.get();
+  auto out_val_ptr = vals_3.get();
+
+  for (int i = 0; i < 2 * n - 1; i += 1) {
+    // Compute the output value and range.
+    b1_val = s1_val * s2_val;
+    if (s1_end <= s2_end) {
+      b1_end = s1_end;
+      s1_end = *s1_end_ptr++;
+      s1_val = *s1_val_ptr++;
+    } else {
+      b1_end = s2_end;
+      s2_end = *s2_end_ptr++;
+      s2_val = *s2_val_ptr++;
+    }
+
+    // Emit the result with compression.
+    if (i != 0 && b1_end == out_end) {
+      continue;
+    } else if (i != 0 && b1_val == out_val) {
+      out_end = b1_end;
+      *(out_end_ptr - 1) = out_end;
+    } else {
+      out_val = b1_val;
+      out_end = b1_end;
+      *out_end_ptr++ = out_end;
+      *out_val_ptr++ = out_val;
+    }
+  }
+}
+
+static void exec_plan_2(
+    int n,
+    std::unique_ptr<int[]>& ends_1,
+    std::unique_ptr<int[]>& vals_1,
+    std::unique_ptr<int[]>& ends_2,
+    std::unique_ptr<int[]>& vals_2,
+    std::unique_ptr<int[]>& ends_3,
+    std::unique_ptr<int[]>& vals_3) {
+  // TODO: Figure out how to handle the source sentinels. One option is to add
+  // a range to the end of every array that always loses (max_array_size + 1).
+
+  // Initialize source op 1.
+  auto s1_end_ptr = ends_1.get();
+  auto s1_val_ptr = vals_1.get();
+  auto s1_end = ends_1[0];
+  auto s1_val = vals_1[0];
+
+  // Initialize source op 2.
+  auto s2_end_ptr = ends_2.get();
+  auto s2_val_ptr = vals_2.get();
+  auto s2_end = ends_2[0];
+  auto s2_val = vals_2[0];
+
+  // Initialize binary op.
+  auto b1_val = 0;
+  auto b1_end = 0;
+
+  // Initialize output op.
+  auto out_val = 0;
+  auto out_end = 0;
+  auto out_end_ptr = ends_3.get();
+  auto out_val_ptr = vals_3.get();
+
+  // Special-case first past
+  out_end = std::min(s1_end, s2_end);
+  out_val = s1_val * s2_val;
+  if (s1_end == out_end) {
+    s1_end = *s1_end_ptr++;
+    s1_val = *s1_val_ptr++;
+  }
+  if (s2_end == out_end) {
+    s2_end = *s2_end_ptr++;
+    s2_val = *s2_val_ptr++;
+  }
+  *out_end_ptr++ = out_end;
+  *out_val_ptr++ = out_val;
+
+  for (int i = 0; i < 2 * n - 2; i += 1) {
+    // Evaluate the binary operation.
+    if (s1_end <= s2_end) {
+      b1_end = s1_end;
+      s1_end = *s1_end_ptr++;
+      s1_val = *s1_val_ptr++;
+    } else {
+      b1_end = s2_end;
+      s2_end = *s2_end_ptr++;
+      s2_val = *s2_val_ptr++;
+    }
+    b1_val = s1_val * s2_val;
+
+    // Emit the result with compression.
+    if (b1_end == out_end) {
+      continue;
+    } else if (b1_val == out_val) {
+      out_end = b1_end;
+      *(out_end_ptr - 1) = out_end;
+    } else {
+      out_end = b1_end;
+      out_val = b1_val;
+      *out_end_ptr++ = out_end;
+      *out_val_ptr++ = out_val;
+    }
+  }
+}
+
+__declspec(noalias) static void exec_plan_3(
+    int n,
+    int* s1_end_ptr,
+    int* s1_val_ptr,
+    int* s2_end_ptr,
+    int* s2_val_ptr,
+    int* out_end_ptr,
+    int* out_val_ptr) {
+  // Special-case first range.
+  auto out_end = std::min(*s1_end_ptr, *s2_end_ptr);
+  auto out_val = *s1_val_ptr * *s2_val_ptr;
+  if (*s1_end_ptr == out_end) {
+    ++s1_end_ptr;
+    ++s1_val_ptr;
+  }
+  if (*s2_end_ptr == out_end) {
+    ++s2_end_ptr;
+    ++s2_val_ptr;
+  }
+  *out_end_ptr++ = out_end;
+  *out_val_ptr++ = out_val;
+
+  // Merge in remaining ranges.
+  for (int i = 0; i < 2 * n - 2; i += 1) {
+    int s1_end = *s1_end_ptr;
+    int s2_end = *s2_end_ptr;
+    int b1_val = *s1_val_ptr * *s2_val_ptr;
+    if (s1_end <= s2_end) {
+      ++s1_end_ptr;
+      ++s1_val_ptr;
+      if (s1_end == out_end) {
+        continue;
+      } else if (b1_val != out_val) {
+        out_end = s1_end;
+        out_val = b1_val;
+        *out_end_ptr++ = out_end;
+        *out_val_ptr++ = out_val;
+      } else {
+        out_end = s1_end;
+        *(out_end_ptr - 1) = out_end;
+      }
+    } else {
+      ++s2_end_ptr;
+      ++s2_val_ptr;
+      if (s2_end == out_end) {
+        continue;
+      } else if (b1_val != out_val) {
+        out_end = s2_end;
+        out_val = b1_val;
+        *out_end_ptr++ = out_end;
+        *out_val_ptr++ = out_val;
+      } else {
+        out_end = s2_end;
+        *(out_end_ptr - 1) = out_end;
+      }
+    }
+  }
+}
+
+static void just_merge_1(
+    int n,
+    std::unique_ptr<int[]>& ends_1,
+    std::unique_ptr<int[]>& vals_1,
+    std::unique_ptr<int[]>& ends_2,
+    std::unique_ptr<int[]>& vals_2,
+    std::unique_ptr<int[]>& ends_3,
+    std::unique_ptr<int[]>& vals_3) {
+  auto ends_ptr_1 = ends_1.get();
+  auto ends_ptr_2 = ends_2.get();
+  auto ends_ptr_3 = ends_3.get();
+  for (int i = 0; i < 2 * n - 1; i += 1) {
+    if (*ends_ptr_1 <= *ends_ptr_2) {
+      *ends_ptr_3++ = *ends_ptr_1++;
+    } else {
+      *ends_ptr_3++ = *ends_ptr_2++;
+    }
+  }
+  /*
+  std::merge(
+      ends_1.get(),
+      ends_1.get() + n,
+      ends_2.get(),
+      ends_2.get() + n,
+      ends_3.get());
+      */
+}
 
 TEST_CASE("Benchmark range operations", "[range_ops_benchmark]") {
   constexpr auto n = 128 * 1024 * 1024;
@@ -14,7 +238,8 @@ TEST_CASE("Benchmark range operations", "[range_ops_benchmark]") {
     ends_1[0] = 1;
     vals_1[0] = 1;
     for (int i = 1; i < n - 1; i += 1) {
-      ends_1[i] = ends_1[i - 1] + 1 + (std::rand() % 3);
+      // ends_1[i] = ends_1[i - 1] + 1 + (std::rand() % 3);
+      ends_1[i] = ends_1[i - 1] + 2;
       vals_1[i] = 1;
     }
     ends_1[n - 1] = 4 * n + 4;
@@ -27,7 +252,8 @@ TEST_CASE("Benchmark range operations", "[range_ops_benchmark]") {
     ends_2[0] = 2;
     vals_2[0] = 0;
     for (int i = 1; i < n - 1; i += 1) {
-      ends_2[i] = ends_2[i - 1] + 1 + (std::rand() % 3);
+      // ends_2[i] = ends_2[i - 1] + 1 + (std::rand() % 3);
+      ends_2[i] = ends_2[i - 1] + 2;
       vals_2[i] = i;
     }
     ends_2[n - 1] = 4 * n + 4;
@@ -36,356 +262,40 @@ TEST_CASE("Benchmark range operations", "[range_ops_benchmark]") {
 
   std::unique_ptr<int[]> ends_3;
   std::unique_ptr<int[]> vals_3;
-  BENCHMARK("reset_ranges_v1") {
-    ends_3.reset(new int[2 * n]);
-    vals_3.reset(new int[2 * n]);
+  BENCHMARK("merge_ranges_1") {
+    ends_3.reset(new int[2 * n - 1]);
+    vals_3.reset(new int[2 * n - 1]);
+    exec_plan_1(n, ends_1, vals_1, ends_2, vals_2, ends_3, vals_3);
   };
 
-  BENCHMARK("merge_ranges_v1") {
-    [&](...) {
-      int* e_ptr_1 = ends_1.get();
-      int* v_ptr_1 = vals_1.get();
-      int* e_ptr_2 = ends_2.get();
-      int* v_ptr_2 = vals_2.get();
-      int* e_ptr_3 = ends_3.get();
-      int* v_ptr_3 = vals_3.get();
-
-      int prev_value = 0;
-
-      // Special-case first iteration.
-      *e_ptr_3++ = std::min(*e_ptr_1, *e_ptr_2);
-      *v_ptr_3++ = (*v_ptr_1) * (*v_ptr_2);
-      prev_value = *(v_ptr_3 - 1);
-      if (*e_ptr_1 <= *e_ptr_2) {
-        ++e_ptr_1;
-        ++v_ptr_1;
-      } else {
-        ++e_ptr_2;
-        ++v_ptr_2;
-      }
-
-      // Merge in remaining ranges of output.
-      for (int i = 0; i < 2 * n - 2; i += 1) {
-        int end_1 = *e_ptr_1;
-        int end_2 = *e_ptr_2;
-        int val_3 = (*v_ptr_1) * (*v_ptr_2);
-        if (end_1 <= end_2) {
-          ++e_ptr_1;
-          ++v_ptr_1;
-          if (val_3 != prev_value) {
-            *e_ptr_3++ = end_1;
-            *v_ptr_3++ = val_3;
-            prev_value = val_3;
-          } else {
-            *(e_ptr_3 - 1) = end_1;
-          }
-        } else {
-          ++e_ptr_2;
-          ++v_ptr_2;
-          if (val_3 != prev_value) {
-            *e_ptr_3++ = end_2;
-            *v_ptr_3++ = val_3;
-            prev_value = val_3;
-          } else {
-            *(e_ptr_3 - 1) = end_2;
-          }
-        }
-      }
-    }();
+  BENCHMARK("merge_ranges_2") {
+    ends_3.reset(new int[2 * n - 1]);
+    vals_3.reset(new int[2 * n - 1]);
+    exec_plan_2(n, ends_1, vals_1, ends_2, vals_2, ends_3, vals_3);
   };
 
-  std::unique_ptr<int[]> ends_4;
-  std::unique_ptr<int[]> vals_4;
-  BENCHMARK("reset_ranges_v2") {
-    ends_4.reset(new int[2 * n]);
-    vals_4.reset(new int[2 * n]);
+  BENCHMARK("merge_ranges_3") {
+    ends_3.reset(new int[2 * n - 1]);
+    vals_3.reset(new int[2 * n - 1]);
+    exec_plan_3(
+        n,
+        ends_1.get(),
+        vals_1.get(),
+        ends_2.get(),
+        vals_2.get(),
+        ends_3.get(),
+        vals_3.get());
   };
 
-  BENCHMARK("merge_ranges_v2") {
-    auto gen_1 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [e_ptr = ends_1.get(), v_ptr = vals_1.get()]() mutable {
-          return std::pair(*e_ptr++, *v_ptr++);
-        });
-
-    auto gen_2 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [e_ptr = ends_2.get(), v_ptr = vals_2.get()]() mutable {
-          return std::pair(*e_ptr++, *v_ptr++);
-        });
-
-    auto gen_3 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [gen_1 = std::move(gen_1), gen_2 = std::move(gen_2)]() mutable {
-          auto end_1 = gen_1.get().first;
-          auto val_1 = gen_1.get().second;
-
-          auto end_2 = gen_2.get().first;
-          auto val_2 = gen_2.get().second;
-
-          auto end_3 = std::min(end_1, end_2);
-          auto val_3 = val_1 * val_2;
-
-          if (end_1 == end_3) {
-            gen_1.next();
-          } else {
-            gen_2.next();
-          }
-
-          return std::pair(end_3, val_3);
-        });
-
-    auto prev_value = 0;
-    auto e_ptr_3 = ends_4.get();
-    auto v_ptr_3 = vals_4.get();
-    for (int i = 0; i < 2 * n - 1; i += 1) {
-      auto end_3 = gen_3.get().first;
-      auto val_3 = gen_3.get().second;
-
-      if (i == 0 || val_3 != prev_value) {
-        *e_ptr_3++ = end_3;
-        *v_ptr_3++ = val_3;
-        prev_value = val_3;
-      } else {
-        *(e_ptr_3 - 1) = end_3;
-      }
-
-      gen_3.next();
-    }
+  BENCHMARK("just_merge_1") {
+    ends_3.reset(new int[2 * n - 1]);
+    vals_3.reset(new int[2 * n - 1]);
+    just_merge_1(n, ends_1, vals_1, ends_2, vals_2, ends_3, vals_3);
   };
 
-  BENCHMARK("array_product_v1") {
-    std::unique_ptr<int[]> vals_3(new int[n]);
-    auto v_ptr_1 = vals_1.get();
-    auto v_ptr_2 = vals_2.get();
-    auto v_ptr_3 = vals_3.get();
-    for (int i = 0; i < n; i += 1) {
-      *v_ptr_3++ = (*v_ptr_1++) * (*v_ptr_2++);
-    }
-  };
-
-  BENCHMARK("array_product_v2") {
-    std::unique_ptr<int[]> vals_3(new int[n]);
-    for (int i = 0; i < n; i += 1) {
-      vals_3[i] = vals_1[i] * vals_2[i];
-    }
-  };
-
-  // Print samples of output.
-  auto print_range = [](auto& ends, auto& vals) {
-    std::cout << "range: ";
-    for (int i = 0; i < 10; i += 1) {
-      std::cout << ends[i] << "," << vals[i] << "; ";
-    }
-    std::cout << std::endl;
-  };
-  std::cout << std::endl;
-  print_range(ends_1, vals_1);
-  print_range(ends_2, vals_2);
-  print_range(ends_3, vals_3);
-  print_range(ends_4, vals_4);
-
-  // Test equality
-  for (int i = 0; i < 2 * n - 1; i += 1) {
-    REQUIRE(ends_3[i] == ends_4[i]);
+  std::cout << "\nR: ";
+  for (int i = 0; i < 10; i += 1) {
+    std::cout << ends_3[i] << "," << vals_3[i] << "; ";
   }
-  std::cout << "ends_3 == ends_4 at all indices." << std::endl;
-}
-
-TEST_CASE("Benchmark range operations using STL", "[range_ops_stl_benchmark]") {
-  constexpr auto n = 128 * 1024 * 1024;
-
-  std::vector<std::pair<int, int>> ranges_1;
-  BENCHMARK("init_ranges_1") {
-    ranges_1.reserve(n);
-    ranges_1.emplace_back(1, 1);
-    for (int i = 1; i < n - 1; i += 1) {
-      ranges_1.emplace_back(ranges_1.back().first + 1 + (std::rand() % 3), 1);
-    }
-    ranges_1.emplace_back(4 * n + 4, 1);
-  };
-
-  std::vector<std::pair<int, int>> ranges_2;
-  BENCHMARK("init_ranges_2") {
-    ranges_2.reserve(n);
-    ranges_2.emplace_back(2, 0);
-    for (int i = 1; i < n - 1; i += 1) {
-      ranges_2.emplace_back(ranges_2.back().first + 1 + (std::rand() % 3), i);
-    }
-    ranges_2.emplace_back(4 * n + 4, n - 1);
-  };
-
-  std::vector<std::pair<int, int>> ranges_3;
-  BENCHMARK("merge_ranges_v1") {
-    auto gen_3 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [iter_1 = ranges_1.begin(), iter_2 = ranges_2.begin()]() mutable {
-          auto end_1 = iter_1->first;
-          auto val_1 = iter_1->second;
-
-          auto end_2 = iter_2->first;
-          auto val_2 = iter_2->second;
-
-          auto end_3 = std::min(end_1, end_2);
-          auto val_3 = val_1 * val_2;
-
-          if (end_1 == end_3) {
-            ++iter_1;
-          } else {
-            ++iter_2;
-          }
-
-          return std::pair(end_3, val_3);
-        });
-
-    ranges_3.reserve(2 * n - 1);
-
-    int prev_value = 0;
-    for (int i = 0; i < 2 * n - 1; i += 1) {
-      int end_3 = gen_3.get().first;
-      int val_3 = gen_3.get().second;
-
-      if (i == 0 || val_3 != prev_value) {
-        ranges_3.emplace_back(end_3, val_3);
-        prev_value = val_3;
-      } else {
-        ranges_3.back().first = end_3;
-      }
-
-      gen_3.next();
-    }
-  };
-
-  auto print_range = [](auto& range) {
-    std::cout << "range: ";
-    for (int i = 0; i < 10; i += 1) {
-      std::cout << range[i].first << "," << range[i].second << "; ";
-    }
-    std::cout << std::endl;
-  };
-
   std::cout << std::endl;
-  print_range(ranges_1);
-  print_range(ranges_2);
-  print_range(ranges_3);
-}
-
-TEST_CASE("Benchmark range ops on pairs", "[range_ops_pairs_benchmark]") {
-  constexpr auto n = 128 * 1024 * 1024;
-
-  std::unique_ptr<std::pair<int, int>[]> ranges_1;
-  BENCHMARK("init_ranges_1") {
-    ranges_1.reset(new std::pair<int, int>[n]);
-    ranges_1[0] = std::pair(1, 1);
-    for (int i = 1; i < n - 1; i += 1) {
-      ranges_1[i] = std::pair(ranges_1[i - 1].first + 1 + (std::rand() % 3), 1);
-    }
-    ranges_1[n - 1] = std::pair(4 * n + 4, 1);
-  };
-
-  std::unique_ptr<std::pair<int, int>[]> ranges_2;
-  BENCHMARK("init_ranges_2") {
-    ranges_2.reset(new std::pair<int, int>[n]);
-    ranges_2[0] = std::pair(2, 0);
-    for (int i = 1; i < n - 1; i += 1) {
-      ranges_2[i] = std::pair(ranges_2[i - 1].first + 1 + (std::rand() % 3), i);
-    }
-    ranges_2[n - 1] = std::pair(4 * n + 4, n - 1);
-  };
-
-  std::unique_ptr<std::pair<int, int>[]> ranges_3;
-  BENCHMARK("merge_ranges_v1") {
-    ranges_3.reset(new std::pair<int, int>[2 * n - 1]);
-
-    auto gen_3 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [iter_1 = ranges_1.get(), iter_2 = ranges_2.get()]() mutable {
-          auto end_1 = iter_1->first;
-          auto val_1 = iter_1->second;
-
-          auto end_2 = iter_2->first;
-          auto val_2 = iter_2->second;
-
-          auto end_3 = std::min(end_1, end_2);
-          auto val_3 = val_1 * val_2;
-
-          if (end_1 == end_3) {
-            ++iter_1;
-          } else {
-            ++iter_2;
-          }
-
-          return std::pair(end_3, val_3);
-        });
-
-    auto prev_value = 0;
-    auto r_ptr_3 = ranges_3.get();
-    for (int i = 0; i < 2 * n - 1; i += 1) {
-      auto end_3 = gen_3.get().first;
-      auto val_3 = gen_3.get().second;
-
-      if (i == 0 || val_3 != prev_value) {
-        *r_ptr_3++ = std::pair(end_3, val_3);
-        prev_value = val_3;
-      } else {
-        (r_ptr_3 - 1)->first = end_3;
-      }
-
-      gen_3.next();
-    }
-  };
-
-  BENCHMARK("merge_ranges_v2") {
-    ranges_3.reset(new std::pair<int, int>[2 * n - 1]);
-
-    auto gen_1 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [r_ptr_1 = ranges_1.get()]() mutable { return *r_ptr_1++; });
-
-    auto gen_2 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [r_ptr_2 = ranges_2.get()]() mutable { return *r_ptr_2++; });
-
-    auto gen_3 = skimpy::detail::make_generator<std::pair<int, int>>(
-        [gen_1 = std::move(gen_1), gen_2 = std::move(gen_2)]() mutable {
-          auto end_1 = gen_1.get().first;
-          auto val_1 = gen_1.get().second;
-
-          auto end_2 = gen_2.get().first;
-          auto val_2 = gen_2.get().second;
-
-          auto end_3 = std::min(end_1, end_2);
-          auto val_3 = val_1 * val_2;
-
-          if (end_1 == end_3) {
-            gen_1.next();
-          } else {
-            gen_2.next();
-          }
-
-          return std::pair(end_3, val_3);
-        });
-
-    auto prev_value = 0;
-    auto r_ptr_3 = ranges_3.get();
-    for (int i = 0; i < 2 * n - 1; i += 1) {
-      auto end_3 = gen_3.get().first;
-      auto val_3 = gen_3.get().second;
-
-      if (i == 0 || val_3 != prev_value) {
-        *r_ptr_3++ = std::pair(end_3, val_3);
-        prev_value = val_3;
-      } else {
-        (r_ptr_3 - 1)->first = end_3;
-      }
-
-      gen_3.next();
-    }
-  };
-
-  auto print_range = [](auto& range) {
-    std::cout << "range: ";
-    for (int i = 0; i < 10; i += 1) {
-      std::cout << range[i].first << "," << range[i].second << "; ";
-    }
-    std::cout << std::endl;
-  };
-
-  std::cout << std::endl;
-  print_range(ranges_1);
-  print_range(ranges_2);
-  print_range(ranges_3);
 }

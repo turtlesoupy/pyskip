@@ -9,4 +9,6 @@ function(SKIMPY_BENCHMARK TEST_NAME TEST_FILE)
 endfunction()
 
 # Add each benchmark target and register it for ctest.
+skimpy_benchmark(merge_bench merge_bench.cpp)
+skimpy_benchmark(optree_bench optree_bench.cpp)
 skimpy_benchmark(ranges_bench ranges_bench.cpp)

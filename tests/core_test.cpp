@@ -7,6 +7,8 @@
 
 #include <skimpy/detail/core.hpp>
 
+/*
+
 TEST_CASE("Test range map scanning", "[range_map_scan]") {
   auto rm = skimpy::detail::make_range_map(9, 'a');
 
@@ -175,3 +177,5 @@ TEST_CASE("Test range map assigns", "[range_map_assigns]") {
     REQUIRE(gen.done());
   }
 }
+
+*/

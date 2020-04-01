@@ -6,6 +6,7 @@
 
 namespace skimpy::detail {
 
+// Provides forward iteration over an unbounded sequence of elements.
 template <typename Val, typename Fn>
 class Generator {
  public:
@@ -14,6 +15,9 @@ class Generator {
   }
   const Val& get() const {
     return val_;
+  }
+  bool done() const {
+    return false;
   }
   Val next() {
     auto ret = std::move(val_);
