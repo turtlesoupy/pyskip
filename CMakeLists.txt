@@ -12,7 +12,7 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX512")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 #== BUILD TARGETS ==#
 
