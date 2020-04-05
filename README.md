@@ -12,7 +12,7 @@ A space-optimized array implementation with vectorized operators.
 ```bash
 > python -m venv .venv/
 > source .venv/Scripts/activate
-> pip install -e requirements.txt
+> pip install -r requirements.txt
 > python tools/build.py
 ```
 
