@@ -2,6 +2,7 @@
 #pragma once
 
 #include <fmt/format.h>
+
 #include <algorithm>
 #include <iterator>
 #include <memory>
@@ -51,22 +52,6 @@ class Store {
   int size_;
   std::unique_ptr<int[]> ends_;
   std::unique_ptr<Val[]> vals_;
-};
-
-// Provides sequential access to a sequence of values across one or more stores.
-template <typename Val>
-struct Chain {
- public:
-  int start() const {}
-  int end() const {}
-  const Val& value() const {}
-  auto advance() {}
-
- private:
-  std::shared_ptr<Chain<Val>> next_;
-  std::shared_ptr<Store<Val>> store_;
-  int start_;
-  int end_;
 };
 
 template <typename Val>

@@ -6,6 +6,21 @@
 
 namespace skimpy::detail {
 
+inline constexpr uint32_t round_up_to_power_of_two(uint32_t x) {
+  // NOTE: Zero is mapped to zero.
+  x--;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  return ++x;
+}
+
+inline constexpr uint32_t lg2(uint32_t x) {
+  return x < 2 ? 0 : 1 + lg2(x >> 1);
+}
+
 // Provides forward iteration over an unbounded sequence of elements.
 template <typename Val, typename Fn>
 class Generator {
