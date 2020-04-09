@@ -1,200 +1,630 @@
-/*
-#pragma once
-
 #include <algorithm>
-#include <iterator>
-#include <memory>
-#include <utility>
-#include <vector>
+#include <new>
+#include <thread>
 
-#include "errors.hpp"
-#include "utils.hpp"
+#include "skimpy/detail/errors.hpp"
+#include "skimpy/detail/utils.hpp"
 
 namespace skimpy::detail {
 
-// Utility class for storing sorted ranges associated with values.
-template <typename Pos, typename Val>
-struct RangeStore {
-  size_t size;
-  // std::unique_ptr<std::pair<Pos, Val>[]> ranges;
-  std::vector<std::pair<Pos, Val>> ranges;
+using Pos = int32_t;
+using Val = int;
 
-  // explicit RangeStore(size_t size, std::unique_ptr<std::pair<Pos, Val>>
-  // ranges)
-  //    : size(size), ranges(std::move(ranges)) {}
-  explicit RangeStore(size_t size, std::vector<std::pair<Pos, Val>> ranges)
-      : size(size), ranges(std::move(ranges)) {}
+struct Store {
+  int size;
+  std::unique_ptr<Pos[]> ends;
+  std::unique_ptr<Val[]> vals;
 
-  auto find(const Pos& pos) {
-    CHECK_STATE(size && ranges[0].first <= pos);
-    auto iter = std::upper_bound(
-        ranges.begin(),
-        ranges.end(),
-        // ranges.get(),
-        // ranges.get() + size,
-        pos,
-        [](const Pos& pos, const std::pair<Pos, Val>& range) {
-          return std::less<Pos>()(pos, range.first);
-        });
-    return --iter;
+  Store(int n) : size(n), ends(new Pos[n]), vals(new Val[n]) {}
+
+  void reset(int n) {
+    size = n;
+    ends.reset(new Pos[n]);
+    vals.reset(new Val[n]);
   }
 
-  auto index(const Pos& pos) {
-    return std::distance(ranges.begin(), find(pos));
+  int index(Pos pos) {
+    return std::upper_bound(&ends[0], &ends[size], pos) - &ends[0];
   }
 };
 
-// Utility class for operating over range stores.
-template <typename Pos, typename Val>
-struct RangeMap {
-  using Store = RangeStore<Pos, Val>;
+struct EvalSource {
+  std::shared_ptr<Store> store;
+  Pos start;
+  Pos stop;
+  Pos stride;
 
-  RangeMap(std::shared_ptr<Store> store, Pos start, Pos stop)
-      : store_(std::move(store)),
-        start_(std::move(start)),
-        stop_(std::move(stop)) {
-    CHECK_ARGUMENT(0 <= start_ && start_ <= stop_);
-  }
-
-  Pos size() const {
-    return stop_ - start_;
-  }
-
-  auto scan(const Pos& pos) const {
-    using Ret = std::tuple<Pos, Pos, Val>;
-    auto iter = store_->find(store_pos(pos));
-    return make_generator<Ret>(
-        [this, iter = iter]() mutable -> std::optional<Ret> {
-          if (iter == store_->ranges.end() || iter->first >= stop_) {
-            return {};
-          }
-          auto curr = iter++;
-          auto next = iter;
-          auto start = std::max<Pos>(start_, curr->first);
-          if (next != store_->ranges.end()) {
-            auto stop = std::min<Pos>(next->first, stop_);
-            return std::tuple(start - start_, stop - start_, curr->second);
-          } else {
-            return std::tuple(start - start_, stop_ - start_, curr->second);
-          }
-        });
-  }
-
-  Val get(const Pos& pos) const {
-    return store_->find(store_pos(pos))->second;
-  }
-
-  void set(const Pos& pos, Val val) {
-    slice(pos, pos + 1).assign(std::move(val));
-  }
-
-  void assign(Val val) {
-    assign(make_range_map(stop_ - start_, std::move(val)));
-  }
-
-  void assign(const RangeMap<Pos, Val>& other) {
-    CHECK_ARGUMENT(other.size() == size());
-    if (size() == 0) {
-      return;
-    }
-
-    // We will be copying values out from the old ranges vector.
-    auto& ranges = store_->ranges;
-
-    // Allocate space for the new ranges vector.
-    std::vector<std::pair<Pos, Val>> buffer;
-    buffer.reserve(2 + ranges.size() - range_count() + other.range_count());
-
-    // Copy over everything from the store before the start position.
-    auto iter = store_->find(start_);
-    std::copy(ranges.begin(), iter, std::back_inserter(buffer));
-
-    // Also copy over the start interval if its precedes the start position.
-    if (iter->first < start_) {
-      buffer.emplace_back(*iter);
-    }
-
-    // Set a new interval at the start of the other range (if required).
-    auto other_iter = other.store_->find(other.start_);
-    if (buffer.empty() || buffer.back().second != other_iter->second) {
-      buffer.emplace_back(start_, other_iter->second);
-    }
-
-    // Copy over all of the others ranges strictly inside this range map.
-    // NOTE: We need to adjust the starting position of these intervals.
-    auto other_end = ++other.store_->find(other.stop_ - 1);
-    for (++other_iter; other_iter != other_end; ++other_iter) {
-      auto shift = start_ - other.start_;
-      buffer.emplace_back(other_iter->first + shift, other_iter->second);
-    }
-
-    // Conditionally insert a new range at the start of this maps end.
-    iter = store_->find(stop_);
-    if (iter != ranges.end() && iter->second != buffer.back().second) {
-      buffer.emplace_back(stop_, iter->second);
-    }
-
-    // Copy over the last sequence of ranges.
-    if (iter != ranges.end()) {
-      std::move(++iter, ranges.end(), std::back_inserter(buffer));
-    }
-
-    // Swap in the new set of ranges into our store.
-    store_->ranges.swap(buffer);
-  }
-
-  RangeMap<Pos, Val> slice(const Pos& start, const Pos& stop) const {
-    auto offset = store_pos(start);
-    return RangeMap<Pos, Val>(store_, offset, offset - start + stop);
-  }
-
-  RangeMap<Pos, Val> clone() const {
-    auto ret = make_range_map(stop_ - start_, 0);
-    ret.assign(*this);
-    return ret;
-  }
-
- private:
-  Pos store_pos(const Pos& pos) const {
-    CHECK_ARGUMENT(0 <= pos && pos < stop_ - start_);
-    return start_ + pos;
-  }
-
-  size_t range_count() const {
-    return store_->index(stop_) - store_->index(start_);
-  }
-
-  std::shared_ptr<Store> store_;
-  Pos start_;
-  Pos stop_;
+  EvalSource(std::shared_ptr<Store> store, Pos start, Pos stop, Pos stride)
+      : store(std::move(store)), start(start), stop(stop), stride(stride) {}
 };
 
-template <typename Pos, typename Val>
-inline RangeMap<Pos, Val> make_range_map(Pos size, Val fill) {
-  auto data = make_array_ptr({std::pair(0, fill)});
-  auto store = std::make_shared<RangeStore<Pos, Val>>(
-      1, std::vector<std::pair<Pos, Val>>{std::pair(0, std::move(fill))});
-  return RangeMap<Pos, Val>(std::move(store), 0, std::move(size));
+typedef int (*EvalFn)(int*);
+
+struct EvalStep {
+  int size;
+  Pos start;
+  Pos stop;
+  EvalFn eval_fn;
+  std::vector<EvalSource> sources;
+
+  EvalStep(int size, Pos start, Pos stop, EvalFn eval_fn)
+      : size(size), start(start), stop(stop), eval_fn(eval_fn) {}
+};
+
+struct EvalPlan {
+  std::vector<EvalStep> steps;
+};
+
+template <int k>
+auto eval_step_fixed(Pos* const ends, Val* const vals, const EvalStep& step) {
+  CHECK_ARGUMENT(step.sources.size() == k);
+
+  // Initialize slices.
+  Pos starts[k];
+  Pos strides[k];
+  for (auto i = 0; i < k; i += 1) {
+    starts[i] = step.sources[i].start;
+    strides[i] = step.sources[i].stride;
+  }
+
+  // Initialize iterators.
+  Pos* iter_ends[k];
+  Val* iter_vals[k];
+  for (auto i = 0; i < k; i += 1) {
+    const auto& source = step.sources[i];
+    const auto index = source.store->index(source.start);
+    iter_ends[i] = &source.store->ends[index];
+    iter_vals[i] = &source.store->vals[index];
+  }
+
+  // Initialize frontier.
+  Pos curr_ends[k];
+  Val curr_vals[k];
+  for (auto i = 0; i < k; i += 1) {
+    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_vals[i] = *iter_vals[i]++;
+  }
+
+  // Initialize source heap.
+  int heap[k];
+  std::iota(&heap[0], &heap[k], 0);
+  std::sort(&heap[0], &heap[k], [&](int i, int j) {
+    return curr_ends[i] < curr_ends[j];
+  });
+
+  auto ends_out = ends;
+  auto vals_out = vals;
+  auto eval_fn = step.eval_fn;
+  Pos prev_end = 0;
+  Val prev_val;
+
+  for (int count = 0; count < step.size - 1; count += 1) {
+    auto src = heap[0];
+    auto end = step.start + curr_ends[src];
+
+    // Emit the new marker but handle compression cases.
+    if (!prev_end || prev_end != end) {
+      auto val = eval_fn(curr_vals);
+      if (prev_end && prev_val == val) {
+        --vals_out;
+        --ends_out;
+      }
+      *vals_out++ = val;
+      *ends_out++ = end;
+      prev_end = end;
+      prev_val = val;
+    }
+
+    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    auto new_val = *iter_vals[src]++;
+    curr_ends[src] = new_end;
+    curr_vals[src] = new_val;
+
+    // Update the heap.
+    heap[0] = src;
+    for (int i = 0; i < k - 1; i += 1) {
+      auto next_src = heap[i + 1];
+      if (new_end > curr_ends[next_src]) {
+        heap[i + 1] = heap[i];
+        heap[i] = next_src;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Emit the final end marker at the stop position.
+  auto val = eval_fn(curr_vals);
+  if (prev_end && prev_val == val) {
+    --vals_out;
+    --ends_out;
+  }
+  *vals_out++ = val;
+  *ends_out++ = step.stop;
+
+  return ends_out - ends;
 }
 
-template <typename Val>
-inline RangeMap<size_t, Val> make_range_map(const std::vector<Val>& values) {
-  CHECK_ARGUMENT(!values.empty());
+template <int buffer_size>
+auto eval_step_stack(Pos* const ends, Val* const vals, const EvalStep& step) {
+  const int k = step.sources.size();
+  CHECK_ARGUMENT(k <= buffer_size);
 
-  // Initialize the ranges store from the values vector.
-  using StoreVector = std::vector<std::pair<size_t, Val>>;
-  StoreVector ranges{std::pair(0, values[0])};
-  ranges.reserve(values.size());
-  for (int i = 1; i < values.size(); i += 1) {
-    if (values[i] != ranges.back().second) {
-      ranges.emplace_back(i, values[i]);
+  // Initialize slices.
+  Pos starts[buffer_size];
+  Pos strides[buffer_size];
+  for (auto i = 0; i < k; i += 1) {
+    starts[i] = step.sources[i].start;
+    strides[i] = step.sources[i].stride;
+  }
+
+  // Initialize iterators.
+  Pos* iter_ends[buffer_size];
+  Val* iter_vals[buffer_size];
+  for (auto i = 0; i < k; i += 1) {
+    const auto& source = step.sources[i];
+    const auto index = source.store->index(source.start);
+    iter_ends[i] = &source.store->ends[index];
+    iter_vals[i] = &source.store->vals[index];
+  }
+
+  // Initialize frontier.
+  Pos curr_ends[buffer_size];
+  Val curr_vals[buffer_size];
+  for (auto i = 0; i < k; i += 1) {
+    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_vals[i] = *iter_vals[i]++;
+  }
+
+  // Initialize tournament tree.
+  uint64_t tree[4 * buffer_size];
+  const auto u = round_up_to_power_of_two(k);
+  for (int src = 0; src < u; src += 1) {
+    if (src < k) {
+      tree[u + src - 1] = (static_cast<uint64_t>(curr_ends[src]) << 32) | src;
+    } else {
+      tree[u + src - 1] = std::numeric_limits<int64_t>::max();
+    }
+  }
+  for (int h = u >> 1; h > 0; h >>= 1) {
+    for (int i = h; i < h << 1; i += 1) {
+      auto l = (i << 1) - 1;
+      auto r = (i << 1);
+      tree[i - 1] = tree[l] <= tree[r] ? tree[l] : tree[r];
     }
   }
 
-  auto store = std::make_shared<RangeStore<size_t, Val>>(
-      values.size(), std::move(ranges));
-  return RangeMap<size_t, Val>(std::move(store), 0, values.size());
+  // Initialize the hash table.
+  struct HashNode {
+    int key;
+    int size;
+    int vals[buffer_size];
+  };
+  constexpr int hash_size = round_up_to_power_of_two(16 * buffer_size);
+  CHECK_ARGUMENT(is_power_of_two(hash_size));
+  std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
+  for (int i = 0; i < hash_size; i += 1) {
+    hash[i].key = 0;
+  }
+
+  auto ends_out = ends;
+  auto vals_out = vals;
+  auto eval_fn = step.eval_fn;
+  Pos prev_end = 0;
+  Val prev_val;
+
+  for (int count = 0; count < step.size - 1; count += 1) {
+    auto src = tree[0] & 0xFFFFFFFF;
+    auto end = step.start + curr_ends[src];
+
+    // Emit the new marker but handle compression cases.
+    if (prev_end != end) {
+      auto val = eval_fn(curr_vals);
+      if (prev_end && prev_val == val) {
+        --ends_out;
+        --vals_out;
+      }
+      *ends_out++ = end;
+      *vals_out++ = val;
+      prev_end = end;
+      prev_val = val;
+    }
+
+    // Update all duplicate ends in the hash table as well.
+    auto out_end = curr_ends[src];
+    if (auto& slot = hash[out_end & (hash_size - 1)]; slot.key == out_end) {
+      for (int i = 0; i < slot.size; i += 1) {
+        auto hash_src = slot.vals[i];
+        curr_vals[hash_src] = *iter_vals[hash_src]++;
+        count += 1;
+      }
+      slot.key = 0;
+    }
+
+    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+
+    // Store duplicate ends in the hash table instead of the tournament tree.
+    while (step.start + new_end < step.stop) {
+      auto& slot = hash[new_end & (hash_size - 1)];
+      if (slot.key != new_end) {
+        if (slot.key == 0) {
+          slot.key = new_end;
+          slot.size = 0;
+        }
+        break;
+      }
+      slot.vals[slot.size++] = src;
+      new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    };
+
+    curr_ends[src] = new_end;
+    curr_vals[src] = *iter_vals[src]++;
+
+    // Update the tournament tree.
+    tree[u + src - 1] = (static_cast<uint64_t>(new_end) << 32) | src;
+    for (int i = (u + src) >> 1; i > 0; i >>= 1) {
+      auto l = (i << 1) - 1;
+      auto r = (i << 1);
+      if (tree[l] < tree[r]) {
+        tree[i - 1] = tree[l];
+      } else {
+        tree[i - 1] = tree[r];
+      }
+    }
+  }
+
+  // Emit the final end marker at the stop position.
+  auto val = eval_fn(curr_vals);
+  if (prev_end && prev_val == val) {
+    --vals_out;
+    --ends_out;
+  }
+  *vals_out++ = val;
+  *ends_out++ = step.stop;
+
+  return ends_out - ends;
+}
+
+auto eval_step_heap(Pos* const ends, Val* const vals, const EvalStep& step) {
+  const int k = step.sources.size();
+  constexpr auto kCacheLineSize = std::hardware_destructive_interference_size;
+
+  // Initialize slices.
+  std::unique_ptr<Pos[]> starts(new Pos[k, kCacheLineSize]);
+  std::unique_ptr<Pos[]> strides(new Pos[k, kCacheLineSize]);
+  for (auto i = 0; i < k; i += 1) {
+    starts[i] = step.sources[i].start;
+    strides[i] = step.sources[i].stride;
+  }
+
+  // Initialize iterators.
+  std::unique_ptr<Pos*[]> iter_ends(new Pos*[k, kCacheLineSize]);
+  std::unique_ptr<Val*[]> iter_vals(new Val*[k, kCacheLineSize]);
+  for (auto i = 0; i < k; i += 1) {
+    const auto& source = step.sources[i];
+    const auto index = source.store->index(source.start);
+    iter_ends[i] = &source.store->ends[index];
+    iter_vals[i] = &source.store->vals[index];
+  }
+
+  // Initialize frontier.
+  std::unique_ptr<Pos[]> curr_ends(new Pos[k, kCacheLineSize]);
+  std::unique_ptr<Val[]> curr_vals(new Val[k, kCacheLineSize]);
+  for (auto i = 0; i < k; i += 1) {
+    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_vals[i] = *iter_vals[i]++;
+  }
+
+  // Initialize tournament tree.
+  std::unique_ptr<uint64_t[]> tree(new uint64_t[4 * k, kCacheLineSize]);
+  const auto u = round_up_to_power_of_two(k);
+  for (int src = 0; src < u; src += 1) {
+    if (src < k) {
+      tree[u + src - 1] = (static_cast<uint64_t>(curr_ends[src]) << 32) | src;
+    } else {
+      tree[u + src - 1] = std::numeric_limits<int64_t>::max();
+    }
+  }
+  for (int h = u >> 1; h > 0; h >>= 1) {
+    for (int i = h; i < h << 1; i += 1) {
+      auto l = (i << 1) - 1;
+      auto r = (i << 1);
+      tree[i - 1] = tree[l] <= tree[r] ? tree[l] : tree[r];
+    }
+  }
+
+  // Initialize the hash table.
+  struct HashNode {
+    int key;
+    int size;
+    std::unique_ptr<int[]> vals;
+  };
+  const int hash_size = round_up_to_power_of_two(4 * k);
+  CHECK_ARGUMENT(is_power_of_two(hash_size));
+  std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
+  for (int i = 0; i < hash_size; i += 1) {
+    hash[i].key = 0;
+    hash[i].vals.reset(new int[k]);
+  }
+
+  auto ends_out = ends;
+  auto vals_out = vals;
+  auto eval_fn = step.eval_fn;
+  Pos prev_end = 0;
+  Val prev_val;
+
+  for (int count = 0; count < step.size - 1; count += 1) {
+    auto src = tree[0] & 0xFFFFFFFF;
+    auto end = step.start + curr_ends[src];
+
+    // Emit the new marker but handle compression cases.
+    if (prev_end != end) {
+      auto val = eval_fn(&curr_vals[0]);
+      if (prev_end && prev_val == val) {
+        --ends_out;
+        --vals_out;
+      }
+      *ends_out++ = end;
+      *vals_out++ = val;
+      prev_end = end;
+      prev_val = val;
+    }
+
+    // Update all duplicate ends in the hash table as well.
+    auto out_end = curr_ends[src];
+    if (auto& slot = hash[out_end & (hash_size - 1)]; slot.key == out_end) {
+      for (int i = 0; i < slot.size; i += 1) {
+        auto hash_src = slot.vals[i];
+        curr_vals[hash_src] = *iter_vals[hash_src]++;
+        count += 1;
+      }
+      slot.key = 0;
+    }
+
+    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+
+    // Store duplicate ends in the hash table instead of the tournament tree.
+    while (step.start + new_end < step.stop) {
+      auto& slot = hash[new_end & (hash_size - 1)];
+      if (slot.key != new_end) {
+        if (slot.key == 0) {
+          slot.key = new_end;
+          slot.size = 0;
+        }
+        break;
+      }
+      slot.vals[slot.size++] = src;
+      new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    };
+
+    curr_ends[src] = new_end;
+    curr_vals[src] = *iter_vals[src]++;
+
+    // Update the tournament tree.
+    tree[u + src - 1] = (static_cast<uint64_t>(new_end) << 32) | src;
+    for (int i = (u + src) >> 1; i > 0; i >>= 1) {
+      auto l = (i << 1) - 1;
+      auto r = (i << 1);
+      if (tree[l] < tree[r]) {
+        tree[i - 1] = tree[l];
+      } else {
+        tree[i - 1] = tree[r];
+      }
+    }
+  }
+
+  // Emit the final end marker at the stop position.
+  auto val = eval_fn(&curr_vals[0]);
+  if (prev_end && prev_val == val) {
+    --vals_out;
+    --ends_out;
+  }
+  *vals_out++ = val;
+  *ends_out++ = step.stop;
+
+  return ends_out - ends;
+}
+
+auto check_step(const EvalStep& step) {
+  CHECK_ARGUMENT(step.sources.size() > 0);
+
+  // Compute and validate the span of each source.
+  std::vector<int> spans;
+  for (const auto& source : step.sources) {
+    const auto& store = *source.store;
+    CHECK_ARGUMENT(source.start >= 0);
+    CHECK_ARGUMENT(source.start < store.ends[store.size - 1]);
+    CHECK_ARGUMENT(source.start < source.stop);
+    CHECK_ARGUMENT(source.stop <= store.ends[store.size - 1]);
+    CHECK_ARGUMENT(source.stride > 0);
+    spans.push_back(1 + (source.stop - source.start - 1) / source.stride);
+  }
+
+  // Check that all spans are aligned.
+  for (int i = 1; i < spans.size(); i += 1) {
+    CHECK_ARGUMENT(spans[i - 1] == spans[i]);
+  }
+
+  // Make sure that the spans match the output span.
+  CHECK_ARGUMENT(spans[0] == (step.stop - step.start));
+}
+
+template <typename FnRange>
+void run_in_parallel(const FnRange& fns) {
+  std::vector<std::thread> threads;
+  std::vector<std::exception_ptr> exceptions;
+
+  // Create a thread for each task function.
+  int i = 0;
+  for (const auto& fn : fns) {
+    exceptions.push_back(nullptr);
+    threads.emplace_back([&exceptions, &fn, i] {
+      try {
+        fn();
+      } catch (...) {
+        exceptions[i] = std::current_exception();
+      }
+    });
+    ++i;
+  }
+
+  // Wait for all threads to finish before returning.
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  // Throw any exceptions that were raised.
+  for (auto& exception : exceptions) {
+    if (exception) {
+      std::rethrow_exception(exception);
+    }
+  }
+}
+
+auto eval_plan(const EvalPlan& plan) {
+  auto s = plan.steps.size();
+  CHECK_ARGUMENT(s <= std::numeric_limits<int32_t>::max());
+
+  // Validate that each step is properly configured.
+  for (const auto& step : plan.steps) {
+    check_step(step);
+  }
+
+  // We need to keep track of where we write each step's output into the
+  // temporary store and the size of each output after compression.
+  std::vector<int> dest_sizes(s);
+  std::vector<int> step_offsets(s + 1);
+  step_offsets[0] = 0;
+  for (int i = 0; i < plan.steps.size(); i += 1) {
+    CHECK_ARGUMENT(plan.steps[i].size > 0);
+    step_offsets[i + 1] = step_offsets[i] + plan.steps[i].size;
+  }
+
+  // Allocate the destination store to fit all step outputs.
+  auto store = std::make_shared<Store>(step_offsets[s]);
+
+  // Create a task for each eval step in the plan.
+  std::vector<std::function<void()>> eval_fns;
+  for (int i = 0; i < plan.steps.size(); i += 1) {
+    eval_fns.emplace_back([&, i] {
+      EvalStep step = plan.steps[i];
+      Pos* ends = store->ends.get() + step_offsets[i];
+      Val* vals = store->vals.get() + step_offsets[i];
+
+      // Emit the merged ranges into the destination.
+      CHECK_ARGUMENT(step.sources.size());
+      if (step.sources.size() == 1) {
+        dest_sizes[i] = eval_step_fixed<1>(ends, vals, step);
+      } else if (step.sources.size() == 2) {
+        dest_sizes[i] = eval_step_fixed<2>(ends, vals, step);
+      } else if (step.sources.size() == 3) {
+        dest_sizes[i] = eval_step_fixed<3>(ends, vals, step);
+      } else if (step.sources.size() == 4) {
+        dest_sizes[i] = eval_step_fixed<4>(ends, vals, step);
+      } else if (step.sources.size() <= 16) {
+        dest_sizes[i] = eval_step_stack<16>(ends, vals, step);
+      } else if (step.sources.size() <= 32) {
+        dest_sizes[i] = eval_step_stack<32>(ends, vals, step);
+      } else if (step.sources.size() <= 64) {
+        dest_sizes[i] = eval_step_stack<64>(ends, vals, step);
+      } else if (step.sources.size() <= 128) {
+        dest_sizes[i] = eval_step_stack<128>(ends, vals, step);
+      } else if (step.sources.size() <= 256) {
+        dest_sizes[i] = eval_step_stack<256>(ends, vals, step);
+      } else if (step.sources.size() <= 512) {
+        dest_sizes[i] = eval_step_stack<512>(ends, vals, step);
+      } else if (step.sources.size() <= 1024) {
+        dest_sizes[i] = eval_step_stack<1024>(ends, vals, step);
+      } else {
+        dest_sizes[i] = eval_step_heap(ends, vals, step);
+      }
+    });
+  }
+
+  // Run all of the eval tasks in parallel.
+  run_in_parallel(eval_fns);
+
+  // Update the output offsets and sizes to reflect comrpession at the edges.
+  for (int i = 0; i < s - 1; i += 1) {
+    auto l_head = step_offsets[i];
+    auto l_size = dest_sizes[i];
+    auto l_back = l_head + l_size - 1;
+    auto r_head = step_offsets[i + 1];
+    auto r_size = dest_sizes[i + 1];
+
+    CHECK_ARGUMENT(l_size > 0);
+    CHECK_ARGUMENT(r_size >= 0);
+    if (r_size == 0) {
+      store->ends[r_head - 1] = store->ends[l_back];
+      store->vals[r_head - 1] = store->vals[l_back];
+      --l_size;
+      --r_head;
+      ++r_size;
+    } else if (r_size == 1) {
+      if (store->ends[l_back] == store->ends[r_head]) {
+        store->vals[r_head] = store->vals[l_back];
+        --l_size;
+      } else if (store->vals[l_back] == store->vals[r_head]) {
+        --l_size;
+      }
+    } else {
+      if (store->ends[l_back] != store->ends[r_head]) {
+        if (store->vals[l_back] == store->vals[r_head]) {
+          --l_size;
+        }
+      } else {
+        if (store->vals[l_back] != store->vals[r_head + 1]) {
+          ++r_head;
+          --r_size;
+        } else {
+          --l_size;
+          ++r_head;
+          --r_size;
+        }
+      }
+    }
+
+    step_offsets[i] = l_head;
+    dest_sizes[i] = l_size;
+    step_offsets[i + 1] = r_head;
+    dest_sizes[i + 1] = r_size;
+  }
+
+  // Calculate the final output offsets.
+  std::vector<int> dest_offsets;
+  dest_offsets.push_back(0);
+  for (int i = 0; i < s; i += 1) {
+    dest_offsets.push_back(dest_offsets.back() + dest_sizes[i]);
+  }
+
+  // Allocate the compressed destination store.
+  auto destination = std::make_shared<Store>(dest_offsets[s]);
+
+  // Create a task for to move the output of each step in the plan.
+  std::vector<std::function<void()>> move_fns;
+  for (int i = 0; i < plan.steps.size(); i += 1) {
+    move_fns.emplace_back([&, i] {
+      auto step_b = step_offsets[i];
+      auto step_e = step_offsets[i] + dest_sizes[i];
+      auto dest_b = dest_offsets[i];
+      std::copy(
+          &store->ends[step_b],
+          &store->ends[step_e],
+          &destination->ends[dest_b]);
+      std::copy(
+          &store->vals[step_b],
+          &store->vals[step_e],
+          &destination->vals[dest_b]);
+    });
+  }
+
+  // Run all of the move tasks in parallel.
+  run_in_parallel(move_fns);
+
+  return destination;
 }
 
 }  // namespace skimpy::detail
-*/

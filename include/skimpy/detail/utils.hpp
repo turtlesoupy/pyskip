@@ -6,6 +6,10 @@
 
 namespace skimpy::detail {
 
+inline constexpr bool is_power_of_two(uint32_t x) {
+  return (x & (x - 1)) == 0;
+}
+
 inline constexpr uint32_t round_up_to_power_of_two(uint32_t x) {
   // NOTE: Zero is mapped to zero.
   x--;
