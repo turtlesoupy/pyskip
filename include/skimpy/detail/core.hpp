@@ -127,11 +127,15 @@ auto eval_step_fixed(Pos* const ends, Val* const vals, const EvalStep& step) {
       prev_val = val;
     }
 
-    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    // Compute the new end coordinate, relative to the slice parameters.
     auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
-    auto new_val = *iter_vals[src]++;
+    if (is_power_of_two(strides[src])) {
+      new_end >>= lg2(strides[src]);
+    } else {
+      new_end /= strides[src];
+    }
     curr_ends[src] = new_end;
-    curr_vals[src] = new_val;
+    curr_vals[src] = *iter_vals[src]++;
 
     // Update the heap.
     heap[0] = src;
@@ -257,8 +261,13 @@ auto eval_step_stack(Pos* const ends, Val* const vals, const EvalStep& step) {
       slot.key = 0;
     }
 
-    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    // Compute the new end coordinate, relative to the slice parameters.
     auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    if (is_power_of_two(strides[src])) {
+      new_end >>= lg2(strides[src]);
+    } else {
+      new_end /= strides[src];
+    }
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
@@ -401,8 +410,13 @@ auto eval_step_heap(Pos* const ends, Val* const vals, const EvalStep& step) {
       slot.key = 0;
     }
 
-    // auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1) / strides[src];
+    // Compute the new end coordinate, relative to the slice parameters.
     auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    if (is_power_of_two(strides[src])) {
+      new_end >>= lg2(strides[src]);
+    } else {
+      new_end /= strides[src];
+    }
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
