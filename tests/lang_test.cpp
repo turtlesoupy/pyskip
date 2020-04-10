@@ -1,14 +1,13 @@
 
 #define CATCH_CONFIG_MAIN
 
-#include <fmt/format.h>
+#include "skimpy/detail/lang.hpp"
 
 #include <catch2/catch.hpp>
-#include <cmath>
-#include <skimpy/detail/ranges.hpp>
+
+using namespace skimpy::detail::lang;
 
 TEST_CASE("Test range map scanning", "[range_map_scan]") {
-  using namespace skimpy::detail::ranges;
   /*
 
   auto x = store(5, 'a');

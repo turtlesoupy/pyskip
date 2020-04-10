@@ -1,9 +1,8 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/detail/utils.hpp"
+#include "skimpy/detail/util.hpp"
 
 #include <catch2/catch.hpp>
-#include <optional>
 
 using namespace skimpy::detail;
 

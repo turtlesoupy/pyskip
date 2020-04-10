@@ -11,9 +11,9 @@
 
 #include "core.hpp"
 #include "errors.hpp"
-#include "utils.hpp"
+#include "util.hpp"
 
-namespace skimpy::detail::ranges {
+namespace skimpy::detail::lang {
 
 template <typename Val>
 class Op;
@@ -140,21 +140,9 @@ inline OpPtr<Val> apply(OpPtr<Val> input, Fun&& func) {
 }
 
 template <typename Val>
-inline auto emit(std::shared_ptr<Op<Val>> input) {
+inline auto eval(std::shared_ptr<Op<Val>> input) {
   std::shared_ptr<Store<Val>> ret;
   return ret;
 }
 
-template <typename Val>
-inline auto to_vector(std::shared_ptr<Op<Val>> input) {
-  std::vector<Val> ret;
-  return ret;
-}
-
-template <typename Val>
-inline auto to_string(std::shared_ptr<Op<Val>> input) {
-  std::string ret;
-  return ret;
-}
-
-}  // namespace skimpy::detail::ranges
+}  // namespace skimpy::detail::lang
