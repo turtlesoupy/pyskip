@@ -23,7 +23,7 @@ struct Store {
     vals.reset(new Val[n]);
   }
 
-  int index(Pos pos) {
+  int index(Pos pos) const {
     return std::upper_bound(&ends[0], &ends[size], pos) - &ends[0];
   }
 };
@@ -41,14 +41,23 @@ struct EvalSource {
 typedef int (*EvalFn)(int*);
 
 struct EvalStep {
-  int size;
   Pos start;
   Pos stop;
   EvalFn eval_fn;
   std::vector<EvalSource> sources;
 
-  EvalStep(int size, Pos start, Pos stop, EvalFn eval_fn)
-      : size(size), start(start), stop(stop), eval_fn(eval_fn) {}
+  EvalStep(Pos start, Pos stop, EvalFn eval_fn)
+      : start(start), stop(stop), eval_fn(eval_fn) {}
+
+  int size() const {
+    int size = 1;
+    for (const auto& source : sources) {
+      auto start = source.start;
+      auto stop = source.stop;
+      size += source.store->index(stop - 1) - source.store->index(start);
+    }
+    return size;
+  }
 };
 
 struct EvalPlan {
@@ -92,13 +101,16 @@ auto eval_step_fixed(Pos* const ends, Val* const vals, const EvalStep& step) {
     return curr_ends[i] < curr_ends[j];
   });
 
+  // Compute the size of the iteration.
+  auto step_size = step.size() - 1;
+
+  // Iterate over all input arrays combining their ranges together.
   auto ends_out = ends;
   auto vals_out = vals;
   auto eval_fn = step.eval_fn;
   Pos prev_end = 0;
   Val prev_val;
-
-  for (int count = 0; count < step.size - 1; count += 1) {
+  for (int count = 0; count < step_size; count += 1) {
     auto src = heap[0];
     auto end = step.start + curr_ends[src];
 
@@ -208,13 +220,16 @@ auto eval_step_stack(Pos* const ends, Val* const vals, const EvalStep& step) {
     hash[i].key = 0;
   }
 
+  // Compute the size of the iteration.
+  auto step_size = step.size() - 1;
+
+  // Iterate over all input arrays combining their ranges together.
   auto ends_out = ends;
   auto vals_out = vals;
   auto eval_fn = step.eval_fn;
   Pos prev_end = 0;
   Val prev_val;
-
-  for (int count = 0; count < step.size - 1; count += 1) {
+  for (int count = 0; count < step_size; count += 1) {
     auto src = tree[0] & 0xFFFFFFFF;
     auto end = step.start + curr_ends[src];
 
@@ -349,13 +364,16 @@ auto eval_step_heap(Pos* const ends, Val* const vals, const EvalStep& step) {
     hash[i].vals.reset(new int[k]);
   }
 
+  // Compute the size of the iteration.
+  auto step_size = step.size() - 1;
+
+  // Iterate over all input arrays combining their ranges together.
   auto ends_out = ends;
   auto vals_out = vals;
   auto eval_fn = step.eval_fn;
   Pos prev_end = 0;
   Val prev_val;
-
-  for (int count = 0; count < step.size - 1; count += 1) {
+  for (int count = 0; count < step_size; count += 1) {
     auto src = tree[0] & 0xFFFFFFFF;
     auto end = step.start + curr_ends[src];
 
@@ -499,8 +517,9 @@ auto eval_plan(const EvalPlan& plan) {
   std::vector<int> step_offsets(s + 1);
   step_offsets[0] = 0;
   for (int i = 0; i < plan.steps.size(); i += 1) {
-    CHECK_ARGUMENT(plan.steps[i].size > 0);
-    step_offsets[i + 1] = step_offsets[i] + plan.steps[i].size;
+    auto step_size = plan.steps[i].size();
+    CHECK_ARGUMENT(step_size > 0);
+    step_offsets[i + 1] = step_offsets[i] + step_size;
   }
 
   // Allocate the destination store to fit all step outputs.
@@ -515,6 +534,7 @@ auto eval_plan(const EvalPlan& plan) {
       Val* vals = store->vals.get() + step_offsets[i];
 
       // Emit the merged ranges into the destination.
+      // TODO: Futher specialize cases (e.g. when size == 1).
       CHECK_ARGUMENT(step.sources.size());
       if (step.sources.size() == 1) {
         dest_sizes[i] = eval_step_fixed<1>(ends, vals, step);

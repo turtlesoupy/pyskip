@@ -65,18 +65,14 @@ TEST_CASE("Benchmark 1-source plan evaluation", "[plan_eval_1_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -144,18 +140,14 @@ TEST_CASE("Benchmark 2-source plan evaluation", "[plan_eval_2_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -223,20 +215,16 @@ TEST_CASE("Benchmark 4-source plan evaluation", "[plan_eval_4_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
-    volatile auto dst = (plan);
+    volatile auto dst = eval_plan(plan);
   };
 
   BENCHMARK("lower_bound") {
@@ -302,18 +290,14 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[plan_eval_8_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -381,18 +365,14 @@ TEST_CASE("Benchmark 10-source plan evaluation", "[plan_eval_10_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -460,18 +440,14 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[plan_eval_16_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -539,18 +515,14 @@ TEST_CASE("Benchmark 20-source plan evaluation", "[plan_eval_20_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -618,18 +590,14 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[plan_eval_32_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -697,18 +665,14 @@ TEST_CASE("Benchmark 64-source plan evaluation", "[plan_eval_64_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
@@ -776,18 +740,14 @@ TEST_CASE("Benchmark 128-source plan evaluation", "[plan_eval_128_sources]") {
   for (int64_t i = 0; i < s; i += 1) {
     auto start = static_cast<int>(i * max_end / s);
     auto stop = static_cast<int>((i + 1) * max_end / s);
-    auto size = 1;
-    for (int j = 0; j < q; j += 1) {
-      size += stores[j]->index(stop - 1) - stores[j]->index(start);
-    }
-    EvalStep step(size, start, stop, eval_fn);
+    EvalStep step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
       step.sources.emplace_back(stores[j], start, stop, 1);
     }
     plan.steps.emplace_back(std::move(step));
   }
 
-  // Evaluate the plan, after which x will be populated.
+  // Evaluate the plan.
   BENCHMARK("eval_plan") {
     volatile auto dst = eval_plan(plan);
   };
