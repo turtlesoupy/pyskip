@@ -1,21 +1,23 @@
 #include <algorithm>
+#include <memory>
 #include <new>
+#include <numeric>
 #include <thread>
 
 #include "skimpy/detail/errors.hpp"
 #include "skimpy/detail/utils.hpp"
 
-namespace skimpy::detail {
+namespace skimpy::detail::core {
 
 using Pos = int32_t;
 using Val = int;
 
-struct Store {
+struct EvalStore {
   int size;
   std::unique_ptr<Pos[]> ends;
   std::unique_ptr<Val[]> vals;
 
-  Store(int n) : size(n), ends(new Pos[n]), vals(new Val[n]) {}
+  EvalStore(int n) : size(n), ends(new Pos[n]), vals(new Val[n]) {}
 
   void reset(int n) {
     size = n;
@@ -29,12 +31,12 @@ struct Store {
 };
 
 struct EvalSource {
-  std::shared_ptr<Store> store;
+  std::shared_ptr<EvalStore> store;
   Pos start;
   Pos stop;
   Pos stride;
 
-  EvalSource(std::shared_ptr<Store> store, Pos start, Pos stop, Pos stride)
+  EvalSource(std::shared_ptr<EvalStore> store, Pos start, Pos stop, Pos stride)
       : store(std::move(store)), start(start), stop(stop), stride(stride) {}
 };
 
@@ -537,7 +539,7 @@ auto eval_plan(const EvalPlan& plan) {
   }
 
   // Allocate the destination store to fit all step outputs.
-  auto store = std::make_shared<Store>(step_offsets[s]);
+  auto store = std::make_shared<EvalStore>(step_offsets[s]);
 
   // Create a task for each eval step in the plan.
   std::vector<std::function<void()>> eval_fns;
@@ -635,7 +637,7 @@ auto eval_plan(const EvalPlan& plan) {
   }
 
   // Allocate the compressed destination store.
-  auto destination = std::make_shared<Store>(dest_offsets[s]);
+  auto destination = std::make_shared<EvalStore>(dest_offsets[s]);
 
   // Create a task for to move the output of each step in the plan.
   std::vector<std::function<void()>> move_fns;
@@ -661,4 +663,4 @@ auto eval_plan(const EvalPlan& plan) {
   return destination;
 }
 
-}  // namespace skimpy::detail
+}  // namespace skimpy::detail::core

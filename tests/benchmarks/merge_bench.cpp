@@ -121,7 +121,7 @@ __declspec(noinline) static auto pivot(
 }
 
 TEST_CASE("Benchmark merge on alternating data", "[merge_alternating]") {
-  constexpr auto n = 128 * 1024 * 1024;
+  constexpr auto n = 8 * 1024 * 1024;
 
   std::unique_ptr<int[]> in1(new int[n]);
   std::unique_ptr<int[]> in2(new int[n]);
@@ -197,7 +197,7 @@ TEST_CASE("Benchmark merge on alternating data", "[merge_alternating]") {
 }
 
 TEST_CASE("Benchmark merge on random data", "[merge_random]") {
-  constexpr auto n = 128 * 1024 * 1024;
+  constexpr auto n = 8 * 1024 * 1024;
 
   std::unique_ptr<int[]> in1(new int[n]);
   std::unique_ptr<int[]> in2(new int[n]);

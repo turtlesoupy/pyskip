@@ -1,47 +1,32 @@
 #define CATCH_CONFIG_MAIN
 
+#include "skimpy/detail/utils.hpp"
+
 #include <catch2/catch.hpp>
 #include <optional>
 
-#include <skimpy/detail/utils.hpp>
-
 using namespace skimpy::detail;
 
-/*
-TEST_CASE("Test generator pattern with no elements", "[generator_empty]") {
-  auto gen = make_generator<int>([]() -> std::optional<int> { return {}; });
+TEST_CASE("Test power of two util functions", "[util_power_of_two]") {
+  for (int i = 0; i < 31; i += 1) {
+    REQUIRE(is_power_of_two(1 << i));
+  }
 
-  REQUIRE(gen.done());
-  REQUIRE_THROWS(gen.get());
-  REQUIRE_THROWS(gen.next());
+  REQUIRE(round_up_to_power_of_two(14) == 16);
+  REQUIRE(round_up_to_power_of_two(16) == 16);
+  REQUIRE(round_up_to_power_of_two(17) == 32);
+  REQUIRE(round_up_to_power_of_two(1) == 1);
+  REQUIRE(round_up_to_power_of_two(2) == 2);
+  REQUIRE(round_up_to_power_of_two(3) == 4);
+  REQUIRE(round_up_to_power_of_two(4) == 4);
+
+  REQUIRE(lg2(1) == 0);
+  REQUIRE(lg2(2) == 1);
+  REQUIRE(lg2(3) == 1);
+  REQUIRE(lg2(4) == 2);
+  REQUIRE(lg2(15) == 3);
+  REQUIRE(lg2(16) == 4);
+  REQUIRE(lg2(17) == 4);
+  REQUIRE(lg2(31) == 4);
+  REQUIRE(lg2(32) == 5);
 }
-
-TEST_CASE("Test generator pattern with finite elements", "[generator_empty]") {
-  auto gen = make_generator<int>([i = 0]() mutable -> std::optional<int> {
-    if (i < 4) {
-      return i++;
-    } else {
-      return {};
-    }
-  });
-
-  REQUIRE(!gen.done());
-  REQUIRE(gen.get() == 0);
-  REQUIRE(gen.get() == 0);
-  gen.next();
-  REQUIRE(!gen.done());
-  REQUIRE(gen.get() == 1);
-  gen.next();
-  REQUIRE(!gen.done());
-  REQUIRE(gen.get() == 2);
-  REQUIRE(gen.get() == 2);
-  REQUIRE(gen.get() == 2);
-  gen.next();
-  REQUIRE(!gen.done());
-  REQUIRE(gen.get() == 3);
-  gen.next();
-  REQUIRE(gen.done());
-  REQUIRE_THROWS(gen.get());
-  REQUIRE_THROWS(gen.next());
-}
-*/
