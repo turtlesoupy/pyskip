@@ -210,7 +210,7 @@ auto eval_step_stack(
     int vals[buffer_size];
   };
   constexpr int hash_size = round_up_to_power_of_two(16 * buffer_size);
-  CHECK_ARGUMENT(is_power_of_two(hash_size));
+  CHECK_STATE(is_power_of_two(hash_size));
   std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
   for (int i = 0; i < hash_size; i += 1) {
     hash[i].key = 0;
@@ -360,7 +360,7 @@ auto eval_step_heap(
     std::unique_ptr<int[]> vals;
   };
   const int hash_size = round_up_to_power_of_two(4 * k);
-  CHECK_ARGUMENT(is_power_of_two(hash_size));
+  CHECK_STATE(is_power_of_two(hash_size));
   std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
   for (int i = 0; i < hash_size; i += 1) {
     hash[i].key = 0;
@@ -585,8 +585,8 @@ auto eval_plan(const EvalPlan<Val>& plan) {
     auto r_head = step_offsets[i + 1];
     auto r_size = dest_sizes[i + 1];
 
-    CHECK_ARGUMENT(l_size > 0);
-    CHECK_ARGUMENT(r_size >= 0);
+    CHECK_STATE(l_size > 0);
+    CHECK_STATE(r_size >= 0);
     if (r_size == 0) {
       store->ends[r_head - 1] = store->ends[l_back];
       store->vals[r_head - 1] = store->vals[l_back];

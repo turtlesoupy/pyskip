@@ -15,3 +15,8 @@
       throw std::invalid_argument(#cond); \
     }                                     \
   } while (0)
+
+#define CHECK_UNREACHABLE(msg)   \
+  do {                           \
+    throw std::logic_error(msg); \
+  } while (0)
