@@ -9,6 +9,7 @@
 #include <typeindex>
 #include <typeinfo>
 
+#include "skimpy/detail/conv.hpp"
 #include "skimpy/detail/util.hpp"
 
 using Catch::Equals;
@@ -134,4 +135,18 @@ TEST_CASE("Test visiting an ops graph", "[ops_build]") {
           typeid(Slice<char>),
           typeid(Store<char>),
       }));
+}
+
+TEST_CASE("Test computing depth of an ops graph", "[ops_depth]") {
+  auto x = store(5, 'a');
+  x = stack(stack(slice(x, 0, 2), store(1, 'b')), slice(x, 3, 5));
+  REQUIRE(depth(x) == 4);
+}
+
+TEST_CASE("Test evaluating an ops graph", "[ops_eval]") {
+  auto x = stack(store(1, 0), store(1, 1), store(1, 2), store(1, 3));
+  auto y = apply(x, [](int a) { return 4 - a; });
+  auto z = merge(x, y, [](int a, int b) { return a * b; });
+  auto result = materialize(z);
+  REQUIRE_THAT(conv::to_vector(*result), Equals<int>({0, 3, 4, 3}));
 }

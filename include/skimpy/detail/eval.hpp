@@ -13,8 +13,11 @@ namespace skimpy::detail::eval {
 
 using Pos = core::Pos;
 
+// template <typename Val>
+// using EvalFn = Val (*)(Val*);
+
 template <typename Val>
-using EvalFn = int (*)(Val*);
+using EvalFn = std::function<Val(Val*)>;
 
 template <typename Val>
 struct EvalSource {

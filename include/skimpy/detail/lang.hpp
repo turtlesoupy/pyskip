@@ -12,7 +12,7 @@ namespace skimpy::detail::lang {
 template <typename Val>
 struct Op {
   virtual ~Op() = default;
-  virtual core::Pos size() const = 0;
+  virtual core::Pos span() const = 0;
   virtual const std::type_info& type() const = 0;
   virtual std::string str() const = 0;
 
@@ -42,7 +42,7 @@ struct Store : public Op<Val> {
 
   Store(std::shared_ptr<core::Store<Val>> store) : store(std::move(store)) {}
 
-  core::Pos size() const override {
+  core::Pos span() const override {
     return store->span();
   }
 
@@ -71,11 +71,11 @@ struct Slice : public Op<Val> {
       : input(input), start(start), stop(stop), stride(stride) {
     CHECK_ARGUMENT(0 <= start);
     CHECK_ARGUMENT(start <= stop);
-    CHECK_ARGUMENT(stop <= input->size());
+    CHECK_ARGUMENT(stop <= input->span());
     CHECK_ARGUMENT(stride > 0);
   }
 
-  core::Pos size() const override {
+  core::Pos span() const override {
     return 1 + (stop - start - 1) / stride;
   }
 
@@ -97,10 +97,10 @@ struct Stack : public Op<Val> {
     CHECK_ARGUMENT(this->inputs.size());
   }
 
-  core::Pos size() const override {
+  core::Pos span() const override {
     core::Pos ret = 0;
     for (const auto& input : inputs) {
-      ret += input->size();
+      ret += input->span();
     }
     return ret;
   }
@@ -120,18 +120,18 @@ struct Stack : public Op<Val> {
 
 template <typename Val>
 struct Merge : public Op<Val> {
-  using Fn = int (*)(int, int);
+  using Fn = Val (*)(Val, Val);
 
   const OpPtr<Val> lhs;
   const OpPtr<Val> rhs;
   const Fn fn;
 
   Merge(OpPtr<Val> lhs, OpPtr<Val> rhs, Fn fn) : lhs(lhs), rhs(rhs), fn(fn) {
-    CHECK_ARGUMENT(lhs->size() == rhs->size());
+    CHECK_ARGUMENT(lhs->span() == rhs->span());
   }
 
-  core::Pos size() const override {
-    return lhs->size();
+  core::Pos span() const override {
+    return lhs->span();
   }
 
   const std::type_info& type() const override {
@@ -145,15 +145,15 @@ struct Merge : public Op<Val> {
 
 template <typename Val>
 struct Apply : public Op<Val> {
-  using Fn = int (*)(int);
+  using Fn = Val (*)(Val);
 
   const OpPtr<Val> input;
   const Fn fn;
 
   Apply(OpPtr<Val> input, Fn fn) : input(input), fn(fn) {}
 
-  core::Pos size() const override {
-    return input->size();
+  core::Pos span() const override {
+    return input->span();
   }
 
   const std::type_info& type() const override {
@@ -166,10 +166,10 @@ struct Apply : public Op<Val> {
 };
 
 template <typename Val>
-inline OpPtr<Val> store(core::Pos size, Val fill) {
-  CHECK_ARGUMENT(size > 0);
+inline OpPtr<Val> store(core::Pos span, Val fill) {
+  CHECK_ARGUMENT(span > 0);
   auto s = std::make_shared<core::Store<Val>>(1);
-  s->ends[0] = size;
+  s->ends[0] = span;
   s->vals[0] = fill;
   return store(std::move(s));
 }
@@ -250,6 +250,17 @@ auto clone(const OpPtr<Val>& op) {
 }
 
 template <typename Val>
+auto depth(const OpPtr<Val>& op) {
+  auto max_depth = 0;
+  Fix([&, depth = 0](auto& fn, const OpPtr<Val>& op) mutable -> void {
+    max_depth = std::max(max_depth, ++depth);
+    recurse(op, fn);
+    --depth;
+  })(op);
+  return max_depth;
+}
+
+template <typename Val>
 auto normalize(const OpPtr<Val>& op) {
   OpPtr<Val> ret = op;
 
@@ -272,12 +283,12 @@ auto normalize(const OpPtr<Val>& op) {
       for (const auto& input : c.inputs) {
         auto rel_s = p->start - offset;
         auto start = std::max(rel_s, (p->stride + rel_s) % p->stride);
-        auto stop = std::min(p->stop - offset, input->size());
+        auto stop = std::min(p->stop - offset, input->span());
         auto stride = p->stride;
         if (start < stop && offset + start >= p->start) {
           inputs.push_back(slice(input, start, stop, stride));
         }
-        offset += input->size();
+        offset += input->span();
       }
 
       return stack(inputs);
@@ -306,32 +317,32 @@ auto normalize(const OpPtr<Val>& op) {
       // Merge across both the lhs and rhs stacks.
       std::vector<OpPtr<Val>> inputs;
       while (i_1 != c_1.inputs.end() && i_2 != c_2.inputs.end()) {
-        auto size_1 = (*i_1)->size();
-        auto size_2 = (*i_2)->size();
-        if (o_1 + size_1 < o_2 + size_2) {
-          auto lhs = slice(*i_1, s_1, size_1, 1);
-          auto rhs = slice(*i_2, s_2, s_2 + size_1 - s_1, 1);
+        auto span_1 = (*i_1)->span();
+        auto span_2 = (*i_2)->span();
+        if (o_1 + span_1 < o_2 + span_2) {
+          auto lhs = slice(*i_1, s_1, span_1, 1);
+          auto rhs = slice(*i_2, s_2, s_2 + span_1 - s_1, 1);
           inputs.push_back(merge(lhs, rhs, p->fn));
-          s_2 += size_1 - s_1;
-          o_1 += size_1;
+          s_2 += span_1 - s_1;
+          o_1 += span_1;
           s_1 = 0;
           ++i_1;
-        } else if (o_1 + size_1 > o_2 + size_2) {
-          auto lhs = slice(*i_1, s_1, s_1 + size_2 - s_2, 1);
-          auto rhs = slice(*i_2, s_2, size_2, 1);
+        } else if (o_1 + span_1 > o_2 + span_2) {
+          auto lhs = slice(*i_1, s_1, s_1 + span_2 - s_2, 1);
+          auto rhs = slice(*i_2, s_2, span_2, 1);
           inputs.push_back(merge(lhs, rhs, p->fn));
-          s_1 += size_2 - s_2;
-          o_2 += size_2;
+          s_1 += span_2 - s_2;
+          o_2 += span_2;
           s_2 = 0;
           ++i_2;
         } else {
-          auto lhs = slice(*i_1, s_1, size_1, 1);
-          auto rhs = slice(*i_2, s_2, size_2, 1);
+          auto lhs = slice(*i_1, s_1, span_1, 1);
+          auto rhs = slice(*i_2, s_2, span_2, 1);
           inputs.push_back(merge(lhs, rhs, p->fn));
           s_1 = 0;
           s_2 = 0;
-          o_1 += size_1;
-          o_2 += size_2;
+          o_1 += span_1;
+          o_2 += span_2;
           ++i_1;
           ++i_2;
         }
@@ -356,7 +367,7 @@ auto normalize(const OpPtr<Val>& op) {
   ret = Fix([](auto fn, const OpPtr<Val>& op) -> OpPtr<Val> {
     // Handle the base case by wrapping the leaf store in a slice.
     if (op->is<Store<Val>>()) {
-      return slice(op, 0, op->size(), 1);
+      return slice(op, 0, op->span(), 1);
     }
 
     // If the op is a slice, we push it down one level in the tree.
@@ -387,9 +398,78 @@ auto normalize(const OpPtr<Val>& op) {
 }
 
 template <typename Val>
-inline auto eval(std::shared_ptr<Op<Val>> input) {
-  std::shared_ptr<Store<Val>> ret;
-  return ret;
+inline auto materialize(const OpPtr<Val>& input) {
+  auto normal_form = normalize(input);
+  CHECK_STATE(normal_form->is<Stack<Val>>());
+
+  eval::EvalPlan<Val> plan;
+
+  auto offset = 0;
+  for (const auto& root : normal_form->to<Stack<Val>>().inputs) {
+    struct EvalNode {
+      enum { STORE, MERGE, APPLY } tag;
+      union {
+        size_t index;
+        Apply<Val>::Fn apply_fn;
+        Merge<Val>::Fn merge_fn;
+      };
+    };
+    struct EvalFunc {
+      std::vector<EvalNode> nodes;
+      std::unique_ptr<Val[]> stack;
+    };
+
+    // Initialize the state of the eval fn.
+    constexpr auto kCacheLineSize = std::hardware_destructive_interference_size;
+    auto ef = std::make_shared<EvalFunc>();
+    ef->stack.reset(new Val[depth(root), kCacheLineSize]);
+
+    // Initialize the step.
+    eval::EvalStep<Val> step(offset, offset + root->span(), [ef](Val* inputs) {
+      auto sp = &ef->stack[0];
+      for (auto cn : ef->nodes) {
+        switch (cn.tag) {
+          case EvalNode::STORE:
+            *sp++ = inputs[cn.index];
+            break;
+          case EvalNode::MERGE:
+            *(sp - 2) = cn.merge_fn(*(sp - 2), *(sp - 1));
+            --sp;
+            break;
+          case EvalNode::APPLY:
+            *(sp - 1) = cn.apply_fn(*(sp - 1));
+            break;
+        }
+      }
+      return *(sp - 1);
+    });
+
+    // Traverse the op graph to populate the eval step.
+    Fix([&](auto fn, const OpPtr<Val>& op) -> void {
+      recurse(op, fn);
+      if (auto p = op->as<Slice<Val>>()) {
+        const auto& store = p->input->to<Store<Val>>();
+        step.sources.emplace_back(store.store, p->start, p->stop, p->stride);
+        ef->nodes.emplace_back();
+        ef->nodes.back().tag = EvalNode::STORE;
+        ef->nodes.back().index = step.sources.size() - 1;
+      } else if (auto p = op->as<Merge<Val>>()) {
+        ef->nodes.emplace_back();
+        ef->nodes.back().tag = EvalNode::MERGE;
+        ef->nodes.back().merge_fn = p->fn;
+      } else if (auto p = op->as<Apply<Val>>()) {
+        ef->nodes.emplace_back();
+        ef->nodes.back().tag = EvalNode::APPLY;
+        ef->nodes.back().apply_fn = p->fn;
+      }
+    })(root);
+
+    // Add the fully populated step to the plan and loop.
+    plan.steps.push_back(std::move(step));
+    offset += root->span();
+  }
+
+  return eval::eval_plan(plan);
 }
 
 }  // namespace skimpy::detail::lang
