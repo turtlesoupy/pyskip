@@ -254,9 +254,9 @@ auto normalize(const OpPtr<Val>& op) {
   OpPtr<Val> ret = op;
 
   // Pull all stack operations to the top of the tree.
-  ret = Fix([](auto fn, const OpPtr<char>& op) -> OpPtr<char> {
+  ret = Fix([](auto fn, const OpPtr<Val>& op) -> OpPtr<Val> {
     // Handle the base case by wrapping the leaf store in a stack.
-    if (op->is<Store<char>>()) {
+    if (op->is<Store<Val>>()) {
       return stack(op);
     }
 
@@ -264,11 +264,11 @@ auto normalize(const OpPtr<Val>& op) {
     auto new_op = substitute(op, fn);
 
     // Handle remaining cases by pulling each child stack up.
-    if (auto p = new_op->as<Slice<char>>()) {
-      const auto& c = p->input->to<Stack<char>>();
+    if (auto p = new_op->as<Slice<Val>>()) {
+      const auto& c = p->input->to<Stack<Val>>();
 
       int offset = 0;
-      std::vector<OpPtr<char>> inputs;
+      std::vector<OpPtr<Val>> inputs;
       for (const auto& input : c.inputs) {
         auto rel_s = p->start - offset;
         auto start = std::max(rel_s, (p->stride + rel_s) % p->stride);
@@ -281,53 +281,69 @@ auto normalize(const OpPtr<Val>& op) {
       }
 
       return stack(inputs);
-    } else if (auto p = new_op->as<Stack<char>>()) {
-      std::vector<OpPtr<char>> inputs;
+    } else if (auto p = new_op->as<Stack<Val>>()) {
+      std::vector<OpPtr<Val>> inputs;
+
+      // Flatten the stack of stacks into a single stack.
       for (const auto& p_input : p->inputs) {
-        const auto& c = p_input->to<Stack<char>>();
+        const auto& c = p_input->to<Stack<Val>>();
         for (const auto& c_input : c.inputs) {
           inputs.push_back(c_input);
         }
       }
+
       return stack(inputs);
-    } else if (auto p = new_op->as<Merge<char>>()) {
-      auto c_1 = p->lhs->to<Stack<char>>();
-      auto c_2 = p->rhs->to<Stack<char>>();
+    } else if (auto p = new_op->as<Merge<Val>>()) {
+      auto c_1 = p->lhs->to<Stack<Val>>();
+      auto c_2 = p->rhs->to<Stack<Val>>();
       auto i_1 = c_1.inputs.begin();
-      auto i_2 = c_1.inputs.begin();
+      auto i_2 = c_2.inputs.begin();
       auto o_1 = 0;
       auto o_2 = 0;
       auto s_1 = 0;
       auto s_2 = 0;
 
-      std::vector<OpPtr<char>> inputs;
+      // Merge across both the lhs and rhs stacks.
+      std::vector<OpPtr<Val>> inputs;
       while (i_1 != c_1.inputs.end() && i_2 != c_2.inputs.end()) {
-        const auto& size_1 = (*i_1)->size();
-        const auto& size_2 = (*i_2)->size();
-        if (o_1 + size_1 <= o_2 + size_2) {
+        auto size_1 = (*i_1)->size();
+        auto size_2 = (*i_2)->size();
+        if (o_1 + size_1 < o_2 + size_2) {
           auto lhs = slice(*i_1, s_1, size_1, 1);
-          auto rhs = slice(*i_2, s_2, size_1, 1);
+          auto rhs = slice(*i_2, s_2, s_2 + size_1 - s_1, 1);
           inputs.push_back(merge(lhs, rhs, p->fn));
+          s_2 += size_1 - s_1;
           o_1 += size_1;
           s_1 = 0;
-          s_2 = size_1;
           ++i_1;
-        } else {
-          auto lhs = slice(*i_1, s_1, size_2, 1);
+        } else if (o_1 + size_1 > o_2 + size_2) {
+          auto lhs = slice(*i_1, s_1, s_1 + size_2 - s_2, 1);
           auto rhs = slice(*i_2, s_2, size_2, 1);
           inputs.push_back(merge(lhs, rhs, p->fn));
+          s_1 += size_2 - s_2;
           o_2 += size_2;
           s_2 = 0;
-          s_1 = size_2;
+          ++i_2;
+        } else {
+          auto lhs = slice(*i_1, s_1, size_1, 1);
+          auto rhs = slice(*i_2, s_2, size_2, 1);
+          inputs.push_back(merge(lhs, rhs, p->fn));
+          s_1 = 0;
+          s_2 = 0;
+          o_1 += size_1;
+          o_2 += size_2;
+          ++i_1;
           ++i_2;
         }
       }
+      CHECK_STATE(i_1 == c_1.inputs.end() && i_2 == c_2.inputs.end());
+
       return stack(inputs);
     } else {
-      auto parent = new_op->to<Apply<char>>();
-      auto c = parent.input->to<Stack<char>>();
+      auto parent = new_op->to<Apply<Val>>();
+      auto c = parent.input->to<Stack<Val>>();
 
-      std::vector<OpPtr<char>> inputs;
+      std::vector<OpPtr<Val>> inputs;
       for (const auto& input : c.inputs) {
         inputs.push_back(apply(input, parent.fn));
       }
@@ -337,26 +353,26 @@ auto normalize(const OpPtr<Val>& op) {
   })(ret);
 
   // Push all slice operations to the bottom of the tree.
-  ret = Fix([](auto fn, const OpPtr<char>& op) -> OpPtr<char> {
+  ret = Fix([](auto fn, const OpPtr<Val>& op) -> OpPtr<Val> {
     // Handle the base case by wrapping the leaf store in a slice.
-    if (op->is<Store<char>>()) {
+    if (op->is<Store<Val>>()) {
       return slice(op, 0, op->size(), 1);
     }
 
     // If the op is a slice, we push it down one level in the tree.
-    if (auto p = op->as<Slice<char>>()) {
-      if (auto c = p->input->as<Store<char>>()) {
+    if (auto p = op->as<Slice<Val>>()) {
+      if (auto c = p->input->as<Store<Val>>()) {
         return op;
-      } else if (auto c = p->input->as<Slice<char>>()) {
+      } else if (auto c = p->input->as<Slice<Val>>()) {
         auto start = c->start + c->stride * p->start;
         auto stop = c->start + c->stride * p->stop;
         auto stride = c->stride * p->stride;
         return fn(slice(c->input, start, stop, stride));
-      } else if (auto c = p->input->as<Merge<char>>()) {
+      } else if (auto c = p->input->as<Merge<Val>>()) {
         auto lhs = slice(c->lhs, p->start, p->stop, p->stride);
         auto rhs = slice(c->rhs, p->start, p->stop, p->stride);
         return substitute(merge(lhs, rhs, c->fn), fn);
-      } else if (auto c = p->input->as<Apply<char>>()) {
+      } else if (auto c = p->input->as<Apply<Val>>()) {
         auto input = slice(c->input, p->start, p->stop, p->stride);
         return substitute(apply(input, c->fn), fn);
       } else {

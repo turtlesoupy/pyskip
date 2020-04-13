@@ -66,9 +66,18 @@ TEST_CASE("Test building an ops graph", "[ops_build]") {
       stack_s(slice_s(store_s("5=>a"), "0:2:1"), store_s("1=>b")),
       slice_s(store_s("5=>a"), "3:5:1"));
   REQUIRE(x->str() == x_s);
+
+  auto mul = [](int x, int y) { return x * y; };
+  auto neg = [](int x) { return -x; };
+  auto y = apply(merge(store(2, 1), slice(store(8, 2), 6, 8), mul), neg);
+
+  auto y_s =
+      apply_s(merge_s(store_s("2=>1"), slice_s(store_s("8=>2"), "6:8:1")));
+  REQUIRE(y->str() == y_s);
 }
 
 TEST_CASE("Test normalizing an ops graph", "[ops_normalize]") {
+  // Normalize an example with some stack and slice operations.
   auto x = store(5, 'a');
   x = slice(stack(stack(slice(x, 0, 2), store(1, 'b')), slice(x, 3, 5)), 2, 4);
   x = normalize(x);
@@ -76,6 +85,32 @@ TEST_CASE("Test normalizing an ops graph", "[ops_normalize]") {
   auto x_s = stack_s(
       slice_s(store_s("1=>b"), "0:1:1"), slice_s(store_s("5=>a"), "3:4:1"));
   REQUIRE(x->str() == x_s);
+
+  // Normalize an example with a merge and apply operation.
+  auto mul = [](int x, int y) { return x * y; };
+  auto neg = [](int x) { return -x; };
+  auto y = apply(merge(store(2, 1), slice(store(8, 2), 6, 8), mul), neg);
+  y = normalize(y);
+
+  auto y_s = stack_s(apply_s(merge_s(
+      slice_s(store_s("2=>1"), "0:2:1"), slice_s(store_s("8=>2"), "6:8:1"))));
+  REQUIRE(y->str() == y_s);
+
+  // Normalize an example with a stack of merge and apply operation.
+  auto s = store(5, 3);
+  auto z = merge(
+      stack(slice(s, 0, 2), slice(s, 3, 5)),
+      stack(slice(s, 1, 2), slice(s, 0, 2), slice(s, 3, 4)),
+      mul);
+  z = normalize(z);
+
+  auto s_s = store_s("5=>3");
+  auto z_s = stack_s(
+      merge_s(slice_s(s_s, "0:1:1"), slice_s(s_s, "1:2:1")),
+      merge_s(slice_s(s_s, "1:2:1"), slice_s(s_s, "0:1:1")),
+      merge_s(slice_s(s_s, "3:4:1"), slice_s(s_s, "1:2:1")),
+      merge_s(slice_s(s_s, "4:5:1"), slice_s(s_s, "3:4:1")));
+  REQUIRE(z->str() == z_s);
 }
 
 TEST_CASE("Test visiting an ops graph", "[ops_build]") {
