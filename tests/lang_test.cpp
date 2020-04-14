@@ -144,9 +144,9 @@ TEST_CASE("Test computing depth of an ops graph", "[ops_depth]") {
 }
 
 TEST_CASE("Test evaluating an ops graph", "[ops_eval]") {
-  auto x = stack(store(1, 0), store(1, 1), store(1, 2), store(1, 3));
+  auto x = stack(store(2, 0), store(1, 1), store(2, 2), store(1, 3));
   auto y = apply(x, [](int a) { return 4 - a; });
   auto z = merge(x, y, [](int a, int b) { return a * b; });
   auto result = materialize(z);
-  REQUIRE_THAT(conv::to_vector(*result), Equals<int>({0, 3, 4, 3}));
+  REQUIRE_THAT(conv::to_vector(*result), Equals<int>({0, 0, 3, 4, 4, 3}));
 }

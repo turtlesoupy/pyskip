@@ -35,6 +35,16 @@ auto to_vector(const core::Store<Val>& store) {
 
 template <typename Val>
 auto to_string(const core::Store<Val>& store) {
+  std::string ret = "";
+  ret += store->ends[0];
+  ret += std::string("=>");
+  ret += store->vals[0];
+  for (int i = 1; i < store->size; i += 1) {
+    ret += ", ";
+    ret += store->ends[0];
+    ret += "=>";
+    ret += store->vals[0];
+  }
   return "";
 }
 

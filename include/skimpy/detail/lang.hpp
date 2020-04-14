@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/core.h>
+
 #include <memory>
 #include <vector>
 
@@ -93,9 +95,7 @@ template <typename Val>
 struct Stack : public Op<Val> {
   const std::vector<OpPtr<Val>> inputs;
 
-  Stack(std::vector<OpPtr<Val>> inputs) : inputs(std::move(inputs)) {
-    CHECK_ARGUMENT(this->inputs.size());
-  }
+  Stack(std::vector<OpPtr<Val>> inputs) : inputs(std::move(inputs)) {}
 
   core::Pos span() const override {
     core::Pos ret = 0;
@@ -110,7 +110,10 @@ struct Stack : public Op<Val> {
   }
 
   std::string str() const override {
-    std::string ret = "stack(" + inputs.at(0)->str();
+    std::string ret = "stack(";
+    if (inputs.size()) {
+      ret += inputs.at(0)->str();
+    }
     for (int i = 1; i < inputs.size(); i += 1) {
       ret += ", " + inputs[i]->str();
     }
@@ -375,8 +378,9 @@ auto normalize(const OpPtr<Val>& op) {
       if (auto c = p->input->as<Store<Val>>()) {
         return op;
       } else if (auto c = p->input->as<Slice<Val>>()) {
-        auto start = c->start + c->stride * p->start;
-        auto stop = c->start + c->stride * p->stop;
+        auto span = c->input->span();
+        auto start = std::min(c->start + c->stride * p->start, span);
+        auto stop = std::min(c->start + c->stride * p->stop, span);
         auto stride = c->stride * p->stride;
         return fn(slice(c->input, start, stop, stride));
       } else if (auto c = p->input->as<Merge<Val>>()) {
