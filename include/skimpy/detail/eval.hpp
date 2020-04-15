@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "skimpy/detail/errors.hpp"
+#include "skimpy/detail/threads.hpp"
 #include "skimpy/detail/util.hpp"
 
 namespace skimpy::detail::eval {
@@ -484,33 +485,24 @@ void check_step(const EvalStep<Val>& step) {
 
 template <typename FnRange>
 void run_in_parallel(const FnRange& fns) {
-  std::vector<std::thread> threads;
-  std::vector<std::exception_ptr> exceptions;
+  static auto executor = [] {
+    auto n = std::thread::hardware_concurrency();
+    return std::make_unique<threads::QueueExecutor>(n);
+  }();
 
-  // Create a thread for each task function.
-  int i = 0;
+  std::vector<std::future<void>> futures;
   for (const auto& fn : fns) {
-    exceptions.push_back(nullptr);
-    threads.emplace_back([&exceptions, &fn, i] {
-      try {
-        fn();
-      } catch (...) {
-        exceptions[i] = std::current_exception();
-      }
-    });
-    ++i;
+    futures.push_back(executor->schedule(fn));
   }
-
-  // Wait for all threads to finish before returning.
-  for (auto& thread : threads) {
-    thread.join();
+  for (auto& future : futures) {
+    future.get();
   }
+}
 
-  // Throw any exceptions that were raised.
-  for (auto& exception : exceptions) {
-    if (exception) {
-      std::rethrow_exception(exception);
-    }
+template <typename FnRange>
+void run_inline(const FnRange& fns) {
+  for (const auto& fn : fns) {
+    fn();
   }
 }
 
@@ -578,7 +570,12 @@ auto eval_plan(const EvalPlan<Val>& plan) {
   }
 
   // Run all of the eval tasks in parallel.
-  run_in_parallel(eval_fns);
+  constexpr auto kParallelizeEvalThreshold = 1024 * 1024;
+  if (step_offsets[s] > kParallelizeEvalThreshold) {
+    run_in_parallel(eval_fns);
+  } else {
+    run_inline(eval_fns);
+  }
 
   // Update the output offsets and sizes to reflect comrpession at the edges.
   for (int i = 0; i < s - 1; i += 1) {
@@ -655,7 +652,12 @@ auto eval_plan(const EvalPlan<Val>& plan) {
   }
 
   // Run all of the move tasks in parallel.
-  run_in_parallel(move_fns);
+  constexpr auto kParallelizeMoveThreshold = 1024 * 1024;
+  if (dest_offsets[s] > kParallelizeMoveThreshold) {
+    run_in_parallel(move_fns);
+  } else {
+    run_inline(move_fns);
+  }
 
   return destination;
 }

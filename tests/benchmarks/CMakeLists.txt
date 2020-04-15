@@ -17,5 +17,6 @@ endfunction()
 
 # Add each benchmark target and register it for ctest.
 skimpy_benchmark(asmjit_bench asmjit_bench.cpp)
-skimpy_benchmark(merge_bench merge_bench.cpp)
 skimpy_benchmark(eval_bench eval_bench.cpp)
+skimpy_benchmark(merge_bench merge_bench.cpp)
+skimpy_benchmark(skimpy_bench skimpy_bench.cpp)

@@ -37,6 +37,53 @@ struct Slice {
 };
 
 template <typename Val>
+class Array;
+
+template <typename Val>
+class LazySetter {
+ public:
+  LazySetter(Array<Val>& dst) : dst_(dst), op_(dst_.op_) {}
+  ~LazySetter() {
+    try {
+      flush();
+    } catch (...) {
+      terminate();
+    }
+  }
+
+  void set(Pos pos, Val val) {
+    set(pos, Array<Val>(1, std::move(val)));
+  }
+  void set(const Slice& slice, Val val) {
+    set(slice, Array<Val>(slice.span(), std::move(val)));
+  }
+  void set(Pos pos, const Array<Val>& other) {
+    set(Slice(pos, pos + 1), other);
+  }
+  void set(const Slice& slice, const Array<Val>& other) {
+    // TODO: Implement strided assignment.
+    CHECK_ARGUMENT(slice.stride == 1);
+    CHECK_ARGUMENT(slice.span() == other.len());
+    auto l = lang::slice(op_, 0, slice.start, 1);
+    auto r = lang::slice(op_, slice.stop, dst_.len(), 1);
+    op_ = lang::stack(l, other.op_, r);
+  }
+
+  void flush() {
+    dst_.op_ = lang::store(lang::materialize(op_));
+    op_ = dst_.op_;
+  }
+
+  const Array<Val>& destination() const {
+    return dst_;
+  }
+
+ private:
+  Array<Val>& dst_;
+  lang::OpPtr<Val> op_;
+};
+
+template <typename Val>
 class Array {
  public:
   // Value constructors
@@ -128,6 +175,8 @@ class Array {
   explicit Array(lang::OpPtr<Val> op) : op_(std::move(op)) {}
 
   lang::OpPtr<Val> op_;
+
+  friend class LazySetter<Val>;
 };
 
 // Unary arithmetic operations

@@ -41,6 +41,32 @@ PYBIND11_MODULE(skimpy, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
 
+  using IntLazySetter = skimpy::LazySetter<int>;
+  py::class_<IntLazySetter>(m, "IntLazySetter")
+      .def(py::init<skimpy::Array<int>&>())
+      .def("__enter__", [](IntLazySetter& self) {})
+      .def(
+          "__exit__",
+          [](IntLazySetter& self,
+             py::object exc_type,
+             py::object exc_value,
+             py::object traceback) { self.flush(); })
+      .def(
+          "__setitem__",
+          [](IntLazySetter& self, int pos, int val) { self.set(pos, val); })
+      .def(
+          "__setitem__",
+          [](IntLazySetter& self, py::slice slice, int val) {
+            self.set(convert_slice(self.destination(), slice), val);
+          })
+      .def(
+          "__setitem__",
+          [](IntLazySetter& self,
+             py::slice slice,
+             const skimpy::Array<int>& other) {
+            self.set(convert_slice(self.destination(), slice), other);
+          });
+
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
       .def(py::init<int, int>())
