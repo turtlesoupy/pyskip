@@ -25,7 +25,11 @@ struct Slice {
   Slice(Pos stop) : Slice(0, stop) {}
   Slice(Pos start, Pos stop) : Slice(start, stop, 1) {}
   Slice(Pos start, Pos stop, Pos stride)
-      : start(start), stop(stop), stride(stride) {}
+      : start(start), stop(stop), stride(stride) {
+    CHECK_ARGUMENT(0 <= start);
+    CHECK_ARGUMENT(start <= stop);
+    CHECK_ARGUMENT(stride > 0);
+  }
 
   Pos span() const {
     return 1 + (stop - start - 1) / stride;
@@ -100,20 +104,24 @@ class Array {
   // TODO: Figure out how to handle cross-type math operations
   template <typename ArrayOrVal>
   Array<Val> min(const ArrayOrVal& other) const {
-    return min(*this, other);
+    return skimpy::min(*this, other);
   }
   template <typename ArrayOrVal>
   Array<Val> max(const ArrayOrVal& other) const {
-    return max(*this, other);
+    return skimpy::max(*this, other);
+  }
+  template <typename ArrayOrVal>
+  Array<Val> pow(const ArrayOrVal& other) const {
+    return skimpy::pow(*this, other);
   }
   Array<Val> abs() const {
-    return abs(*this);
+    return skimpy::abs(*this);
   }
   Array<Val> sqrt() const {
-    return sqrt(*this);
+    return skimpy::sqrt(*this);
   }
   Array<Val> exp() const {
-    return exp(*this);
+    return skimpy::exp(*this);
   }
 
  private:
@@ -317,6 +325,23 @@ Array<Val> max(const Array<Val>& lhs, Val rhs) {
 template <typename Val>
 Array<Val> max(Val lhs, const Array<Val>& rhs) {
   return max(Array<Val>(rhs.len(), lhs), rhs);
+}
+
+template <typename Val>
+Array<Val> pow(const Array<Val>& lhs, const Array<Val>& rhs) {
+  return lhs.merge(rhs, [](Val a, Val b) {
+    auto d_a = static_cast<double>(a);
+    auto d_b = static_cast<double>(b);
+    return static_cast<Val>(std::pow(d_a, d_b));
+  });
+}
+template <typename Val>
+Array<Val> pow(const Array<Val>& lhs, Val rhs) {
+  return pow(lhs, Array<Val>(lhs.len(), rhs));
+}
+template <typename Val>
+Array<Val> pow(Val lhs, const Array<Val>& rhs) {
+  return pow(Array<Val>(rhs.len(), lhs), rhs);
 }
 
 }  // namespace skimpy
