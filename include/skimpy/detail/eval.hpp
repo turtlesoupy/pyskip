@@ -123,12 +123,15 @@ auto eval_step_fixed(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    auto new_end = *iter_ends[src]++ - starts[src] - 1;
     if (is_power_of_two(strides[src])) {
       new_end >>= lg2(strides[src]);
     } else {
       new_end /= strides[src];
     }
+    new_end += 1;
+
+    // Update the frontier.
     curr_ends[src] = new_end;
     curr_vals[src] = *iter_vals[src]++;
 
@@ -258,12 +261,13 @@ auto eval_step_stack(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    auto new_end = *iter_ends[src]++ - starts[src] - 1;
     if (is_power_of_two(strides[src])) {
       new_end >>= lg2(strides[src]);
     } else {
       new_end /= strides[src];
     }
+    new_end += 1;
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
@@ -279,6 +283,7 @@ auto eval_step_stack(
       new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
     };
 
+    // Update the frontier.
     curr_ends[src] = new_end;
     curr_vals[src] = *iter_vals[src]++;
 
@@ -409,12 +414,13 @@ auto eval_step_heap(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+    auto new_end = *iter_ends[src]++ - starts[src] - 1;
     if (is_power_of_two(strides[src])) {
       new_end >>= lg2(strides[src]);
     } else {
       new_end /= strides[src];
     }
+    new_end += 1;
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
@@ -430,6 +436,7 @@ auto eval_step_heap(
       new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
     };
 
+    // Update the frontier.
     curr_ends[src] = new_end;
     curr_vals[src] = *iter_vals[src]++;
 

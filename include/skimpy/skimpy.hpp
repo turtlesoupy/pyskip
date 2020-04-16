@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/core.h>
+
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -22,7 +24,7 @@ struct Slice {
   Pos stop;
   Pos stride;
 
-  Slice(Pos stop) : Slice(0, stop) {}
+  explicit Slice(Pos stop) : Slice(0, stop) {}
   Slice(Pos start, Pos stop) : Slice(start, stop, 1) {}
   Slice(Pos start, Pos stop, Pos stride)
       : start(start), stop(stop), stride(stride) {
@@ -40,46 +42,48 @@ template <typename Val>
 class Array;
 
 template <typename Val>
-class LazySetter {
+class ArrayBuilder {
  public:
-  LazySetter(Array<Val>& dst) : dst_(dst), op_(dst_.op_) {}
-  ~LazySetter() {
-    try {
-      flush();
-    } catch (...) {
-      terminate();
-    }
+  // Value constructors
+  explicit ArrayBuilder(std::shared_ptr<Store<Val>> store)
+      : op_(lang::store(store)) {}
+  explicit ArrayBuilder(const Array<Val>& array) : op_(array.op_) {}
+  ArrayBuilder(Pos span, Val fill) : op_(lang::store(span, fill)) {}
+
+  // Metadata methods
+  Pos len() const {
+    return op_->span();
   }
 
-  void set(Pos pos, Val val) {
+  // Value assign methods
+  ArrayBuilder<Val>& set(Pos pos, Val val) {
     set(pos, Array<Val>(1, std::move(val)));
+    return *this;
   }
-  void set(const Slice& slice, Val val) {
+  ArrayBuilder<Val>& set(const Slice& slice, Val val) {
     set(slice, Array<Val>(slice.span(), std::move(val)));
+    return *this;
   }
-  void set(Pos pos, const Array<Val>& other) {
+  ArrayBuilder<Val>& set(Pos pos, const Array<Val>& other) {
     set(Slice(pos, pos + 1), other);
+    return *this;
   }
-  void set(const Slice& slice, const Array<Val>& other) {
+  ArrayBuilder<Val>& set(const Slice& slice, const Array<Val>& other) {
     // TODO: Implement strided assignment.
     CHECK_ARGUMENT(slice.stride == 1);
     CHECK_ARGUMENT(slice.span() == other.len());
     auto l = lang::slice(op_, 0, slice.start, 1);
-    auto r = lang::slice(op_, slice.stop, dst_.len(), 1);
+    auto r = lang::slice(op_, slice.stop, len(), 1);
     op_ = lang::stack(l, other.op_, r);
+    return *this;
   }
 
-  void flush() {
-    dst_.op_ = lang::store(lang::materialize(op_));
-    op_ = dst_.op_;
-  }
-
-  const Array<Val>& destination() const {
-    return dst_;
+  // Builder methods
+  Array<Val> build() {
+    return Array<Val>(lang::materialize(op_));
   }
 
  private:
-  Array<Val>& dst_;
   lang::OpPtr<Val> op_;
 };
 
@@ -88,7 +92,7 @@ class Array {
  public:
   // Value constructors
   explicit Array(std::shared_ptr<Store<Val>> store) : op_(lang::store(store)) {}
-  Array(Pos span, Val fill) : Array<Val>(lang::store(span, fill)) {}
+  Array(Pos span, Val fill) : op_(lang::store(span, fill)) {}
 
   // Copy and move constructors
   Array(const Array<Val>& other) : Array<Val>(lang::materialize(other.op_)) {}
@@ -96,7 +100,7 @@ class Array {
 
   // Copy and move assignment
   Array<Val>& operator=(const Array<Val>& other) {
-    op_ = lang::store(lang::materialize(other.op));
+    op_ = lang::store(lang::materialize(other.op_));
     return *this;
   }
   Array<Val>& operator=(Array<Val>&& other) {
@@ -106,6 +110,18 @@ class Array {
   // Metadata methods
   Pos len() const {
     return op_->span();
+  }
+  std::string str() const {
+    std::string ret = fmt::format("[{}", get(0));
+    if (len() <= 10) {
+      for (int i = 1; i < len(); i += 1) {
+        ret += fmt::format(", {}", get(i));
+      }
+    } else {
+      auto last = get(len() - 1);
+      ret += fmt::format(", {}, {}, {}, ..., {}", get(1), get(2), get(3), last);
+    }
+    return fmt::format("{}]", ret);
   }
 
   // Value assign methods
@@ -176,7 +192,7 @@ class Array {
 
   lang::OpPtr<Val> op_;
 
-  friend class LazySetter<Val>;
+  friend class ArrayBuilder<Val>;
 };
 
 // Unary arithmetic operations

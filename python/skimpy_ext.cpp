@@ -5,10 +5,9 @@
 
 namespace py = pybind11;
 
-template <typename Val>
-auto convert_slice(const skimpy::Array<Val>& array, py::slice slice) {
+auto convert_slice(skimpy::Pos length, py::slice slice) {
   skimpy::Pos start = 0;
-  skimpy::Pos stop = array.len();
+  skimpy::Pos stop = length;
   skimpy::Pos stride = 1;
 
   // Set non-default slice values.
@@ -24,15 +23,15 @@ auto convert_slice(const skimpy::Array<Val>& array, py::slice slice) {
 
   // Handle negative values.
   if (start < 0) {
-    start = array.len() - start;
+    start = length - start;
   }
   if (stop < 0) {
-    stop = array.len() - stop;
+    stop = length - stop;
   }
   CHECK_ARGUMENT(stride > 0);
 
   // Truncate start and stop values before returning.
-  stop = std::min(stop, array.len());
+  stop = std::min(stop, length);
   start = std::min(start, stop);
   return skimpy::Slice(start, stop, stride);
 }
@@ -41,31 +40,27 @@ PYBIND11_MODULE(skimpy, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
 
-  using IntLazySetter = skimpy::LazySetter<int>;
-  py::class_<IntLazySetter>(m, "IntLazySetter")
-      .def(py::init<skimpy::Array<int>&>())
-      .def("__enter__", [](IntLazySetter& self) {})
-      .def(
-          "__exit__",
-          [](IntLazySetter& self,
-             py::object exc_type,
-             py::object exc_value,
-             py::object traceback) { self.flush(); })
+  using IntArrayBuilder = skimpy::ArrayBuilder<int>;
+  py::class_<IntArrayBuilder>(m, "IntArrayBuilder")
+      .def(py::init<int, int>())
+      .def(py::init<skimpy::Array<int>>())
+      .def("__len__", &IntArrayBuilder::len)
       .def(
           "__setitem__",
-          [](IntLazySetter& self, int pos, int val) { self.set(pos, val); })
+          [](IntArrayBuilder& self, int pos, int val) { self.set(pos, val); })
       .def(
           "__setitem__",
-          [](IntLazySetter& self, py::slice slice, int val) {
-            self.set(convert_slice(self.destination(), slice), val);
+          [](IntArrayBuilder& self, py::slice slice, int val) {
+            self.set(convert_slice(self.len(), slice), val);
           })
       .def(
           "__setitem__",
-          [](IntLazySetter& self,
+          [](IntArrayBuilder& self,
              py::slice slice,
              const skimpy::Array<int>& other) {
-            self.set(convert_slice(self.destination(), slice), other);
-          });
+            self.set(convert_slice(self.len(), slice), other);
+          })
+      .def("build", &IntArrayBuilder::build);
 
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
@@ -74,26 +69,15 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "__repr__",
           [](IntArray& self) {
-            std::string ret = "[";
-            ret += std::to_string(self.get(0));
-            if (self.len() <= 10) {
-              for (int i = 1; i < self.len(); i += 1) {
-                ret += ", " + std::to_string(self.get(i));
-              }
-            } else {
-              ret += ", " + std::to_string(self.get(1));
-              ret += ", " + std::to_string(self.get(2));
-              ret += ", " + std::to_string(self.get(3));
-              ret += ", ...";
-              ret += ", " + std::to_string(self.get(self.len() - 1));
-            }
-            return ret + "]";
+            fmt::print("__repr__\n");
+            return self.str();
           })
       .def("__getitem__", [](IntArray& self, int pos) { return self.get(pos); })
       .def(
           "__getitem__",
           [](IntArray& self, py::slice slice) {
-            return self.get(convert_slice(self, slice));
+            fmt::print("__getitem__\n");
+            return self.get(convert_slice(self.len(), slice));
           })
       .def(
           "__setitem__",
@@ -101,12 +85,12 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "__setitem__",
           [](IntArray& self, py::slice slice, int val) {
-            self.set(convert_slice(self, slice), val);
+            self.set(convert_slice(self.len(), slice), val);
           })
       .def(
           "__setitem__",
           [](IntArray& self, py::slice slice, IntArray other) {
-            self.set(convert_slice(self, slice), other);
+            self.set(convert_slice(self.len(), slice), other);
           })
       .def("__neg__", [](const IntArray& self) { return -self; })
       .def("__pos__", [](const IntArray& self) { return +self; })
