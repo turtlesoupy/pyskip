@@ -66,17 +66,11 @@ PYBIND11_MODULE(skimpy, m) {
   py::class_<IntArray>(m, "IntArray")
       .def(py::init<int, int>())
       .def("__len__", &IntArray::len)
-      .def(
-          "__repr__",
-          [](IntArray& self) {
-            fmt::print("__repr__\n");
-            return self.str();
-          })
+      .def("__repr__", [](IntArray& self) { return self.str(); })
       .def("__getitem__", [](IntArray& self, int pos) { return self.get(pos); })
       .def(
           "__getitem__",
           [](IntArray& self, py::slice slice) {
-            fmt::print("__getitem__\n");
             return self.get(convert_slice(self.len(), slice));
           })
       .def(
