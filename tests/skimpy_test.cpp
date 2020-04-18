@@ -99,4 +99,11 @@ TEST_CASE("Test array builders", "[array_builders]") {
   REQUIRE(z.get(3) == 1);
   REQUIRE(z.get(4) == 1);
   REQUIRE(z.str() == "[1, 1, 1, 1, 1]");
+
+  skimpy::Array<int> big(1024 * 1024, 1);
+  skimpy::ArrayBuilder<int> big_builder(big);
+  for (auto i = 0; i < 10; i += 1) {
+    big_builder.set(i, i);
+  }
+  big = big_builder.build();
 }

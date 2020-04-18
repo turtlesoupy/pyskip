@@ -54,6 +54,9 @@ class ArrayBuilder {
   Pos len() const {
     return op_->span();
   }
+  std::string str() const {
+    return lang::str(op_);
+  }
 
   // Value assign methods
   ArrayBuilder<Val>& set(Pos pos, Val val) {
