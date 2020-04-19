@@ -38,6 +38,15 @@ inline auto make_array_ptr(std::initializer_list<T> vals) {
   return ret;
 }
 
+template <typename Range, typename Fn>
+auto map(Range&& r, Fn&& fn) {
+  std::vector<decltype(fn(*r.begin()))> ret;
+  for (const auto& x : r) {
+    ret.push_back(fn(x));
+  }
+  return ret;
+}
+
 template <typename Fn>
 class Fix {
  public:

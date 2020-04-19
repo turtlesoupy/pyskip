@@ -31,6 +31,12 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(skimpy INTERFACE OpenMP::OpenMP_CXX)
 endif()
 
+# fmtlib has propensity to cause "Fatal Error C1128":
+# https://tinyurl.com/yaflrbx9
+if (MSVC)
+  target_compile_options(skimpy INTERFACE /bigobj)
+endif()
+
 # Add python extension targets.
 if(SKIMPY_ENABLE_PYTHON)
   add_subdirectory(python)
