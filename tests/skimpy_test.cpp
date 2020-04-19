@@ -102,8 +102,9 @@ TEST_CASE("Test array builders", "[array_builders]") {
 
   skimpy::Array<int> big(1024 * 1024, 1);
   skimpy::ArrayBuilder<int> big_builder(big);
-  for (auto i = 0; i < 10; i += 1) {
+  for (auto i = 0; i < 1000; i += 1) {
     big_builder.set(i, i);
   }
   big = big_builder.build();
+  REQUIRE(big.get(23) == 23);
 }

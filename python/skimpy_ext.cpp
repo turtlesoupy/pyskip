@@ -45,6 +45,8 @@ PYBIND11_MODULE(skimpy, m) {
       .def(py::init<int, int>())
       .def(py::init<skimpy::Array<int>>())
       .def("__len__", &IntArrayBuilder::len)
+      .def("__repr__", &IntArrayBuilder::str)
+      .def("plan", &IntArrayBuilder::plan)
       .def(
           "__setitem__",
           [](IntArrayBuilder& self, int pos, int val) { self.set(pos, val); })

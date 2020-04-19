@@ -228,12 +228,16 @@ inline auto traverse(const OpPtr<Val>& op, Fn&& fn) {
   Fix tr([&](const auto& tr, const OpPtr<Val>& op) -> Deferred<Ret> {
     auto pre = std::make_shared<Deferred<Ret>>();
     call_queue.push_back([&fn, &call_queue, &tr, pre, op] {
-      call_queue.push_back([pre, post = fn(tr, op)] { *pre = post; });
+      call_queue.push_back([pre, post = fn(tr, op)] {
+        *pre = post;
+        pre->get();  // Pre-generate to avoid stack overflow.
+      });
     });
     return make_deferred([pre] { return pre->get(); });
   });
 
   auto ret = tr(op);
+
   for (;;) {
     call_stack.insert(call_stack.end(), call_queue.rbegin(), call_queue.rend());
     call_queue.clear();
@@ -275,13 +279,12 @@ inline auto linearize(const OpPtr<Val>& op) {
     } else if (auto p = op->as<Slice<Val>>()) {
       return tr(p->input).then([&, op] { ret.push_back(op); });
     } else if (auto p = op->as<Stack<Val>>()) {
-      std::vector<Deferred<void>> d;
-      for (const auto& input : p->inputs) {
-        d.push_back(tr(input));
-      }
+      auto d = map(p->inputs, tr);
       return chain(d).then([&, op] { ret.push_back(op); });
     } else if (auto p = op->as<Merge<Val>>()) {
-      return chain(tr(p->lhs), tr(p->rhs)).then([&, op] { ret.push_back(op); });
+      auto l = tr(p->lhs);
+      auto r = tr(p->rhs);
+      return chain(l, r).then([&, op] { ret.push_back(op); });
     } else if (auto p = op->as<Apply<Val>>()) {
       return tr(p->input).then([&, op] { ret.push_back(op); });
     } else {
@@ -349,6 +352,11 @@ inline auto str(const OpPtr<Val>& op, const char* sep = " ") {
 }
 
 template <typename Val>
+inline auto count(const OpPtr<Val>& op) {
+  return linearize(op).size();
+}
+
+template <typename Val>
 inline auto depth(const OpPtr<Val>& op) {
   return cached_traverse<int>(op, [](const auto& tr, const auto& op) {
     if (auto p = op->as<Store<Val>>()) {
@@ -404,7 +412,15 @@ inline auto normalize(const OpPtr<Val>& op) {
           auto stop = std::min(p->stop - offset, input->span());
           auto stride = p->stride;
           if (start < stop && offset + start >= p->start) {
-            inputs.push_back(slice(input, start, stop, stride));
+            if (auto gc = input->as<Slice<Val>>()) {
+              auto span = gc->input->span();
+              start = std::min(gc->start + gc->stride * start, span);
+              stop = std::min(gc->start + gc->stride * stop, span);
+              stride = gc->stride * stride;
+              inputs.push_back(slice(gc->input, start, stop, stride));
+            } else {
+              inputs.push_back(slice(input, start, stop, stride));
+            }
           }
           offset += input->span();
         }

@@ -74,7 +74,10 @@ class CMakeBuild(build_ext):
     # Run CMake build.
     print("Executing cmake build...")
     subprocess.check_call(
-        args = ["cmake", "--build", ".", "--config", config],
+        args = [
+            "cmake", "--build", ".", "--target", "skimpy_ext", "--config",
+            config
+        ],
         cwd = self.build_temp,
     )
 

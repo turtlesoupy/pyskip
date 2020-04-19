@@ -46,8 +46,9 @@ class ArrayBuilder {
  public:
   // Value constructors
   explicit ArrayBuilder(std::shared_ptr<Store<Val>> store)
-      : op_(lang::store(store)) {}
-  explicit ArrayBuilder(const Array<Val>& array) : op_(array.op_) {}
+      : op_(lang::store(store)), store_size_(store->size) {}
+  explicit ArrayBuilder(const Array<Val>& array)
+      : ArrayBuilder(lang::materialize(array.op_)) {}
   ArrayBuilder(Pos span, Val fill) : op_(lang::store(span, fill)) {}
 
   // Metadata methods
@@ -56,6 +57,9 @@ class ArrayBuilder {
   }
   std::string str() const {
     return lang::str(op_);
+  }
+  std::string plan() const {
+    return lang::str(lang::normalize(op_));
   }
 
   // Value assign methods
@@ -78,6 +82,7 @@ class ArrayBuilder {
     auto l = lang::slice(op_, 0, slice.start, 1);
     auto r = lang::slice(op_, slice.stop, len(), 1);
     op_ = lang::stack(l, other.op_, r);
+    maybe_materialize();
     return *this;
   }
 
@@ -87,7 +92,17 @@ class ArrayBuilder {
   }
 
  private:
+  void maybe_materialize() {
+    auto op_count = count(op_);
+    if (op_count * op_count > store_size_) {
+      auto store = lang::materialize(op_);
+      store_size_ = store->size;
+      op_ = lang::store(store);
+    }
+  }
+
   lang::OpPtr<Val> op_;
+  int store_size_;
 };
 
 template <typename Val>
