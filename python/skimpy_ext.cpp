@@ -24,10 +24,10 @@ auto convert_slice(skimpy::Pos length, py::slice slice) {
 
   // Handle negative values.
   if (start < 0) {
-    start = length - start;
+    start = length + start;
   }
   if (stop < 0) {
-    stop = length - stop;
+    stop = length + stop;
   }
   CHECK_ARGUMENT(stride > 0);
 
@@ -49,7 +49,7 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "__repr__",
           [](IntArrayBuilder& self) {
-            return fmt::format("IntArrayBuilder({})", self.build().str());
+            return fmt::format("ArrayBuilder<int>({})", self.build().str());
           })
       .def(
           "__setitem__",
@@ -75,14 +75,14 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "__repr__",
           [](IntArray& self) {
-            return fmt::format("IntArray({})", self.str());
+            return fmt::format("Array<int>({})", self.str());
           })
       .def(
           "to_numpy",
           [](IntArray& self) {
             auto store = self.store();
             int* buffer = new int[store->span()];
-            skimpy::to_buffer(*store, buffer);
+            skimpy::conv::to_buffer(*store, buffer);
             return py::array_t<int>(store->span(), buffer);
           })
       .def("__getitem__", [](IntArray& self, int pos) { return self.get(pos); })

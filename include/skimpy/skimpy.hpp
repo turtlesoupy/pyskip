@@ -12,9 +12,8 @@
 
 namespace skimpy {
 
-constexpr auto&& to_buffer = detail::conv::to_buffer;
-
 namespace core = detail::core;
+namespace conv = detail::conv;
 namespace lang = detail::lang;
 
 using Pos = core::Pos;
