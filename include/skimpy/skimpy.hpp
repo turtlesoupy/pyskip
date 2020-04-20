@@ -6,10 +6,13 @@
 #include <memory>
 #include <vector>
 
+#include "detail/conv.hpp"
 #include "detail/core.hpp"
 #include "detail/lang.hpp"
 
 namespace skimpy {
+
+constexpr auto&& to_buffer = detail::conv::to_buffer;
 
 namespace core = detail::core;
 namespace lang = detail::lang;
@@ -45,30 +48,34 @@ template <typename Val>
 class ArrayBuilder {
  public:
   // Value constructors
+  explicit ArrayBuilder(const Array<Val>& array) : span_(array.len()) {
+    set(array);
+  }
   explicit ArrayBuilder(std::shared_ptr<Store<Val>> store)
-      : op_(lang::store(store)), store_size_(store->size) {}
-  explicit ArrayBuilder(const Array<Val>& array)
-      : ArrayBuilder(lang::materialize(array.op_)) {}
-  ArrayBuilder(Pos span, Val fill) : op_(lang::store(span, fill)) {}
+      : ArrayBuilder<Val>(Array<Val>(std::move(store))) {}
+  ArrayBuilder(Pos span, Val fill)
+      : ArrayBuilder<Val>(Array<Val>(span, fill)) {}
 
   // Metadata methods
   Pos len() const {
-    return op_->span();
-  }
-  std::string str() const {
-    return lang::str(op_);
-  }
-  std::string plan() const {
-    return lang::str(lang::normalize(op_));
+    return span_;
   }
 
   // Value assign methods
+  ArrayBuilder<Val>& set(Val val) {
+    set(Slice(span_), std::move(val));
+    return *this;
+  }
   ArrayBuilder<Val>& set(Pos pos, Val val) {
     set(pos, Array<Val>(1, std::move(val)));
     return *this;
   }
   ArrayBuilder<Val>& set(const Slice& slice, Val val) {
     set(slice, Array<Val>(slice.span(), std::move(val)));
+    return *this;
+  }
+  ArrayBuilder<Val>& set(const Array<Val>& other) {
+    set(Slice(span_), other);
     return *this;
   }
   ArrayBuilder<Val>& set(Pos pos, const Array<Val>& other) {
@@ -78,31 +85,85 @@ class ArrayBuilder {
   ArrayBuilder<Val>& set(const Slice& slice, const Array<Val>& other) {
     // TODO: Implement strided assignment.
     CHECK_ARGUMENT(slice.stride == 1);
+    CHECK_ARGUMENT(0 <= slice.start && slice.stop <= len());
     CHECK_ARGUMENT(slice.span() == other.len());
-    auto l = lang::slice(op_, 0, slice.start, 1);
-    auto r = lang::slice(op_, slice.stop, len(), 1);
-    op_ = lang::stack(l, other.op_, r);
-    maybe_materialize();
+    sets_.emplace_back(sets_.size(), slice, other.op_);
     return *this;
   }
 
   // Builder methods
   Array<Val> build() {
-    return Array<Val>(lang::materialize(op_));
+    // TODO: This algorithm below should actually be incorporated into the lang
+    // expression normalization routine. It's here now as a temporary hack.
+    auto rank_fn = [](const auto& p1, const auto& p2) {
+      auto s1 = std::get<1>(p1).start;
+      auto s2 = std::get<1>(p2).start;
+      auto i1 = std::get<0>(p1);
+      auto i2 = std::get<0>(p2);
+      return s1 == s2 ? i1 < i2 : s1 > s2;
+    };
+
+    auto pop_heap = [&](auto& b, auto& e) {
+      auto ret = std::move(*b);
+      std::pop_heap(b, e--, rank_fn);
+      return ret;
+    };
+
+    auto push_heap = [&](auto& b, auto& e, auto v) {
+      *e++ = std::move(v);
+      std::push_heap(b, e, rank_fn);
+    };
+
+    // Prepare a heap with all set operations.
+    std::make_heap(sets_.begin(), sets_.end(), rank_fn);
+
+    // Initialize the output slices composing the output stack.
+    std::vector<lang::OpPtr<Val>> slices;
+
+    // Track the relative slice offsets of each set.
+    std::unordered_map<lang::OpPtr<Val>, core::Pos> offsets;
+    auto emit_slice = [&](const auto& op, auto span) {
+      auto& offset = offsets[op];
+      slices.push_back(slice(op, offset, offset + span, 1));
+      offset += span;
+    };
+
+    // Emit all slices composing the output stack.
+    auto b = sets_.begin();
+    auto e = sets_.end();
+    auto x = pop_heap(b, e);
+    while (b != e) {
+      auto y = pop_heap(b, e);
+      auto [xi, xs, xo] = x;
+      auto [yi, ys, yo] = y;
+
+      if (xi > yi && xs.stop > ys.start) {
+        if (ys.stop > xs.stop) {
+          ys.start = xs.stop;
+          push_heap(b, e, std::make_tuple(yi, ys, yo));
+        }
+      } else {
+        CHECK_STATE(xi < yi || xs.stop == ys.start);
+        CHECK_STATE(xs.start < ys.start);
+        emit_slice(xo, ys.start - xs.start);
+        if (xs.stop > ys.start) {
+          xs.start = ys.start;
+          push_heap(b, e, std::make_tuple(xi, xs, xo));
+        }
+        x = y;
+      }
+    }
+    emit_slice(std::get<2>(x), len() - std::get<1>(x).start);
+
+    Array<Val> ret(lang::materialize(lang::stack(slices)));
+    sets_.clear();
+    set(ret);
+    return ret;
   }
 
  private:
-  void maybe_materialize() {
-    auto op_count = count(op_);
-    if (op_count * op_count > store_size_) {
-      auto store = lang::materialize(op_);
-      store_size_ = store->size;
-      op_ = lang::store(store);
-    }
-  }
-
-  lang::OpPtr<Val> op_;
-  int store_size_;
+  core::Pos span_;
+  std::vector<std::tuple<size_t, Slice, lang::OpPtr<Val>>> sets_;
 };
 
 template <typename Val>
@@ -162,6 +223,9 @@ class Array {
   }
 
   // Value access methods
+  std::shared_ptr<Store<Val>> store() const {
+    return lang::materialize(op_);
+  }
   Val get(Pos pos) const {
     return lang::materialize(get(Slice(pos, pos + 1)).op_)->vals[0];
   }

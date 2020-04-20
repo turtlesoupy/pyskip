@@ -1,3 +1,4 @@
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -45,8 +46,11 @@ PYBIND11_MODULE(skimpy, m) {
       .def(py::init<int, int>())
       .def(py::init<skimpy::Array<int>>())
       .def("__len__", &IntArrayBuilder::len)
-      .def("__repr__", &IntArrayBuilder::str)
-      .def("plan", &IntArrayBuilder::plan)
+      .def(
+          "__repr__",
+          [](IntArrayBuilder& self) {
+            return fmt::format("IntArrayBuilder({})", self.build().str());
+          })
       .def(
           "__setitem__",
           [](IntArrayBuilder& self, int pos, int val) { self.set(pos, val); })
@@ -68,7 +72,19 @@ PYBIND11_MODULE(skimpy, m) {
   py::class_<IntArray>(m, "IntArray")
       .def(py::init<int, int>())
       .def("__len__", &IntArray::len)
-      .def("__repr__", [](IntArray& self) { return self.str(); })
+      .def(
+          "__repr__",
+          [](IntArray& self) {
+            return fmt::format("IntArray({})", self.str());
+          })
+      .def(
+          "to_numpy",
+          [](IntArray& self) {
+            auto store = self.store();
+            int* buffer = new int[store->span()];
+            skimpy::to_buffer(*store, buffer);
+            return py::array_t<int>(store->span(), buffer);
+          })
       .def("__getitem__", [](IntArray& self, int pos) { return self.get(pos); })
       .def(
           "__getitem__",
