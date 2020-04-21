@@ -1,18 +1,50 @@
 #pragma once
 
+#include <fmt/core.h>
+
 #include <string>
 #include <vector>
 
 #include "core.hpp"
+#include "errors.hpp"
 
 namespace skimpy::detail::conv {
 
-// TODO: Implement these conversion routines.
+using Pos = core::Pos;
 
 template <typename Val, typename Allocator>
-auto to_store(const std::vector<Val, Allocator>& vals) {
-  core::Store<Val> ret;
-  return ret;
+auto to_store(const std::vector<Val, Allocator>& array) {
+  return to_store(array.size(), array.data());
+}
+
+template <typename Val>
+auto to_store(size_t size, const Val* buffer) {
+  CHECK_ARGUMENT(size > 0);
+
+  // Work out how big of a store array is needed.
+  auto store_size = 1;
+  for (int i = 1; i < size; i += 1) {
+    if (buffer[i] != buffer[i - 1]) {
+      store_size += 1;
+    }
+  }
+
+  // Create the store arrays.
+  std::unique_ptr<Pos[]> ends(new Pos[store_size]);
+  std::unique_ptr<Val[]> vals(new Val[store_size]);
+  auto ends_ptr = &ends[0];
+  auto vals_ptr = &vals[0];
+  for (int i = 1; i < size; i += 1) {
+    if (buffer[i] != buffer[i - 1]) {
+      *ends_ptr++ = i;
+      *vals_ptr++ = buffer[i - 1];
+    }
+  }
+  *ends_ptr = size;
+  *vals_ptr = buffer[size - 1];
+
+  return std::make_shared<core::Store<Val>>(
+      store_size, std::move(ends), std::move(vals));
 }
 
 template <typename Val>
@@ -49,13 +81,12 @@ auto to_vector(const core::Store<Val>& store) {
 
 template <typename Val>
 auto to_string(const core::Store<Val>& store) {
-  std::string ret = "";
-  ret += std::to_string(store->ends[0]) + "=>" + std::to_string(store->vals[0]);
-  for (int i = 1; i < store->size; i += 1) {
-    ret += ", " + std::to_string(store->ends[i]);
-    ret += "=>" + std::to_string(store->vals[i]);
+  CHECK_ARGUMENT(store.size);
+  auto ret = fmt::format("{}=>{}", store.ends[0], store.vals[0]);
+  for (int i = 1; i < store.size; i += 1) {
+    ret += fmt::format(", {}=>{}", store.ends[i], store.vals[i]);
   }
-  return "";
+  return ret;
 }
 
 };  // namespace skimpy::detail::conv

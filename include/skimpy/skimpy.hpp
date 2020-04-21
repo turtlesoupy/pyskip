@@ -173,16 +173,17 @@ class Array {
   Array(Pos span, Val fill) : op_(lang::store(span, fill)) {}
 
   // Copy and move constructors
-  Array(const Array<Val>& other) : Array<Val>(lang::materialize(other.op_)) {}
-  Array(Array<Val>&& other) : Array<Val>(other) {}
+  Array(const Array<Val>& other) : op_(other.op_) {}
+  Array(Array<Val>&& other) : op_(std::move(other.op_)) {}
 
   // Copy and move assignment
   Array<Val>& operator=(const Array<Val>& other) {
-    op_ = lang::store(lang::materialize(other.op_));
+    op_ = other.op_;
     return *this;
   }
   Array<Val>& operator=(Array<Val>&& other) {
-    return *this = other;
+    op_ = std::move(other.op_);
+    return *this;
   }
 
   // Metadata methods
@@ -202,6 +203,14 @@ class Array {
     return fmt::format("{}]", ret);
   }
 
+  // Utility methods
+  std::shared_ptr<Store<Val>> store() const {
+    return lang::materialize(op_);
+  }
+  Array<Val> clone() const {
+    return Array<Val>(op_);
+  }
+
   // Value assign methods
   void set(Pos pos, Val val) {
     set(pos, Array<Val>(1, std::move(val)));
@@ -216,17 +225,15 @@ class Array {
     // TODO: Implement strided assignment.
     CHECK_ARGUMENT(slice.stride == 1);
     CHECK_ARGUMENT(slice.span() == other.len());
-    auto l = lang::slice(op_, 0, slice.start, 1);
-    auto r = lang::slice(op_, slice.stop, len(), 1);
-    op_ = lang::store(lang::materialize(lang::stack(l, other.op_, r)));
+    *this = Array<Val>(lang::stack(
+        lang::slice(op_, 0, slice.start, 1),
+        other.op_,
+        lang::slice(op_, slice.stop, len(), 1)));
   }
 
   // Value access methods
-  std::shared_ptr<Store<Val>> store() const {
-    return lang::materialize(op_);
-  }
   Val get(Pos pos) const {
-    return lang::materialize(get(Slice(pos, pos + 1)).op_)->vals[0];
+    return get(Slice(pos, pos + 1)).store()->vals[0];
   }
   Array<Val> get(const Slice& slice) const {
     CHECK_ARGUMENT(0 <= slice.start && slice.stop <= len());
@@ -269,7 +276,17 @@ class Array {
   }
 
  private:
-  explicit Array(lang::OpPtr<Val> op) : op_(std::move(op)) {}
+  explicit Array(lang::OpPtr<Val> op) : op_(std::move(op)) {
+    // There is some cost-criterion for deciding when it's better to evaluate
+    // an op. One reason to eagerly evaluate is to share work across separate
+    // arrays with shared histories. Another reason to eagerly evaluate is to
+    // account for the non-linear costs of lang parsing and array evaluation.
+    // TODO: Figure out the right way to model the cost threshold here.
+    constexpr auto kFlushThreshold = 32;
+    if (count(op_) > kFlushThreshold) {
+      op_ = lang::store(lang::materialize(op_));
+    }
+  }
 
   lang::OpPtr<Val> op_;
 

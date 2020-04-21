@@ -408,19 +408,12 @@ inline auto normalize(const OpPtr<Val>& op) {
         std::vector<OpPtr<Val>> inputs;
         for (const auto& input : c.inputs) {
           auto rel_s = p->start - offset;
-          auto start = std::max(rel_s, (p->stride + rel_s) % p->stride);
+          auto mod_s = p->stride;
+          auto start = std::max(rel_s, (mod_s + (rel_s % mod_s)) % mod_s);
           auto stop = std::min(p->stop - offset, input->span());
           auto stride = p->stride;
           if (start < stop && offset + start >= p->start) {
-            if (auto gc = input->as<Slice<Val>>()) {
-              auto span = gc->input->span();
-              start = std::min(gc->start + gc->stride * start, span);
-              stop = std::min(gc->start + gc->stride * stop, span);
-              stride = gc->stride * stride;
-              inputs.push_back(slice(gc->input, start, stop, stride));
-            } else {
-              inputs.push_back(slice(input, start, stop, stride));
-            }
+            inputs.push_back(slice(input, start, stop, stride));
           }
           offset += input->span();
         }

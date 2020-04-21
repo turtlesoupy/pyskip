@@ -41,6 +41,13 @@ PYBIND11_MODULE(skimpy, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
 
+  // Module routines
+  m.def("from_numpy", [](py::array_t<int>& array) {
+    auto store = skimpy::conv::to_store(array.size(), array.data());
+    return skimpy::Array<int>(store);
+  });
+
+  // ArrayBuilder class for int value types
   using IntArrayBuilder = skimpy::ArrayBuilder<int>;
   py::class_<IntArrayBuilder>(m, "IntArrayBuilder")
       .def(py::init<int, int>())
@@ -68,6 +75,7 @@ PYBIND11_MODULE(skimpy, m) {
           })
       .def("build", &IntArrayBuilder::build);
 
+  // Array class for int value types
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
       .def(py::init<int, int>())
@@ -77,6 +85,10 @@ PYBIND11_MODULE(skimpy, m) {
           [](IntArray& self) {
             return fmt::format("Array<int>({})", self.str());
           })
+      .def("clone", &IntArray::clone)
+      .def(
+          "dumps",
+          [](IntArray& self) { return skimpy::conv::to_string(*self.store()); })
       .def(
           "to_numpy",
           [](IntArray& self) {
