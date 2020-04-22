@@ -30,6 +30,10 @@ struct EvalSource {
   EvalSource(
       std::shared_ptr<core::Store<Val>> store, Pos start, Pos stop, Pos stride)
       : store(std::move(store)), start(start), stop(stop), stride(stride) {}
+
+  int span() const {
+    return 1 + (stop - start - 1) / stride;
+  }
 };
 
 template <typename Val>
@@ -41,6 +45,10 @@ struct EvalStep {
 
   EvalStep(Pos start, Pos stop, EvalFn<Val> eval_fn)
       : start(start), stop(stop), eval_fn(eval_fn) {}
+
+  int span() const {
+    return stop - start;
+  }
 
   int size() const {
     int size = 1;
@@ -490,6 +498,40 @@ void check_step(const EvalStep<Val>& step) {
   CHECK_ARGUMENT(spans[0] == (step.stop - step.start));
 }
 
+template <typename Val>
+auto parallelize_plan(const EvalPlan<Val>& plan) {
+  // STRATEGY: Partition each step into a fixed number of equal-sized chunks
+  // if their total size exceeds some threshold. This approach should have a
+  // minimal overhead while enabling balanced parallelism.
+  static constexpr int kThreshold = 32 * 1024;
+  static int kNumChunks = [] { return std::thread::hardware_concurrency(); }();
+
+  EvalPlan<Val> ret;
+  for (const auto& step : plan.steps) {
+    uint64_t span = step.span();
+    if (span > kThreshold) {
+      for (auto i = 0; i < kNumChunks; i += 1) {
+        ret.steps.emplace_back(
+            static_cast<Pos>(step.start + (span * i) / kNumChunks),
+            static_cast<Pos>(step.start + (span * (i + 1)) / kNumChunks),
+            step.eval_fn);
+        for (auto& src : step.sources) {
+          uint64_t src_span = src.stride * src.span();
+          ret.steps.back().sources.emplace_back(
+              src.store,
+              static_cast<Pos>(src.start + (src_span * i) / kNumChunks),
+              static_cast<Pos>(src.start + (src_span * (i + 1)) / kNumChunks),
+              src.stride);
+        }
+      }
+    } else {
+      ret.steps.push_back(step);
+    }
+  }
+
+  return ret;
+}
+
 template <typename FnRange>
 void run_in_parallel(const FnRange& fns) {
   static auto executor = [] {
@@ -514,14 +556,16 @@ void run_inline(const FnRange& fns) {
 }
 
 template <typename Val>
-auto eval_plan(const EvalPlan<Val>& plan) {
-  auto s = plan.steps.size();
-  CHECK_ARGUMENT(s <= std::numeric_limits<int32_t>::max());
-
+auto eval_plan(const EvalPlan<Val>& input_plan) {
   // Validate that each step is properly configured.
-  for (const auto& step : plan.steps) {
+  for (const auto& step : input_plan.steps) {
     check_step(step);
   }
+
+  // Augment the plan to add better parallelization.
+  auto plan = parallelize_plan(input_plan);
+  auto s = plan.steps.size();
+  CHECK_ARGUMENT(s <= std::numeric_limits<int32_t>::max());
 
   // We need to keep track of where we write each step's output into the
   // temporary store and the size of each output after compression.
@@ -659,7 +703,7 @@ auto eval_plan(const EvalPlan<Val>& plan) {
   }
 
   // Run all of the move tasks in parallel.
-  constexpr auto kParallelizeMoveThreshold = 1024 * 1024;
+  constexpr auto kParallelizeMoveThreshold = 1024;
   if (dest_offsets[s] > kParallelizeMoveThreshold) {
     run_in_parallel(move_fns);
   } else {

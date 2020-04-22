@@ -16,11 +16,20 @@ namespace skimpy::detail::lang {
 
 template <typename Val>
 struct Op {
-  Op(core::Pos span) : span_(span) {}
+  Op(core::Pos span, int depth, int count)
+      : span_(span), depth_(depth), count_(count) {}
   virtual ~Op() = default;
 
   core::Pos span() const {
     return span_;
+  };
+
+  int depth() const {
+    return depth_;
+  };
+
+  int count() const {
+    return depth_;
   };
 
   template <typename OpType>
@@ -41,6 +50,8 @@ struct Op {
 
  private:
   core::Pos span_;
+  int depth_;
+  int count_;
 };
 
 template <typename Val>
@@ -51,7 +62,7 @@ struct Store : public Op<Val> {
   const std::shared_ptr<core::Store<Val>> store;
 
   Store(std::shared_ptr<core::Store<Val>> store)
-      : Op(store->span()), store(std::move(store)) {
+      : Op(store->span(), 1, 1), store(std::move(store)) {
     CHECK_ARGUMENT(span());
   }
 };
@@ -64,7 +75,9 @@ struct Slice : public Op<Val> {
   const core::Pos stride;
 
   Slice(std::shared_ptr<Op<Val>> input, int start, int stop, int stride)
-      : Op(1 + (stop - start - 1) / stride),
+      : Op(1 + (stop - start - 1) / stride,
+           1 + input->depth(),
+           1 + input->count()),
         input(input),
         start(start),
         stop(stop),
@@ -81,7 +94,29 @@ struct Stack : public Op<Val> {
   const std::vector<OpPtr<Val>> inputs;
 
   Stack(std::vector<OpPtr<Val>> inputs)
-      : Op(sum_of_spans(inputs)), inputs(std::move(inputs)) {}
+      : Op(sum(inputs, [](const auto& op) { return op->span(); }),
+           max(inputs, [](const auto& op) { return op->depth(); }) + 1,
+           sum(inputs, [](const auto& op) { return op->count(); }) + 1),
+        inputs(std::move(inputs)) {}
+
+ private:
+  template <typename Fn>
+  static auto sum(const std::vector<OpPtr<Val>>& inputs, Fn&& fn) {
+    decltype(fn(inputs[0])) ret = 0;
+    for (const auto& op : inputs) {
+      ret += fn(op);
+    }
+    return ret;
+  }
+
+  template <typename Fn>
+  static auto max(const std::vector<OpPtr<Val>>& inputs, Fn&& fn) {
+    decltype(fn(inputs[0])) ret = 0;
+    for (const auto& op : inputs) {
+      ret = std::max(ret, fn(op));
+    }
+    return ret;
+  }
 };
 
 template <typename Val>
@@ -92,7 +127,10 @@ struct Merge : public Op<Val> {
   const Fn fn;
 
   Merge(OpPtr<Val> lhs, OpPtr<Val> rhs, Fn fn)
-      : Op(lhs->span()), lhs(std::move(lhs)), rhs(std::move(rhs)), fn(fn) {
+      : Op(lhs->span(), 1 + lhs->depth(), 1 + lhs->count()),
+        lhs(std::move(lhs)),
+        rhs(std::move(rhs)),
+        fn(fn) {
     CHECK_ARGUMENT(this->lhs->span() == this->rhs->span());
   }
 };
@@ -104,7 +142,9 @@ struct Apply : public Op<Val> {
   const Fn fn;
 
   Apply(OpPtr<Val> input, Fn fn)
-      : Op(input->span()), input(std::move(input)), fn(fn) {}
+      : Op(input->span(), 1 + input->depth(), 1 + input->count()),
+        input(std::move(input)),
+        fn(fn) {}
 };
 
 template <typename Val>
@@ -353,34 +393,12 @@ inline auto str(const OpPtr<Val>& op, const char* sep = " ") {
 
 template <typename Val>
 inline auto count(const OpPtr<Val>& op) {
-  return linearize(op).size();
+  return op->count();
 }
 
 template <typename Val>
 inline auto depth(const OpPtr<Val>& op) {
-  return cached_traverse<int>(op, [](const auto& tr, const auto& op) {
-    if (auto p = op->as<Store<Val>>()) {
-      return make_deferred([] { return 1; });
-    } else if (auto p = op->as<Slice<Val>>()) {
-      return tr(p->input).then([](int depth) { return depth + 1; });
-    } else if (auto p = op->as<Stack<Val>>()) {
-      Deferred<int> d([] { return 0; });
-      for (const auto& input : p->inputs) {
-        d = chain(std::move(d), tr(input)).then([](auto depths) {
-          return std::max(std::get<0>(depths), std::get<1>(depths));
-        });
-      }
-      return std::move(d).then([](int depth) { return depth + 1; });
-    } else if (auto p = op->as<Merge<Val>>()) {
-      return chain(tr(p->lhs), tr(p->rhs)).then([](auto depths) {
-        return 1 + std::max(std::get<0>(depths), std::get<1>(depths));
-      });
-    } else if (auto p = op->as<Apply<Val>>()) {
-      return tr(p->input).then([](int depth) { return depth + 1; });
-    } else {
-      CHECK_UNREACHABLE("Unsupported op type");
-    }
-  });
+  return op->depth();
 }
 
 template <typename Val>
@@ -557,20 +575,32 @@ inline auto materialize(const OpPtr<Val>& input) {
         Merge<Val>::Fn merge_fn;
       };
     };
+
+    constexpr auto kStackAlign = std::hardware_destructive_interference_size;
     struct EvalFunc {
-      std::vector<EvalNode> nodes;
+      int stack_size;
       std::unique_ptr<Val[]> stack;
+      std::shared_ptr<std::vector<EvalNode>> nodes;
+
+      EvalFunc(int stack_size)
+          : stack_size(stack_size),
+            stack(new Val[stack_size, kStackAlign]),
+            nodes(std::make_shared<std::vector<EvalNode>>()) {}
+
+      EvalFunc(const EvalFunc& ef)
+          : stack_size(ef.stack_size),
+            stack(new Val[ef.stack_size, kStackAlign]),
+            nodes(ef.nodes) {}
     };
 
     // Initialize the state of the eval fn.
-    constexpr auto kCacheLineSize = std::hardware_destructive_interference_size;
-    auto ef = std::make_shared<EvalFunc>();
-    ef->stack.reset(new Val[depth(root), kCacheLineSize]);
+    EvalFunc ef(depth(root));
+    auto& ef_nodes = *ef.nodes;
 
     // Initialize the step.
     eval::EvalStep<Val> step(offset, offset + root->span(), [ef](Val* inputs) {
-      auto sp = &ef->stack[0];
-      for (auto cn : ef->nodes) {
+      auto sp = &ef.stack[0];
+      for (auto cn : *ef.nodes) {
         switch (cn.tag) {
           case EvalNode::STORE:
             *sp++ = inputs[cn.index];
@@ -592,20 +622,20 @@ inline auto materialize(const OpPtr<Val>& input) {
       if (auto p = op->as<Slice<Val>>()) {
         const auto& store = p->input->to<Store<Val>>();
         step.sources.emplace_back(store.store, p->start, p->stop, p->stride);
-        ef->nodes.emplace_back();
-        ef->nodes.back().tag = EvalNode::STORE;
-        ef->nodes.back().index = step.sources.size() - 1;
+        ef_nodes.emplace_back();
+        ef_nodes.back().tag = EvalNode::STORE;
+        ef_nodes.back().index = step.sources.size() - 1;
       } else if (auto p = op->as<Merge<Val>>()) {
         fn(p->lhs);
         fn(p->rhs);
-        ef->nodes.emplace_back();
-        ef->nodes.back().tag = EvalNode::MERGE;
-        ef->nodes.back().merge_fn = p->fn;
+        ef_nodes.emplace_back();
+        ef_nodes.back().tag = EvalNode::MERGE;
+        ef_nodes.back().merge_fn = p->fn;
       } else if (auto p = op->as<Apply<Val>>()) {
         fn(p->input);
-        ef->nodes.emplace_back();
-        ef->nodes.back().tag = EvalNode::APPLY;
-        ef->nodes.back().apply_fn = p->fn;
+        ef_nodes.emplace_back();
+        ef_nodes.back().tag = EvalNode::APPLY;
+        ef_nodes.back().apply_fn = p->fn;
       }
     })(root);
 

@@ -39,7 +39,7 @@ inline auto make_array_ptr(std::initializer_list<T> vals) {
 }
 
 template <typename Range, typename Fn>
-auto map(Range&& r, Fn&& fn) {
+inline auto map(Range&& r, Fn&& fn) {
   std::vector<decltype(fn(*r.begin()))> ret;
   for (const auto& x : r) {
     ret.push_back(fn(x));
@@ -169,7 +169,7 @@ inline auto make_deferred(Fn&& fn) {
 };
 
 template <typename T>
-auto chain(std::vector<Deferred<T>> inputs) {
+inline auto chain(std::vector<Deferred<T>> inputs) {
   return Deferred<std::vector<T>>([inputs = std::move(inputs)] {
     std::vector<T> ret;
     ret.reserve(inputs.size());
@@ -181,7 +181,7 @@ auto chain(std::vector<Deferred<T>> inputs) {
 }
 
 template <>
-auto chain(std::vector<Deferred<void>> inputs) {
+inline auto chain(std::vector<Deferred<void>> inputs) {
   return Deferred<void>([inputs = std::move(inputs)] {
     for (const auto& input : inputs) {
       input.get();
@@ -192,7 +192,7 @@ auto chain(std::vector<Deferred<void>> inputs) {
 template <
     typename... T,
     typename = std::enable_if_t<(!std::is_same_v<Deferred<void>, T> && ...)>>
-auto chain(T&&... inputs) {
+inline auto chain(T&&... inputs) {
   return Deferred<std::tuple<decltype(inputs.get())...>>(
       [inputs = std::make_tuple(std::forward<T>(inputs)...)] {
         return std::apply(
@@ -202,7 +202,7 @@ auto chain(T&&... inputs) {
 }
 
 template <typename... T>
-auto chain(Deferred<void> d, T&&... inputs) {
+inline auto chain(Deferred<void> d, T&&... inputs) {
   if constexpr (sizeof...(inputs) == 0) {
     return d;
   } else {
@@ -212,19 +212,19 @@ auto chain(Deferred<void> d, T&&... inputs) {
 }
 
 template <typename Head>
-auto hash_combine(Head&& head) {
+inline auto hash_combine(Head&& head) {
   return std::hash<std::decay_t<Head>>()(std::forward<Head>(head));
 }
 
 template <typename Head, typename... Tail>
-auto hash_combine(Head&& head, Tail&&... tail) {
+inline auto hash_combine(Head&& head, Tail&&... tail) {
   auto head_hash = std::hash<std::decay_t<Head>>()(std::forward<Head>(head));
   auto tail_hash = hash_combine(std::forward<Tail>(tail)...);
   return head_hash ^ (0x9e3779b9 + (tail_hash << 6) + (tail_hash >> 2));
 }
 
 template <typename T>
-auto hash_combine(const std::vector<T>& v) {
+inline auto hash_combine(const std::vector<T>& v) {
   CHECK_ARGUMENT(v.size());
   auto ret = hash_combine(v[0]);
   for (auto t : v) {

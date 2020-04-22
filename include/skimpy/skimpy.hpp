@@ -210,6 +210,9 @@ class Array {
   Array<Val> clone() const {
     return Array<Val>(op_);
   }
+  void eval() {
+    *this = Array<Val>(lang::materialize(op_));
+  }
 
   // Value assign methods
   void set(Pos pos, Val val) {
@@ -283,7 +286,7 @@ class Array {
     // account for the non-linear costs of lang parsing and array evaluation.
     // TODO: Figure out the right way to model the cost threshold here.
     constexpr auto kFlushThreshold = 32;
-    if (count(op_) > kFlushThreshold) {
+    if (op_->count() > kFlushThreshold) {
       op_ = lang::store(lang::materialize(op_));
     }
   }
