@@ -86,6 +86,7 @@ PYBIND11_MODULE(skimpy, m) {
             return fmt::format("Array<int>({})", self.str());
           })
       .def("clone", &IntArray::clone)
+      .def("eval", [](IntArray& self) { return IntArray(self.store()); })
       .def(
           "dumps",
           [](IntArray& self) { return skimpy::conv::to_string(*self.store()); })
