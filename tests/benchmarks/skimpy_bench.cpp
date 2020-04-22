@@ -95,3 +95,13 @@ TEST_CASE("Benchmark skimpy arrays", "[bench_arrays]") {
     z.eval();
   };
 }
+
+TEST_CASE("Benchmark skimpy array builders", "[bench_builders]") {
+  BENCHMARK("build_10k") {
+    skimpy::ArrayBuilder<int> b(10000, 0);
+    for (int i = 0; i < 10000; i += 1) {
+      b.set(i, i);
+    }
+    b.build();
+  };
+}

@@ -621,7 +621,7 @@ auto eval_plan(const EvalPlan<Val>& input_plan) {
   }
 
   // Run all of the eval tasks in parallel.
-  constexpr auto kParallelizeEvalThreshold = 1024 * 1024;
+  constexpr auto kParallelizeEvalThreshold = 16 * 1024;
   if (step_offsets[s] > kParallelizeEvalThreshold) {
     run_in_parallel(eval_fns);
   } else {
@@ -703,7 +703,7 @@ auto eval_plan(const EvalPlan<Val>& input_plan) {
   }
 
   // Run all of the move tasks in parallel.
-  constexpr auto kParallelizeMoveThreshold = 1024;
+  constexpr auto kParallelizeMoveThreshold = 16 * 1024;
   if (dest_offsets[s] > kParallelizeMoveThreshold) {
     run_in_parallel(move_fns);
   } else {
