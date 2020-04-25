@@ -8,7 +8,6 @@
 
 #include "skimpy/skimpy.hpp"
 
-/*
 TEST_CASE("Benchmark skimpy arrays", "[bench_arrays]") {
   // Assign to a random entry in a univariate array.
   BENCHMARK("univariate_assign_1") {
@@ -96,7 +95,6 @@ TEST_CASE("Benchmark skimpy arrays", "[bench_arrays]") {
     z.eval();
   };
 }
-*/
 
 TEST_CASE("Benchmark skimpy array builders", "[bench_builders]") {
   BENCHMARK("build_10k") {
