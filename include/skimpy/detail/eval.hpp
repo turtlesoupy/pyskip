@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "skimpy/detail/errors.hpp"
+#include "skimpy/detail/step.hpp"
 #include "skimpy/detail/threads.hpp"
 #include "skimpy/detail/util.hpp"
 
@@ -14,8 +15,7 @@ namespace skimpy::detail::eval {
 
 using Pos = core::Pos;
 
-// template <typename Val>
-// using EvalFn = Val (*)(Val*);
+using StepFn = step::StepFn;
 
 template <typename Val>
 using EvalFn = std::function<Val(Val*)>;
@@ -25,14 +25,23 @@ struct EvalSource {
   std::shared_ptr<core::Store<Val>> store;
   Pos start;
   Pos stop;
-  Pos stride;
+  StepFn step_fn;
+
+  EvalSource(std::shared_ptr<core::Store<Val>> store, Pos start, Pos stop)
+      : EvalSource(std::move(store), start, stop, step::run_skip_fn(1, 0)) {}
 
   EvalSource(
-      std::shared_ptr<core::Store<Val>> store, Pos start, Pos stop, Pos stride)
-      : store(std::move(store)), start(start), stop(stop), stride(stride) {}
+      std::shared_ptr<core::Store<Val>> store,
+      Pos start,
+      Pos stop,
+      StepFn step_fn)
+      : store(std::move(store)),
+        start(start),
+        stop(stop),
+        step_fn(std::move(step_fn)) {}
 
   int span() const {
-    return 1 + (stop - start - 1) / stride;
+    return step::span(start, stop, step_fn);
   }
 };
 
@@ -73,10 +82,10 @@ auto eval_step_fixed(
 
   // Initialize slices.
   Pos starts[k];
-  Pos strides[k];
+  StepFn step_fns[k];
   for (auto i = 0; i < k; i += 1) {
     starts[i] = step.sources[i].start;
-    strides[i] = step.sources[i].stride;
+    step_fns[i] = step.sources[i].step_fn;
   }
 
   // Initialize iterators.
@@ -93,7 +102,7 @@ auto eval_step_fixed(
   Pos curr_ends[k];
   Val curr_vals[k];
   for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
     curr_vals[i] = *iter_vals[i]++;
   }
 
@@ -131,13 +140,7 @@ auto eval_step_fixed(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = *iter_ends[src]++ - starts[src] - 1;
-    if (is_power_of_two(strides[src])) {
-      new_end >>= lg2(strides[src]);
-    } else {
-      new_end /= strides[src];
-    }
-    new_end += 1;
+    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
 
     // Update the frontier.
     curr_ends[src] = new_end;
@@ -176,10 +179,10 @@ auto eval_step_stack(
 
   // Initialize slices.
   Pos starts[buffer_size];
-  Pos strides[buffer_size];
+  StepFn step_fns[buffer_size];
   for (auto i = 0; i < k; i += 1) {
     starts[i] = step.sources[i].start;
-    strides[i] = step.sources[i].stride;
+    step_fns[i] = step.sources[i].step_fn;
   }
 
   // Initialize iterators.
@@ -196,7 +199,7 @@ auto eval_step_stack(
   Pos curr_ends[buffer_size];
   Val curr_vals[buffer_size];
   for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
     curr_vals[i] = *iter_vals[i]++;
   }
 
@@ -269,13 +272,7 @@ auto eval_step_stack(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = *iter_ends[src]++ - starts[src] - 1;
-    if (is_power_of_two(strides[src])) {
-      new_end >>= lg2(strides[src]);
-    } else {
-      new_end /= strides[src];
-    }
-    new_end += 1;
+    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
@@ -288,7 +285,7 @@ auto eval_step_stack(
         break;
       }
       slot.vals[slot.size++] = src;
-      new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+      new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
     };
 
     // Update the frontier.
@@ -328,10 +325,10 @@ auto eval_step_heap(
 
   // Initialize slices.
   std::unique_ptr<Pos[]> starts(new Pos[k, kCacheLineSize]);
-  std::unique_ptr<Pos[]> strides(new Pos[k, kCacheLineSize]);
+  std::unique_ptr<StepFn[]> step_fns(new StepFn[k, kCacheLineSize]);
   for (auto i = 0; i < k; i += 1) {
     starts[i] = step.sources[i].start;
-    strides[i] = step.sources[i].stride;
+    step_fns[i] = step.sources[i].step_fn;
   }
 
   // Initialize iterators.
@@ -348,7 +345,7 @@ auto eval_step_heap(
   std::unique_ptr<Pos[]> curr_ends(new Pos[k, kCacheLineSize]);
   std::unique_ptr<Val[]> curr_vals(new Val[k, kCacheLineSize]);
   for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = 1 + (*iter_ends[i]++ - starts[i] - 1) / strides[i];
+    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
     curr_vals[i] = *iter_vals[i]++;
   }
 
@@ -422,13 +419,7 @@ auto eval_step_heap(
     }
 
     // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = *iter_ends[src]++ - starts[src] - 1;
-    if (is_power_of_two(strides[src])) {
-      new_end >>= lg2(strides[src]);
-    } else {
-      new_end /= strides[src];
-    }
-    new_end += 1;
+    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
 
     // Store duplicate ends in the hash table instead of the tournament tree.
     while (step.start + new_end < step.stop) {
@@ -441,7 +432,7 @@ auto eval_step_heap(
         break;
       }
       slot.vals[slot.size++] = src;
-      new_end = 1 + (*iter_ends[src]++ - starts[src] - 1);
+      new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
     };
 
     // Update the frontier.
@@ -485,8 +476,7 @@ void check_step(const EvalStep<Val>& step) {
     CHECK_ARGUMENT(source.start < store.ends[store.size - 1]);
     CHECK_ARGUMENT(source.start < source.stop);
     CHECK_ARGUMENT(source.stop <= store.ends[store.size - 1]);
-    CHECK_ARGUMENT(source.stride > 0);
-    spans.push_back(1 + (source.stop - source.start - 1) / source.stride);
+    spans.push_back(source.span());
   }
 
   // Check that all spans are aligned.
@@ -516,12 +506,15 @@ auto parallelize_plan(const EvalPlan<Val>& plan) {
             static_cast<Pos>(step.start + (span * (i + 1)) / kNumChunks),
             step.eval_fn);
         for (auto& src : step.sources) {
-          uint64_t src_span = src.stride * src.span();
+          // TODO: For complex step functions, the choice of span partitioning
+          // here might not evenly partition the source ranges. Consider using
+          // a bisection approach to identify perfect partitions.
+          uint64_t src_span = src.stop - src.start;
           ret.steps.back().sources.emplace_back(
               src.store,
               static_cast<Pos>(src.start + (src_span * i) / kNumChunks),
               static_cast<Pos>(src.start + (src_span * (i + 1)) / kNumChunks),
-              src.stride);
+              src.step_fn);
         }
       }
     } else {

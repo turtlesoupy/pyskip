@@ -1,4 +1,3 @@
-
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
 
@@ -67,7 +66,7 @@ TEST_CASE("Benchmark 1-source plan evaluation", "[plan_eval_1_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -142,7 +141,7 @@ TEST_CASE("Benchmark 2-source plan evaluation", "[plan_eval_2_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -217,7 +216,7 @@ TEST_CASE("Benchmark 4-source plan evaluation", "[plan_eval_4_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -292,7 +291,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[plan_eval_8_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -367,7 +366,7 @@ TEST_CASE("Benchmark 10-source plan evaluation", "[plan_eval_10_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -442,7 +441,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[plan_eval_16_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -517,7 +516,7 @@ TEST_CASE("Benchmark 20-source plan evaluation", "[plan_eval_20_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -592,7 +591,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[plan_eval_32_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -667,7 +666,7 @@ TEST_CASE("Benchmark 64-source plan evaluation", "[plan_eval_64_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }
@@ -742,7 +741,7 @@ TEST_CASE("Benchmark 128-source plan evaluation", "[plan_eval_128_sources]") {
     auto stop = static_cast<int>((i + 1) * max_end / s);
     EvalStep<int> step(start, stop, eval_fn);
     for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop, 1);
+      step.sources.emplace_back(stores[j], start, stop);
     }
     plan.steps.emplace_back(std::move(step));
   }

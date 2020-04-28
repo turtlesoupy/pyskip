@@ -11,6 +11,7 @@
 #include "core.hpp"
 #include "errors.hpp"
 #include "eval.hpp"
+#include "step.hpp"
 
 namespace skimpy::detail::lang {
 
@@ -621,7 +622,8 @@ inline auto materialize(const OpPtr<Val>& input) {
     Fix([&](const auto& fn, const OpPtr<Val>& op) -> void {
       if (auto p = op->as<Slice<Val>>()) {
         const auto& store = p->input->to<Store<Val>>();
-        step.sources.emplace_back(store.store, p->start, p->stop, p->stride);
+        step.sources.emplace_back(
+            store.store, p->start, p->stop, step::stride_fn(p->stride));
         ef_nodes.emplace_back();
         ef_nodes.back().tag = EvalNode::STORE;
         ef_nodes.back().index = step.sources.size() - 1;

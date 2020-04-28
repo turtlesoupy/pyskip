@@ -11,6 +11,7 @@ endfunction()
 # Add each test target and register it for ctest.
 skimpy_test(core_test core_test.cpp)
 skimpy_test(lang_test lang_test.cpp)
+skimpy_test(step_test step_test.cpp)
 skimpy_test(skimpy_test skimpy_test.cpp)
 skimpy_test(util_test util_test.cpp)
 
