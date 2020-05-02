@@ -150,4 +150,21 @@ class QueueExecutor {
   MPMCQueue<std::function<void()>> task_queue_;
   std::atomic<int> finished_workers_;
 };
+
+template <typename FnRange>
+void run_in_parallel(const FnRange& fns) {
+  // TODO: Move the executor to CPP.
+  static auto executor = [] {
+    auto n = std::thread::hardware_concurrency();
+    return std::make_unique<threads::QueueExecutor>(n);
+  }();
+
+  std::vector<std::future<void>> futures;
+  for (const auto& fn : fns) {
+    futures.push_back(executor->schedule(fn));
+  }
+  for (auto& future : futures) {
+    future.get();
+  }
+}
 };  // namespace skimpy::detail::threads

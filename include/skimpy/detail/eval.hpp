@@ -7,6 +7,7 @@
 
 #include "core.hpp"
 #include "step.hpp"
+#include "threads.hpp"
 #include "util.hpp"
 
 namespace skimpy::detail::eval {
@@ -206,28 +207,32 @@ class SimpleSource {
     return step::span(start_, stop_, step_fn_);
   }
 
-  inline Pos start() const {
-    return start_;
-  }
-
   inline Pos stop() const {
-    return stop_;
+    return step_fn_(stop_);
   }
 
-  inline int index(Pos pos) const {
-    return store_->index(pos);
+  inline int capacity() const {
+    return 1 + store_->index(stop_ - 1) - store_->index(start_);
   }
 
-  inline Pos end(int index) const {
-    return step_fn_(store->ends[index]);
+  int iter() const {
+    return store_->index(start_);
   }
 
-  inline Val val(int index) const {
+  Pos end(int index) const {
+    return step_fn_(store_->ends[index]);
+  }
+
+  Val val(int index) const {
     return store_->vals[index];
   }
 
   inline auto split(Pos start, Pos stop) const {
-    return std::make_unique<SimpleSource<Val>>(store_, start_, stop_, step_fn_);
+    return std::make_shared<SimpleSource<Val>>(
+        store_,
+        step::invert(start + 1, start_, stop_, step_fn_) - 1,
+        step::invert(stop, start_, stop_, step_fn_),
+        step_fn_);
   }
 
   inline StepFn step_fn() const {
@@ -239,11 +244,11 @@ class SimpleSource {
   }
 
   inline Pos* iter_ends() const {
-    return &store_->ends[index(start_)];
+    return &store_->ends[store_->index(start_)];
   }
 
   inline Val* iter_vals() const {
-    return &store_->vals[index(start_)];
+    return &store_->vals[store_->index(start_)];
   }
 
  private:
@@ -259,10 +264,10 @@ using Mix = std::variant<bool, char, int, float>;
 
 struct MixSourceBase {
   ~MixSourceBase() = default;
-  virtual int span() const = 0;
-  virtual Pos start() const = 0;
+  virtual Pos span() const = 0;
   virtual Pos stop() const = 0;
-  virtual int index(Pos pos) const = 0;
+  virtual int capacity() const = 0;
+  virtual int iter() const = 0;
   virtual Pos end(int index) const = 0;
   virtual Mix val(int index) const = 0;
   virtual std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const = 0;
@@ -293,16 +298,16 @@ class MixSource : public MixSourceBase {
     return step::span(start_, stop_, step_fn_);
   }
 
-  int start() const override {
-    return start_;
-  }
-
   int stop() const override {
-    return stop_;
+    return step_fn_(stop_);
   }
 
-  int index(Pos pos) const override {
-    return store_->index(pos);
+  int capacity() const override {
+    return 1 + store_->index(stop_ - 1) - store_->index(start_);
+  }
+
+  int iter() const override {
+    return store_->index(start_);
   }
 
   Pos end(int index) const override {
@@ -314,7 +319,11 @@ class MixSource : public MixSourceBase {
   }
 
   std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const override {
-    return std::make_shared<MixSource<Val>>(store_, start_, stop_, step_fn_);
+    return std::make_shared<MixSource<Val>>(
+        store_,
+        step::invert(start + 1, start_, stop_, step_fn_) - 1,
+        step::invert(stop, start_, stop_, step_fn_),
+        step_fn_);
   }
 
  private:
@@ -339,6 +348,7 @@ struct Pool {
       : sources(std::move(sources)) {
     for (int i = 1; i < pool_size; i += 1) {
       CHECK_ARGUMENT(this->sources[i - 1]->span() == this->sources[i]->span());
+      CHECK_ARGUMENT(this->sources[i - 1]->stop() == this->sources[i]->stop());
     }
   }
 
@@ -354,10 +364,14 @@ struct Pool {
     return sources[0]->span();
   }
 
+  inline int stop() const {
+    return sources[0]->stop();
+  }
+
   inline int capacity() const {
     int ret = 1;
     for (const auto& source : sources) {
-      ret += source->index(source->stop() - 1) - source->index(source->start());
+      ret += source->capacity() - 1;
     }
     return ret;
   }
@@ -377,6 +391,22 @@ auto make_pool(Head&& head, Tail&&... tail) {
       std::forward<Head>(head), std::forward<Tail>(tail)...);
 }
 
+template <typename Source, int size>
+auto partition_pool(const Pool<Source, size>& pool, int parts) {
+  // TODO: Instead of using uniform ranges, bisect for ranges with uniform
+  // capacity so that parallel work is distributed evenly across threads.
+  uint64_t span = pool.span();
+  std::vector<Pool<Source, size>> ret(parts, pool);
+  for (int i = 0; i < parts; i += 1) {
+    auto l = static_cast<Pos>(i * span / parts);
+    auto r = static_cast<Pos>((i + 1) * span / parts);
+    for (int j = 0; j < pool.size; j += 1) {
+      ret[i].sources[j] = ret[i][j].split(l, r);
+    }
+  }
+  return ret;
+}
+
 // Maps a value frontier to an output value for simple evaluation.
 template <typename Arg, typename Ret>
 using EvalFn = std::function<Ret(const Arg*)>;
@@ -385,9 +415,10 @@ using EvalFn = std::function<Ret(const Arg*)>;
 template <typename Ret, typename Arg, int size>
 class SimpleEvaluator {
  public:
-  SimpleEvaluator(
-      Pos stop, Pool<SimpleSource<Arg>, size> pool, EvalFn<Arg, Ret> eval_fn)
-      : stop_(stop), pool_(std::move(pool)), eval_fn_(std::move(eval_fn)) {
+  SimpleEvaluator(Pool<SimpleSource<Arg>, size> pool, EvalFn<Arg, Ret> eval_fn)
+      : stop_(pool.stop()),
+        pool_(std::move(pool)),
+        eval_fn_(std::move(eval_fn)) {
     for (int src = 0; src < size; src += 1) {
       step_fns_[src] = pool_[src].step_fn();
       iter_ends_[src] = pool_[src].iter_ends();
@@ -432,11 +463,13 @@ class SourceEvaluator {
  public:
   using Arg = typename Pool<Source, size>::Val;
 
-  SourceEvaluator(Pos stop, Pool<Source, size> pool, EvalFn<Arg, Ret> eval_fn)
-      : stop_(stop), pool_(std::move(pool)), eval_fn_(std::move(eval_fn)) {
+  SourceEvaluator(Pool<Source, size> pool, EvalFn<Arg, Ret> eval_fn)
+      : stop_(pool.stop()),
+        pool_(std::move(pool)),
+        eval_fn_(std::move(eval_fn)) {
     for (int src = 0; src < size; src += 1) {
-      iter_ends_[src] = pool_[src].index(pool_[src].start());
-      iter_vals_[src] = pool_[src].index(pool_[src].start());
+      iter_ends_[src] = pool_[src].iter();
+      iter_vals_[src] = pool_[src].iter();
       next_val(src);
     }
   }
@@ -470,6 +503,36 @@ class SourceEvaluator {
   Arg curr_vals_[size];
 };
 
+template <typename Val>
+auto fuse_stores(const std::vector<std::shared_ptr<Store<Val>>>& stores) {
+  std::vector<std::tuple<int, int, int>> offsets(stores.size());
+
+  // Compute the source and destination positives to copy the inputs stores
+  // into the fused output store, handling compression at the edges.
+  // TODO: Implement the compression.
+  auto dst_b = 0;
+  for (int i = 0; i < stores.size(); i += 1) {
+    auto src_b = 0;
+    auto src_e = stores[i]->size;
+    offsets[i] = std::make_tuple(src_b, src_e, dst_b);
+    dst_b += src_e - src_b;
+  }
+
+  // Evaluate each part in parallel.
+  auto ret = std::make_shared<Store<Val>>(dst_b);
+  std::vector<std::function<void()>> tasks;
+  for (int i = 0; i < stores.size(); i += 1) {
+    tasks.emplace_back([&, i] {
+      auto [src_b, src_e, dst_b] = offsets[i];
+      auto& store = stores[i];
+      std::move(&store->ends[src_b], &store->ends[src_e], &ret->ends[dst_b]);
+      std::move(&store->vals[src_b], &store->vals[src_e], &ret->vals[dst_b]);
+    });
+  }
+  threads::run_in_parallel(tasks);
+  return ret;
+}
+
 template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
@@ -489,8 +552,29 @@ auto eval_generic(Evaluator evaluator) {
 
 template <typename Arg, typename Ret, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, Pool<SimpleSource<Arg>, size> pool) {
-  auto s = pool.span();
-  return eval_generic(SimpleEvaluator(s, std::move(pool), std::move(eval_fn)));
+  static constexpr auto kParallelizeThreshold = 8 * 1024;
+  static auto kParallelizeParts = std::thread::hardware_concurrency();
+
+  // Evaluate inline if the pool size is below the threshold.
+  if (pool.capacity() < kParallelizeThreshold) {
+    return eval_generic(SimpleEvaluator(std::move(pool), std::move(eval_fn)));
+  }
+
+  auto partition = partition_pool(pool, kParallelizeParts);
+
+  // Evaluate each part in parallel.
+  std::vector<std::function<void()>> tasks;
+  std::vector<std::shared_ptr<Store<Ret>>> stores(partition.size());
+  for (int i = 0; i < partition.size(); i += 1) {
+    tasks.emplace_back([&, i] {
+      SimpleEvaluator evaluator(std::move(partition[i]), eval_fn);
+      stores[i] = eval_generic(std::move(evaluator));
+    });
+  }
+  threads::run_in_parallel(tasks);
+
+  // Assemble each parts store back together.
+  return fuse_stores(stores);
 }
 
 template <typename Arg, typename Ret, typename... Sources>
@@ -504,8 +588,29 @@ auto eval_simple(
 
 template <typename Ret, int size>
 auto eval_mixed(EvalFn<Mix, Ret> eval_fn, Pool<MixSourceBase, size> pool) {
-  auto s = pool.span();
-  return eval_generic(SourceEvaluator(s, std::move(pool), std::move(eval_fn)));
+  static constexpr auto kParallelizeThreshold = 8 * 1024;
+  static auto kParallelizeParts = std::thread::hardware_concurrency();
+
+  // Evaluate inline if the pool size is below the threshold.
+  if (pool.capacity() < kParallelizeThreshold) {
+    return eval_generic(SourceEvaluator(std::move(pool), std::move(eval_fn)));
+  }
+
+  auto partition = partition_pool(pool, kParallelizeParts);
+
+  // Evaluate each part in parallel.
+  std::vector<std::function<void()>> tasks;
+  std::vector<std::shared_ptr<Store<Ret>>> stores(partition.size());
+  for (int i = 0; i < partition.size(); i += 1) {
+    tasks.emplace_back([&, i] {
+      SourceEvaluator evaluator(std::move(partition[i]), eval_fn);
+      stores[i] = eval_generic(std::move(evaluator));
+    });
+  }
+  threads::run_in_parallel(tasks);
+
+  // Assemble each parts store back together.
+  return fuse_stores(stores);
 }
 
 template <typename Ret, typename Head, typename... Tail>

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "skimpy/detail/core.hpp"
-#include "skimpy/detail/eval2.hpp"
+#include "skimpy/detail/eval.hpp"
 #include "skimpy/detail/step.hpp"
 #include "skimpy/detail/threads.hpp"
 
@@ -44,11 +44,12 @@ auto make_store(int n, int seed) {
   auto store = std::make_shared<core::Store<int>>(n);
   for (int i = 0; i < n; i += 1) {
     store->ends[i] = i + 1;
-    store->vals[i] = (7909 * seed * (i + 7703)) & 128;
+    store->vals[i] = (7909 * seed * (i + 7703)) & 4095;
   }
   return store;
 }
 
+/*
 TEST_CASE("Benchmark 1-source evaluation", "[eval_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
@@ -112,7 +113,7 @@ TEST_CASE("Benchmark 4-source plan evaluation", "[eval_4]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(1, n, [&](int start, int end, ...) {
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -152,7 +153,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[eval_8]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(1, n, [&](int start, int end, ...) {
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -188,7 +189,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
-        [](const int* v) {
+        [](const int* v, ...) {
           auto ret = v[0];
           for (int i = 0; i < sources_size; i += 1) {
             ret *= v[i];
@@ -200,7 +201,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(1, n, [&](int start, int end, ...) {
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -264,7 +265,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(1, n, [&](int start, int end, ...) {
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -275,6 +276,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
     });
   };
 }
+*/
 
 TEST_CASE("Benchmark mixed 1-source evaluation", "[eval_mixed_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
