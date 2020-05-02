@@ -1,709 +1,519 @@
 #pragma once
 
-#include <algorithm>
+#include <array>
+#include <functional>
 #include <memory>
-#include <new>
-#include <numeric>
-#include <thread>
+#include <variant>
 
-#include "skimpy/detail/errors.hpp"
-#include "skimpy/detail/step.hpp"
-#include "skimpy/detail/threads.hpp"
-#include "skimpy/detail/util.hpp"
+#include "core.hpp"
+#include "step.hpp"
+#include "util.hpp"
 
 namespace skimpy::detail::eval {
 
+template <typename Val>
+using Store = core::Store<Val>;
 using Pos = core::Pos;
-
 using StepFn = step::StepFn;
 
+// Convenience wrapper for the pointers to the output store of an evaluation.
 template <typename Val>
-using EvalFn = std::function<Val(Val*)>;
+struct EvalOutput {
+  Pos* ends;
+  Val* vals;
 
-template <typename Val>
-struct EvalSource {
-  std::shared_ptr<core::Store<Val>> store;
-  Pos start;
-  Pos stop;
-  StepFn step_fn;
+  EvalOutput(Pos* ends, Val* vals) : ends(ends), vals(vals) {}
 
-  EvalSource(std::shared_ptr<core::Store<Val>> store, Pos start, Pos stop)
-      : EvalSource(std::move(store), start, stop, step::run_skip_fn(1, 0)) {}
+  inline void rewind() {
+    --ends;
+    --vals;
+  }
 
-  EvalSource(
-      std::shared_ptr<core::Store<Val>> store,
-      Pos start,
-      Pos stop,
-      StepFn step_fn)
-      : store(std::move(store)),
-        start(start),
-        stop(stop),
-        step_fn(std::move(step_fn)) {}
-
-  int span() const {
-    return step::span(start, stop, step_fn);
+  inline void emit(Pos end, Val val) {
+    *ends++ = end;
+    *vals++ = val;
   }
 };
 
-template <typename Val>
-struct EvalStep {
-  Pos start;
-  Pos stop;
-  EvalFn<Val> eval_fn;
-  std::vector<EvalSource<Val>> sources;
+// Provides a priority queue to select the source with the lowest end position.
+template <int sources>
+struct TournamentTree {
+  static constexpr int base = round_up_to_power_of_two(sources);
+  uint64_t keys[2 * base];
 
-  EvalStep(Pos start, Pos stop, EvalFn<Val> eval_fn)
-      : start(start), stop(stop), eval_fn(eval_fn) {}
-
-  int span() const {
-    return stop - start;
+  template <typename Evaluator>
+  TournamentTree(Evaluator& evaluator) {
+    for (int src = 0; src < base; src += 1) {
+      if (src < sources) {
+        auto end = evaluator.next_end(src);
+        keys[base + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
+      } else {
+        keys[base + src - 1] = std::numeric_limits<int64_t>::max();
+      }
+    }
+    for (int h = base >> 1; h > 0; h >>= 1) {
+      for (int i = h; i < h << 1; i += 1) {
+        auto l = (i << 1) - 1;
+        auto r = (i << 1);
+        keys[i - 1] = keys[l] <= keys[r] ? keys[l] : keys[r];
+      }
+    }
   }
 
-  int size() const {
-    int size = 1;
+  inline Pos end() const {
+    return keys[0] >> 32;
+  }
+
+  inline int src() const {
+    return keys[0] & 0xFFFFFFFF;
+  }
+
+  inline void push(int src, Pos end) {
+    keys[base + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
+    for (int i = (base + src) >> 1; i > 0; i >>= 1) {
+      auto l = (i << 1) - 1;
+      auto r = (i << 1);
+      if (keys[l] < keys[r]) {
+        keys[i - 1] = keys[l];
+      } else {
+        keys[i - 1] = keys[r];
+      }
+    }
+  }
+};
+
+// Provides a light-weight hash table to test for redundant insertions into the
+// tournament tree. Insertion is best-effort as we care only about performance.
+template <int sources>
+struct HashTable {
+  struct Node {
+    int key;
+    int size;
+    int vals[sources];
+  };
+  static constexpr int size = round_up_to_power_of_two(sources);
+  std::unique_ptr<Node[]> nodes;
+
+  HashTable() : nodes(new Node[size]) {
+    for (int i = 0; i < size; i += 1) {
+      nodes[i].key = 0;
+    }
+  }
+
+  inline Node& lookup(Pos end) {
+    return nodes[end & (size - 1)];
+  }
+
+  inline const Node& lookup(Pos end) const {
+    return nodes[end & (size - 1)];
+  }
+
+  inline bool insert(int src, Pos end) {
+    auto& node = lookup(end);
+    if (node.key != end) {
+      if (node.key == 0) {
+        node.key = end;
+        node.size = 0;
+      }
+      return true;
+    }
+    node.vals[node.size++] = src;
+    return false;
+  }
+};
+
+// Core evaluation routine. The evaluator is used to maintain the frontier of
+// values, iterate them forward on a per-source basis, and evaluate them into
+// an output value emitted into the output store. The implementation uses a
+// tournament tree to speed up min selection as well as a hasing trick to avoid
+// repeating the min-selection for repeated end position.
+template <int sources, typename Evaluator, typename Val>
+void eval(Evaluator&& evaluator, EvalOutput<Val>& output) {
+  HashTable<sources> hash;
+  TournamentTree<sources> tree(evaluator);
+
+  Pos prev_end = 0;
+  Val prev_val;
+  for (;;) {
+    auto src = tree.src();
+    auto end = tree.end();
+
+    // Emit the current range with compression.
+    if (prev_end != end) {
+      auto val = evaluator.eval();
+      if (prev_end && prev_val == val) {
+        output.rewind();
+      }
+      if (end < evaluator.stop()) {
+        output.emit(end, val);
+      } else {
+        output.emit(evaluator.stop(), val);
+        break;
+      }
+      prev_end = end;
+      prev_val = val;
+    }
+
+    // Advance the value pointers of sources with this shared end position.
+    if (auto& node = hash.lookup(prev_end); node.key == prev_end) {
+      for (int i = 0; i < node.size; i += 1) {
+        evaluator.next_val(node.vals[i]);
+      }
+      node.key = 0;
+    }
+
+    // Loop until we have a new distinct end position for this source.
+    auto new_end = evaluator.next_end(src);
+    while (new_end < evaluator.stop()) {
+      if (hash.insert(src, new_end)) {
+        break;
+      }
+      new_end = evaluator.next_end(src);
+    }
+    evaluator.next_val(src);
+
+    // Update the tournament tree with the new end position.
+    tree.push(src, new_end);
+  }
+}
+
+// A source of input to an evaluation. A source provides iteration over a store
+// along with a mapping of end positions to output coordinates.
+template <typename Val>
+class SimpleSource {
+ public:
+  SimpleSource() = delete;
+
+  SimpleSource(std::shared_ptr<Store<Val>> store)
+      : SimpleSource(store, 0, store->span()) {}
+
+  SimpleSource(std::shared_ptr<Store<Val>> store, Pos start, Pos stop)
+      : SimpleSource(std::move(store), start, stop, step::step_fn()) {}
+
+  SimpleSource(
+      std::shared_ptr<Store<Val>> store, Pos start, Pos stop, StepFn step_fn)
+      : store_(std::move(store)),
+        start_(start),
+        stop_(stop),
+        step_fn_(std::move(step_fn)) {
+    CHECK_ARGUMENT(start_ >= 0);
+    CHECK_ARGUMENT(start_ <= stop_);
+    CHECK_ARGUMENT(start_ < store_->span());
+    CHECK_ARGUMENT(stop_ <= store_->span());
+  }
+
+  inline int span() const {
+    return step::span(start_, stop_, step_fn_);
+  }
+
+  inline Pos start() const {
+    return start_;
+  }
+
+  inline Pos stop() const {
+    return stop_;
+  }
+
+  inline int index(Pos pos) const {
+    return store_->index(pos);
+  }
+
+  inline Pos end(int index) const {
+    return step_fn_(store->ends[index]);
+  }
+
+  inline Val val(int index) const {
+    return store_->vals[index];
+  }
+
+  inline auto split(Pos start, Pos stop) const {
+    return std::make_unique<SimpleSource<Val>>(store_, start_, stop_, step_fn_);
+  }
+
+  inline StepFn step_fn() const {
+    return step_fn_;
+  }
+
+  inline const std::shared_ptr<Store<Val>>& store() const {
+    return store_;
+  }
+
+  inline Pos* iter_ends() const {
+    return &store_->ends[index(start_)];
+  }
+
+  inline Val* iter_vals() const {
+    return &store_->vals[index(start_)];
+  }
+
+ private:
+  std::shared_ptr<Store<Val>> store_;
+  Pos start_;
+  Pos stop_;
+  StepFn step_fn_;
+};
+
+// Mix sources provide multi-typed input to an evaluation. Iteration is exposed
+// via an indexing method. End positions are mapped internally.
+using Mix = std::variant<bool, char, int, float>;
+
+struct MixSourceBase {
+  ~MixSourceBase() = default;
+  virtual int span() const = 0;
+  virtual Pos start() const = 0;
+  virtual Pos stop() const = 0;
+  virtual int index(Pos pos) const = 0;
+  virtual Pos end(int index) const = 0;
+  virtual Mix val(int index) const = 0;
+  virtual std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const = 0;
+};
+
+template <typename Val>
+class MixSource : public MixSourceBase {
+ public:
+  MixSource(std::shared_ptr<Store<Val>> store)
+      : MixSource(store, 0, store->span()) {}
+
+  MixSource(std::shared_ptr<Store<Val>> store, Pos start, Pos stop)
+      : MixSource(std::move(store), start, stop, step::step_fn()) {}
+
+  MixSource(
+      std::shared_ptr<Store<Val>> store, Pos start, Pos stop, StepFn step_fn)
+      : store_(std::move(store)),
+        start_(start),
+        stop_(stop),
+        step_fn_(std::move(step_fn)) {
+    CHECK_ARGUMENT(start_ >= 0);
+    CHECK_ARGUMENT(start_ <= stop_);
+    CHECK_ARGUMENT(start_ < store_->span());
+    CHECK_ARGUMENT(stop_ <= store_->span());
+  }
+
+  int span() const override {
+    return step::span(start_, stop_, step_fn_);
+  }
+
+  int start() const override {
+    return start_;
+  }
+
+  int stop() const override {
+    return stop_;
+  }
+
+  int index(Pos pos) const override {
+    return store_->index(pos);
+  }
+
+  Pos end(int index) const override {
+    return step_fn_(store_->ends[index]);
+  }
+
+  Mix val(int index) const override {
+    return store_->vals[index];
+  }
+
+  std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const override {
+    return std::make_shared<MixSource<Val>>(store_, start_, stop_, step_fn_);
+  }
+
+ private:
+  std::shared_ptr<Store<Val>> store_;
+  Pos start_;
+  Pos stop_;
+  StepFn step_fn_;
+};
+
+// Encapsulates a collection of input sources. The set of input sources compose
+// an eval step and must have the same span. The pool is also designed to allow
+// for paritioning so that it can be processed in parallel on multiple threads.
+template <typename Source, int pool_size>
+struct Pool {
+  static_assert(pool_size > 0);
+  static constexpr auto size = pool_size;
+  using Val = decltype(std::declval<Source>().val(0));
+
+  std::array<std::shared_ptr<Source>, pool_size> sources;
+
+  Pool(std::array<std::shared_ptr<Source>, size> sources)
+      : sources(std::move(sources)) {
+    for (int i = 1; i < pool_size; i += 1) {
+      CHECK_ARGUMENT(this->sources[i - 1]->span() == this->sources[i]->span());
+    }
+  }
+
+  inline Source& operator[](int index) {
+    return *sources[index];
+  }
+
+  inline const Source& operator[](int index) const {
+    return *sources[index];
+  }
+
+  inline int span() const {
+    return sources[0]->span();
+  }
+
+  inline int capacity() const {
+    int ret = 1;
     for (const auto& source : sources) {
-      auto start = source.start;
-      auto stop = source.stop;
-      size += source.store->index(stop - 1) - source.store->index(start);
+      ret += source->index(source->stop() - 1) - source->index(source->start());
     }
-    return size;
+    return ret;
   }
 };
 
-template <typename Val>
-struct EvalPlan {
-  std::vector<EvalStep<Val>> steps;
+template <typename Source, typename Head, typename... Tail>
+auto make_pool(Head&& head, Tail&&... tail) {
+  constexpr auto size = 1 + sizeof...(tail);
+  return Pool<Source, size>(std::array<std::shared_ptr<Source>, size>{
+      std::make_shared<Head>(std::forward<Head>(head)),
+      std::make_shared<Tail>(std::forward<Tail>(tail))...});
+}
+
+template <typename Head, typename... Tail>
+auto make_pool(Head&& head, Tail&&... tail) {
+  return make_pool<std::decay_t<Head>, Head, Tail...>(
+      std::forward<Head>(head), std::forward<Tail>(tail)...);
+}
+
+// Maps a value frontier to an output value for simple evaluation.
+template <typename Arg, typename Ret>
+using EvalFn = std::function<Ret(const Arg*)>;
+
+// Provides evaluation over a pool of simple sources via an eval function.
+template <typename Ret, typename Arg, int size>
+class SimpleEvaluator {
+ public:
+  SimpleEvaluator(
+      Pos stop, Pool<SimpleSource<Arg>, size> pool, EvalFn<Arg, Ret> eval_fn)
+      : stop_(stop), pool_(std::move(pool)), eval_fn_(std::move(eval_fn)) {
+    for (int src = 0; src < size; src += 1) {
+      step_fns_[src] = pool_[src].step_fn();
+      iter_ends_[src] = pool_[src].iter_ends();
+      iter_vals_[src] = pool_[src].iter_vals();
+      next_val(src);
+    }
+  }
+
+  inline auto stop() const {
+    return stop_;
+  }
+
+  inline const auto& pool() const {
+    return pool_;
+  }
+
+  inline auto next_val(int src) {
+    return curr_vals_[src] = *iter_vals_[src]++;
+  }
+
+  inline auto next_end(int src) {
+    return step_fns_[src](*iter_ends_[src]++);
+  }
+
+  inline auto eval() const {
+    return eval_fn_(&curr_vals_[0]);
+  }
+
+ private:
+  Pos stop_;
+  Pool<SimpleSource<Arg>, size> pool_;
+  EvalFn<Arg, Ret> eval_fn_;
+  StepFn step_fns_[size];
+  Pos* iter_ends_[size];
+  Arg* iter_vals_[size];
+  Arg curr_vals_[size];
 };
 
-template <int k, typename Val>
-auto eval_step_fixed(
-    Pos* const ends, Val* const vals, const EvalStep<Val>& step) {
-  CHECK_ARGUMENT(step.sources.size() == k);
+// Provides evaluation over a pool of input sources via an eval function.
+template <typename Ret, typename Source, int size>
+class SourceEvaluator {
+ public:
+  using Arg = typename Pool<Source, size>::Val;
 
-  // Initialize slices.
-  Pos starts[k];
-  StepFn step_fns[k];
-  for (auto i = 0; i < k; i += 1) {
-    starts[i] = step.sources[i].start;
-    step_fns[i] = step.sources[i].step_fn;
-  }
-
-  // Initialize iterators.
-  Pos* iter_ends[k];
-  Val* iter_vals[k];
-  for (auto i = 0; i < k; i += 1) {
-    const auto& source = step.sources[i];
-    const auto index = source.store->index(source.start);
-    iter_ends[i] = &source.store->ends[index];
-    iter_vals[i] = &source.store->vals[index];
-  }
-
-  // Initialize frontier.
-  Pos curr_ends[k];
-  Val curr_vals[k];
-  for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
-    curr_vals[i] = *iter_vals[i]++;
-  }
-
-  // Initialize source heap.
-  int heap[k];
-  std::iota(&heap[0], &heap[k], 0);
-  std::sort(&heap[0], &heap[k], [&](int i, int j) {
-    return curr_ends[i] < curr_ends[j];
-  });
-
-  // Compute the size of the iteration.
-  auto step_size = step.size() - 1;
-
-  // Iterate over all input arrays combining their ranges together.
-  auto ends_out = ends;
-  auto vals_out = vals;
-  auto eval_fn = step.eval_fn;
-  Pos prev_end = 0;
-  Val prev_val;
-  for (int count = 0; count < step_size; count += 1) {
-    auto src = heap[0];
-    auto end = step.start + curr_ends[src];
-
-    // Emit the new marker but handle compression cases.
-    if (!prev_end || prev_end != end) {
-      auto val = eval_fn(curr_vals);
-      if (prev_end && prev_val == val) {
-        --vals_out;
-        --ends_out;
-      }
-      *vals_out++ = val;
-      *ends_out++ = end;
-      prev_end = end;
-      prev_val = val;
-    }
-
-    // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
-
-    // Update the frontier.
-    curr_ends[src] = new_end;
-    curr_vals[src] = *iter_vals[src]++;
-
-    // Update the heap.
-    heap[0] = src;
-    for (int i = 0; i < k - 1; i += 1) {
-      auto next_src = heap[i + 1];
-      if (new_end > curr_ends[next_src]) {
-        heap[i + 1] = heap[i];
-        heap[i] = next_src;
-      } else {
-        break;
-      }
+  SourceEvaluator(Pos stop, Pool<Source, size> pool, EvalFn<Arg, Ret> eval_fn)
+      : stop_(stop), pool_(std::move(pool)), eval_fn_(std::move(eval_fn)) {
+    for (int src = 0; src < size; src += 1) {
+      iter_ends_[src] = pool_[src].index(pool_[src].start());
+      iter_vals_[src] = pool_[src].index(pool_[src].start());
+      next_val(src);
     }
   }
 
-  // Emit the final end marker at the stop position.
-  auto val = eval_fn(curr_vals);
-  if (prev_end && prev_val == val) {
-    --vals_out;
-    --ends_out;
+  inline auto stop() const {
+    return stop_;
   }
-  *vals_out++ = val;
-  *ends_out++ = step.stop;
 
-  return ends_out - ends;
+  inline const auto& pool() const {
+    return pool_;
+  }
+
+  inline auto next_val(int src) {
+    return curr_vals_[src] = pool_[src].val(iter_vals_[src]++);
+  }
+
+  inline auto next_end(int src) {
+    return pool_[src].end(iter_ends_[src]++);
+  }
+
+  inline auto eval() const {
+    return eval_fn_(&curr_vals_[0]);
+  }
+
+ private:
+  Pos stop_;
+  Pool<Source, size> pool_;
+  EvalFn<Arg, Ret> eval_fn_;
+  int iter_ends_[size];
+  int iter_vals_[size];
+  Arg curr_vals_[size];
+};
+
+template <typename Evaluator>
+auto eval_generic(Evaluator evaluator) {
+  static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
+  using Val = decltype(evaluator.eval());
+
+  // Allocate the output store.
+  auto store = std::make_shared<Store<Val>>(evaluator.pool().capacity());
+
+  // Evaluate the output store.
+  EvalOutput<Val> output(&store->ends[0], &store->vals[0]);
+  eval<size>(evaluator, output);
+
+  // Resize the output (due to compression).
+  store->size = output.ends - &store->ends[0];
+  return store;
 }
 
-template <int buffer_size, typename Val>
-auto eval_step_stack(
-    Pos* const ends, Val* const vals, const EvalStep<Val>& step) {
-  const int k = step.sources.size();
-  CHECK_ARGUMENT(k <= buffer_size);
-
-  // Initialize slices.
-  Pos starts[buffer_size];
-  StepFn step_fns[buffer_size];
-  for (auto i = 0; i < k; i += 1) {
-    starts[i] = step.sources[i].start;
-    step_fns[i] = step.sources[i].step_fn;
-  }
-
-  // Initialize iterators.
-  Pos* iter_ends[buffer_size];
-  Val* iter_vals[buffer_size];
-  for (auto i = 0; i < k; i += 1) {
-    const auto& source = step.sources[i];
-    const auto index = source.store->index(source.start);
-    iter_ends[i] = &source.store->ends[index];
-    iter_vals[i] = &source.store->vals[index];
-  }
-
-  // Initialize frontier.
-  Pos curr_ends[buffer_size];
-  Val curr_vals[buffer_size];
-  for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
-    curr_vals[i] = *iter_vals[i]++;
-  }
-
-  // Initialize tournament tree.
-  uint64_t tree[4 * buffer_size];
-  const auto u = round_up_to_power_of_two(k);
-  for (int src = 0; src < u; src += 1) {
-    if (src < k) {
-      tree[u + src - 1] = (static_cast<uint64_t>(curr_ends[src]) << 32) | src;
-    } else {
-      tree[u + src - 1] = std::numeric_limits<int64_t>::max();
-    }
-  }
-  for (int h = u >> 1; h > 0; h >>= 1) {
-    for (int i = h; i < h << 1; i += 1) {
-      auto l = (i << 1) - 1;
-      auto r = (i << 1);
-      tree[i - 1] = tree[l] <= tree[r] ? tree[l] : tree[r];
-    }
-  }
-
-  // Initialize the hash table.
-  struct HashNode {
-    int key;
-    int size;
-    int vals[buffer_size];
-  };
-  constexpr int hash_size = round_up_to_power_of_two(16 * buffer_size);
-  CHECK_STATE(is_power_of_two(hash_size));
-  std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
-  for (int i = 0; i < hash_size; i += 1) {
-    hash[i].key = 0;
-  }
-
-  // Compute the size of the iteration.
-  auto step_size = step.size() - 1;
-
-  // Iterate over all input arrays combining their ranges together.
-  auto ends_out = ends;
-  auto vals_out = vals;
-  auto eval_fn = step.eval_fn;
-  Pos prev_end = 0;
-  Val prev_val;
-  for (int count = 0; count < step_size; count += 1) {
-    auto src = tree[0] & 0xFFFFFFFF;
-    auto end = step.start + curr_ends[src];
-
-    // Emit the new marker but handle compression cases.
-    if (prev_end != end) {
-      auto val = eval_fn(curr_vals);
-      if (prev_end && prev_val == val) {
-        --ends_out;
-        --vals_out;
-      }
-      *ends_out++ = end;
-      *vals_out++ = val;
-      prev_end = end;
-      prev_val = val;
-    }
-
-    // Update all duplicate ends in the hash table as well.
-    auto out_end = curr_ends[src];
-    if (auto& slot = hash[out_end & (hash_size - 1)]; slot.key == out_end) {
-      for (int i = 0; i < slot.size; i += 1) {
-        auto hash_src = slot.vals[i];
-        curr_vals[hash_src] = *iter_vals[hash_src]++;
-        count += 1;
-      }
-      slot.key = 0;
-    }
-
-    // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
-
-    // Store duplicate ends in the hash table instead of the tournament tree.
-    while (step.start + new_end < step.stop) {
-      auto& slot = hash[new_end & (hash_size - 1)];
-      if (slot.key != new_end) {
-        if (slot.key == 0) {
-          slot.key = new_end;
-          slot.size = 0;
-        }
-        break;
-      }
-      slot.vals[slot.size++] = src;
-      new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
-    };
-
-    // Update the frontier.
-    curr_ends[src] = new_end;
-    curr_vals[src] = *iter_vals[src]++;
-
-    // Update the tournament tree.
-    tree[u + src - 1] = (static_cast<uint64_t>(new_end) << 32) | src;
-    for (int i = (u + src) >> 1; i > 0; i >>= 1) {
-      auto l = (i << 1) - 1;
-      auto r = (i << 1);
-      if (tree[l] < tree[r]) {
-        tree[i - 1] = tree[l];
-      } else {
-        tree[i - 1] = tree[r];
-      }
-    }
-  }
-
-  // Emit the final end marker at the stop position.
-  auto val = eval_fn(curr_vals);
-  if (prev_end && prev_val == val) {
-    --vals_out;
-    --ends_out;
-  }
-  *vals_out++ = val;
-  *ends_out++ = step.stop;
-
-  return ends_out - ends;
+template <typename Arg, typename Ret, int size>
+auto eval_simple(EvalFn<Arg, Ret> eval_fn, Pool<SimpleSource<Arg>, size> pool) {
+  auto s = pool.span();
+  return eval_generic(SimpleEvaluator(s, std::move(pool), std::move(eval_fn)));
 }
 
-template <typename Val>
-auto eval_step_heap(
-    Pos* const ends, Val* const vals, const EvalStep<Val>& step) {
-  const int k = step.sources.size();
-  constexpr auto kCacheLineSize = std::hardware_destructive_interference_size;
-
-  // Initialize slices.
-  std::unique_ptr<Pos[]> starts(new Pos[k, kCacheLineSize]);
-  std::unique_ptr<StepFn[]> step_fns(new StepFn[k, kCacheLineSize]);
-  for (auto i = 0; i < k; i += 1) {
-    starts[i] = step.sources[i].start;
-    step_fns[i] = step.sources[i].step_fn;
-  }
-
-  // Initialize iterators.
-  std::unique_ptr<Pos*[]> iter_ends(new Pos*[k, kCacheLineSize]);
-  std::unique_ptr<Val*[]> iter_vals(new Val*[k, kCacheLineSize]);
-  for (auto i = 0; i < k; i += 1) {
-    const auto& source = step.sources[i];
-    const auto index = source.store->index(source.start);
-    iter_ends[i] = &source.store->ends[index];
-    iter_vals[i] = &source.store->vals[index];
-  }
-
-  // Initialize frontier.
-  std::unique_ptr<Pos[]> curr_ends(new Pos[k, kCacheLineSize]);
-  std::unique_ptr<Val[]> curr_vals(new Val[k, kCacheLineSize]);
-  for (auto i = 0; i < k; i += 1) {
-    curr_ends[i] = step_fns[i](*iter_ends[i]++ - starts[i]);
-    curr_vals[i] = *iter_vals[i]++;
-  }
-
-  // Initialize tournament tree.
-  std::unique_ptr<uint64_t[]> tree(new uint64_t[4 * k, kCacheLineSize]);
-  const auto u = round_up_to_power_of_two(k);
-  for (int src = 0; src < u; src += 1) {
-    if (src < k) {
-      tree[u + src - 1] = (static_cast<uint64_t>(curr_ends[src]) << 32) | src;
-    } else {
-      tree[u + src - 1] = std::numeric_limits<int64_t>::max();
-    }
-  }
-  for (int h = u >> 1; h > 0; h >>= 1) {
-    for (int i = h; i < h << 1; i += 1) {
-      auto l = (i << 1) - 1;
-      auto r = (i << 1);
-      tree[i - 1] = tree[l] <= tree[r] ? tree[l] : tree[r];
-    }
-  }
-
-  // Initialize the hash table.
-  struct HashNode {
-    int key;
-    int size;
-    std::unique_ptr<int[]> vals;
-  };
-  const int hash_size = round_up_to_power_of_two(4 * k);
-  CHECK_STATE(is_power_of_two(hash_size));
-  std::unique_ptr<HashNode[]> hash(new HashNode[hash_size]);
-  for (int i = 0; i < hash_size; i += 1) {
-    hash[i].key = 0;
-    hash[i].vals.reset(new int[k]);
-  }
-
-  // Compute the size of the iteration.
-  auto step_size = step.size() - 1;
-
-  // Iterate over all input arrays combining their ranges together.
-  auto ends_out = ends;
-  auto vals_out = vals;
-  auto eval_fn = step.eval_fn;
-  Pos prev_end = 0;
-  Val prev_val;
-  for (int count = 0; count < step_size; count += 1) {
-    auto src = tree[0] & 0xFFFFFFFF;
-    auto end = step.start + curr_ends[src];
-
-    // Emit the new marker but handle compression cases.
-    if (prev_end != end) {
-      auto val = eval_fn(&curr_vals[0]);
-      if (prev_end && prev_val == val) {
-        --ends_out;
-        --vals_out;
-      }
-      *ends_out++ = end;
-      *vals_out++ = val;
-      prev_end = end;
-      prev_val = val;
-    }
-
-    // Update all duplicate ends in the hash table as well.
-    auto out_end = curr_ends[src];
-    if (auto& slot = hash[out_end & (hash_size - 1)]; slot.key == out_end) {
-      for (int i = 0; i < slot.size; i += 1) {
-        auto hash_src = slot.vals[i];
-        curr_vals[hash_src] = *iter_vals[hash_src]++;
-        count += 1;
-      }
-      slot.key = 0;
-    }
-
-    // Compute the new end coordinate, relative to the slice parameters.
-    auto new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
-
-    // Store duplicate ends in the hash table instead of the tournament tree.
-    while (step.start + new_end < step.stop) {
-      auto& slot = hash[new_end & (hash_size - 1)];
-      if (slot.key != new_end) {
-        if (slot.key == 0) {
-          slot.key = new_end;
-          slot.size = 0;
-        }
-        break;
-      }
-      slot.vals[slot.size++] = src;
-      new_end = step_fns[src](*iter_ends[src]++ - starts[src]);
-    };
-
-    // Update the frontier.
-    curr_ends[src] = new_end;
-    curr_vals[src] = *iter_vals[src]++;
-
-    // Update the tournament tree.
-    tree[u + src - 1] = (static_cast<uint64_t>(new_end) << 32) | src;
-    for (int i = (u + src) >> 1; i > 0; i >>= 1) {
-      auto l = (i << 1) - 1;
-      auto r = (i << 1);
-      if (tree[l] < tree[r]) {
-        tree[i - 1] = tree[l];
-      } else {
-        tree[i - 1] = tree[r];
-      }
-    }
-  }
-
-  // Emit the final end marker at the stop position.
-  auto val = eval_fn(&curr_vals[0]);
-  if (prev_end && prev_val == val) {
-    --vals_out;
-    --ends_out;
-  }
-  *vals_out++ = val;
-  *ends_out++ = step.stop;
-
-  return ends_out - ends;
+template <typename Arg, typename Ret, typename... Sources>
+auto eval_simple(
+    EvalFn<Arg, Ret> eval_fn, SimpleSource<Arg> head, Sources&&... tail) {
+  constexpr auto size = 1 + sizeof...(tail);
+  return eval_simple<Arg, Ret, size>(
+      std::move(eval_fn),
+      make_pool(std::move(head), std::forward<Sources>(tail)...));
 }
 
-template <typename Val>
-void check_step(const EvalStep<Val>& step) {
-  CHECK_ARGUMENT(step.sources.size() > 0);
-
-  // Compute and validate the span of each source.
-  std::vector<int> spans;
-  for (const auto& source : step.sources) {
-    const auto& store = *source.store;
-    CHECK_ARGUMENT(source.start >= 0);
-    CHECK_ARGUMENT(source.start < store.ends[store.size - 1]);
-    CHECK_ARGUMENT(source.start < source.stop);
-    CHECK_ARGUMENT(source.stop <= store.ends[store.size - 1]);
-    spans.push_back(source.span());
-  }
-
-  // Check that all spans are aligned.
-  for (int i = 1; i < spans.size(); i += 1) {
-    CHECK_ARGUMENT(spans[i - 1] == spans[i]);
-  }
-
-  // Make sure that the spans match the output span.
-  CHECK_ARGUMENT(spans[0] == (step.stop - step.start));
+template <typename Ret, int size>
+auto eval_mixed(EvalFn<Mix, Ret> eval_fn, Pool<MixSourceBase, size> pool) {
+  auto s = pool.span();
+  return eval_generic(SourceEvaluator(s, std::move(pool), std::move(eval_fn)));
 }
 
-template <typename Val>
-auto parallelize_plan(const EvalPlan<Val>& plan) {
-  // STRATEGY: Partition each step into a fixed number of equal-sized chunks
-  // if their total size exceeds some threshold. This approach should have a
-  // minimal overhead while enabling balanced parallelism.
-  static constexpr int kThreshold = 32 * 1024;
-  static int kNumChunks = [] { return std::thread::hardware_concurrency(); }();
-
-  EvalPlan<Val> ret;
-  for (const auto& step : plan.steps) {
-    uint64_t span = step.span();
-    if (span > kThreshold) {
-      for (auto i = 0; i < kNumChunks; i += 1) {
-        ret.steps.emplace_back(
-            static_cast<Pos>(step.start + (span * i) / kNumChunks),
-            static_cast<Pos>(step.start + (span * (i + 1)) / kNumChunks),
-            step.eval_fn);
-        for (auto& src : step.sources) {
-          // TODO: For complex step functions, the choice of span partitioning
-          // here might not evenly partition the source ranges. Consider using
-          // a bisection approach to identify perfect partitions.
-          uint64_t src_span = src.stop - src.start;
-          ret.steps.back().sources.emplace_back(
-              src.store,
-              static_cast<Pos>(src.start + (src_span * i) / kNumChunks),
-              static_cast<Pos>(src.start + (src_span * (i + 1)) / kNumChunks),
-              src.step_fn);
-        }
-      }
-    } else {
-      ret.steps.push_back(step);
-    }
-  }
-
-  return ret;
-}
-
-template <typename FnRange>
-void run_in_parallel(const FnRange& fns) {
-  static auto executor = [] {
-    auto n = std::thread::hardware_concurrency();
-    return std::make_unique<threads::QueueExecutor>(n);
-  }();
-
-  std::vector<std::future<void>> futures;
-  for (const auto& fn : fns) {
-    futures.push_back(executor->schedule(fn));
-  }
-  for (auto& future : futures) {
-    future.get();
-  }
-}
-
-template <typename FnRange>
-void run_inline(const FnRange& fns) {
-  for (const auto& fn : fns) {
-    fn();
-  }
-}
-
-template <typename Val>
-auto eval_plan(const EvalPlan<Val>& input_plan) {
-  // Validate that each step is properly configured.
-  for (const auto& step : input_plan.steps) {
-    check_step(step);
-  }
-
-  // Augment the plan to add better parallelization.
-  auto plan = parallelize_plan(input_plan);
-  auto s = plan.steps.size();
-  CHECK_ARGUMENT(s <= std::numeric_limits<int32_t>::max());
-
-  // We need to keep track of where we write each step's output into the
-  // temporary store and the size of each output after compression.
-  std::vector<int> dest_sizes(s);
-  std::vector<int> step_offsets(s + 1);
-  step_offsets[0] = 0;
-  for (int i = 0; i < plan.steps.size(); i += 1) {
-    auto step_size = plan.steps[i].size();
-    CHECK_ARGUMENT(step_size > 0);
-    step_offsets[i + 1] = step_offsets[i] + step_size;
-  }
-
-  // Allocate the destination store to fit all step outputs.
-  auto store = std::make_shared<core::Store<Val>>(step_offsets[s]);
-
-  // Create a task for each eval step in the plan.
-  std::vector<std::function<void()>> eval_fns;
-  for (int i = 0; i < plan.steps.size(); i += 1) {
-    eval_fns.emplace_back([&, i] {
-      EvalStep step = plan.steps[i];
-      Pos* ends = store->ends.get() + step_offsets[i];
-      Val* vals = store->vals.get() + step_offsets[i];
-
-      // Emit the merged ranges into the destination.
-      // TODO: Futher specialize cases (e.g. when size == 1).
-      CHECK_ARGUMENT(step.sources.size());
-      if (step.sources.size() == 1) {
-        dest_sizes[i] = eval_step_fixed<1>(ends, vals, step);
-      } else if (step.sources.size() == 2) {
-        dest_sizes[i] = eval_step_fixed<2>(ends, vals, step);
-      } else if (step.sources.size() == 3) {
-        dest_sizes[i] = eval_step_fixed<3>(ends, vals, step);
-      } else if (step.sources.size() == 4) {
-        dest_sizes[i] = eval_step_fixed<4>(ends, vals, step);
-      } else if (step.sources.size() <= 16) {
-        dest_sizes[i] = eval_step_stack<16>(ends, vals, step);
-      } else if (step.sources.size() <= 32) {
-        dest_sizes[i] = eval_step_stack<32>(ends, vals, step);
-      } else if (step.sources.size() <= 64) {
-        dest_sizes[i] = eval_step_stack<64>(ends, vals, step);
-      } else if (step.sources.size() <= 128) {
-        dest_sizes[i] = eval_step_stack<128>(ends, vals, step);
-      } else if (step.sources.size() <= 256) {
-        dest_sizes[i] = eval_step_stack<256>(ends, vals, step);
-      } else if (step.sources.size() <= 512) {
-        dest_sizes[i] = eval_step_stack<512>(ends, vals, step);
-      } else if (step.sources.size() <= 1024) {
-        dest_sizes[i] = eval_step_stack<1024>(ends, vals, step);
-      } else {
-        dest_sizes[i] = eval_step_heap(ends, vals, step);
-      }
-    });
-  }
-
-  // Run all of the eval tasks in parallel.
-  constexpr auto kParallelizeEvalThreshold = 16 * 1024;
-  if (step_offsets[s] > kParallelizeEvalThreshold) {
-    run_in_parallel(eval_fns);
-  } else {
-    run_inline(eval_fns);
-  }
-
-  // Update the output offsets and sizes to reflect comrpession at the edges.
-  for (int i = 0; i < s - 1; i += 1) {
-    auto l_head = step_offsets[i];
-    auto l_size = dest_sizes[i];
-    auto l_back = l_head + l_size - 1;
-    auto r_head = step_offsets[i + 1];
-    auto r_size = dest_sizes[i + 1];
-
-    CHECK_STATE(l_size > 0);
-    CHECK_STATE(r_size >= 0);
-    if (r_size == 0) {
-      store->ends[r_head - 1] = store->ends[l_back];
-      store->vals[r_head - 1] = store->vals[l_back];
-      --l_size;
-      --r_head;
-      ++r_size;
-    } else if (r_size == 1) {
-      if (store->ends[l_back] == store->ends[r_head]) {
-        store->vals[r_head] = store->vals[l_back];
-        --l_size;
-      } else if (store->vals[l_back] == store->vals[r_head]) {
-        --l_size;
-      }
-    } else {
-      if (store->ends[l_back] != store->ends[r_head]) {
-        if (store->vals[l_back] == store->vals[r_head]) {
-          --l_size;
-        }
-      } else {
-        if (store->vals[l_back] != store->vals[r_head + 1]) {
-          ++r_head;
-          --r_size;
-        } else {
-          --l_size;
-          ++r_head;
-          --r_size;
-        }
-      }
-    }
-
-    step_offsets[i] = l_head;
-    dest_sizes[i] = l_size;
-    step_offsets[i + 1] = r_head;
-    dest_sizes[i + 1] = r_size;
-  }
-
-  // Calculate the final output offsets.
-  std::vector<int> dest_offsets;
-  dest_offsets.push_back(0);
-  for (int i = 0; i < s; i += 1) {
-    dest_offsets.push_back(dest_offsets.back() + dest_sizes[i]);
-  }
-
-  // Allocate the compressed destination store.
-  auto destination = std::make_shared<core::Store<Val>>(dest_offsets[s]);
-
-  // Create a task for to move the output of each step in the plan.
-  std::vector<std::function<void()>> move_fns;
-  for (int i = 0; i < plan.steps.size(); i += 1) {
-    move_fns.emplace_back([&, i] {
-      auto step_b = step_offsets[i];
-      auto step_e = step_offsets[i] + dest_sizes[i];
-      auto dest_b = dest_offsets[i];
-      std::copy(
-          &store->ends[step_b],
-          &store->ends[step_e],
-          &destination->ends[dest_b]);
-      std::copy(
-          &store->vals[step_b],
-          &store->vals[step_e],
-          &destination->vals[dest_b]);
-    });
-  }
-
-  // Run all of the move tasks in parallel.
-  constexpr auto kParallelizeMoveThreshold = 16 * 1024;
-  if (dest_offsets[s] > kParallelizeMoveThreshold) {
-    run_in_parallel(move_fns);
-  } else {
-    run_inline(move_fns);
-  }
-
-  return destination;
+template <typename Ret, typename Head, typename... Tail>
+auto eval_mixed(EvalFn<Mix, Ret> eval_fn, Head head, Tail&&... tail) {
+  constexpr auto size = 1 + sizeof...(tail);
+  return eval_mixed<Ret, size>(
+      std::move(eval_fn),
+      make_pool<MixSourceBase>(std::move(head), std::forward<Tail>(tail)...));
 }
 
 }  // namespace skimpy::detail::eval

@@ -34,10 +34,10 @@ TEST_CASE("Test building an ops graph", "[ops_build]") {
 
   auto x_s = join(
       "x0 = store(5=>a); ",
-      "x1 = slice(x0, 0:2:1); ",
+      "x1 = slice(x0, 0:2); ",
       "x2 = store(1=>b); ",
       "x3 = stack(x1, x2); ",
-      "x4 = slice(x0, 3:5:1); ",
+      "x4 = slice(x0, 3:5); ",
       "x5 = stack(x3, x4); ",
       "x5");
   REQUIRE(str(x) == x_s);
@@ -49,7 +49,7 @@ TEST_CASE("Test building an ops graph", "[ops_build]") {
   auto y_s = join(
       "x0 = store(2=>1); ",
       "x1 = store(8=>2); ",
-      "x2 = slice(x1, 6:8:1); ",
+      "x2 = slice(x1, 6:8); ",
       "x3 = merge(x0, x2); ",
       "x4 = apply(x3); ",
       "x4");
@@ -82,9 +82,9 @@ TEST_CASE("Test normalizing an ops graph", "[ops_normalize]") {
 
   auto x_s = join(
       "x0 = store(1=>b); ",
-      "x1 = slice(x0, 0:1:1); ",
+      "x1 = slice(x0, 0:1); ",
       "x2 = store(5=>a); ",
-      "x3 = slice(x2, 3:4:1); ",
+      "x3 = slice(x2, 3:4); ",
       "x4 = stack(x1, x3); ",
       "x4");
   REQUIRE(str(x) == x_s);
@@ -97,9 +97,9 @@ TEST_CASE("Test normalizing an ops graph", "[ops_normalize]") {
 
   auto y_s = join(
       "x0 = store(2=>1); ",
-      "x1 = slice(x0, 0:2:1); ",
+      "x1 = slice(x0, 0:2); ",
       "x2 = store(8=>2); ",
-      "x3 = slice(x2, 6:8:1); ",
+      "x3 = slice(x2, 6:8); ",
       "x4 = merge(x1, x3); ",
       "x5 = apply(x4); ",
       "x6 = stack(x5); ",
@@ -116,13 +116,13 @@ TEST_CASE("Test normalizing an ops graph", "[ops_normalize]") {
 
   auto z_s = join(
       "x0 = store(5=>3); ",
-      "x1 = slice(x0, 0:1:1); ",
-      "x2 = slice(x0, 1:2:1); ",
+      "x1 = slice(x0, 0:1); ",
+      "x2 = slice(x0, 1:2); ",
       "x3 = merge(x1, x2); ",
       "x4 = merge(x2, x1); ",
-      "x5 = slice(x0, 3:4:1); ",
+      "x5 = slice(x0, 3:4); ",
       "x6 = merge(x5, x2); ",
-      "x7 = slice(x0, 4:5:1); ",
+      "x7 = slice(x0, 4:5); ",
       "x8 = merge(x7, x5); ",
       "x9 = stack(x3, x4, x6, x8); "
       "x9");

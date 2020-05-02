@@ -1,773 +1,413 @@
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
 
+#include <array>
 #include <catch2/catch.hpp>
 #include <thread>
 #include <vector>
 
 #include "skimpy/detail/core.hpp"
-#include "skimpy/detail/eval.hpp"
+#include "skimpy/detail/eval2.hpp"
+#include "skimpy/detail/step.hpp"
+#include "skimpy/detail/threads.hpp"
 
-using namespace skimpy::detail::core;
-using namespace skimpy::detail::eval;
+using namespace skimpy::detail;
+
+template <typename FnRange>
+void run_in_parallel(const FnRange& fns) {
+  static auto executor = [] {
+    auto n = std::thread::hardware_concurrency();
+    return std::make_unique<threads::QueueExecutor>(n);
+  }();
+
+  std::vector<std::future<void>> futures;
+  for (const auto& fn : fns) {
+    futures.push_back(executor->schedule(fn));
+  }
+  for (auto& future : futures) {
+    future.get();
+  }
+}
 
 template <typename Fn>
-void parallel(int t, int n, Fn&& fn) {
-  std::vector<std::thread> threads;
+void partition(int t, int n, Fn&& fn) {
+  std::vector<std::function<void()>> tasks;
   for (int i = 0; i < t; i += 1) {
-    threads.emplace_back([i, t, n, fn = std::forward<Fn>(fn)] {
+    tasks.emplace_back([i, t, n, fn = std::forward<Fn>(fn)] {
       fn(i * n / t, (i + 1) * n / t, i);
     });
   }
-  for (auto& thread : threads) {
-    thread.join();
-  }
+  run_in_parallel(tasks);
 }
 
-TEST_CASE("Benchmark 1-source plan evaluation", "[plan_eval_1_sources]") {
+auto make_store(int n, int seed) {
+  auto store = std::make_shared<core::Store<int>>(n);
+  for (int i = 0; i < n; i += 1) {
+    store->ends[i] = i + 1;
+    store->vals[i] = (7909 * seed * (i + 7703)) & 128;
+  }
+  return store;
+}
+
+TEST_CASE("Benchmark 1-source evaluation", "[eval_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 1;            // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool(eval::SimpleSource<int>(make_store(n, 1)));
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return 2 * v[0]; }, sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = 2 * sources[0].store()->vals[i];
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark 2-source plan evaluation", "[eval_2]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource<int>(make_store(n, 1)),
+      eval::SimpleSource<int>(make_store(n, 2)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 2; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 2-source plan evaluation", "[plan_eval_2_sources]") {
+TEST_CASE("Benchmark 4-source plan evaluation", "[eval_4]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 2;            // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_store(n, 1)),
+      eval::SimpleSource(make_store(n, 2)),
+      eval::SimpleSource(make_store(n, 3)),
+      eval::SimpleSource(make_store(n, 4)));
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1] * v[2] * v[3]; }, sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(1, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 4; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 4-source plan evaluation", "[plan_eval_4_sources]") {
+TEST_CASE("Benchmark 8-source plan evaluation", "[eval_8]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 4;            // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_store(n, 1)),
+      eval::SimpleSource(make_store(n, 2)),
+      eval::SimpleSource(make_store(n, 3)),
+      eval::SimpleSource(make_store(n, 4)),
+      eval::SimpleSource(make_store(n, 5)),
+      eval::SimpleSource(make_store(n, 6)),
+      eval::SimpleSource(make_store(n, 7)),
+      eval::SimpleSource(make_store(n, 8)));
+  static constexpr auto sources_size = decltype(sources)::size;
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 0; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(1, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 8-source plan evaluation", "[plan_eval_8_sources]") {
+TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 8;            // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_store(n, 1)),
+      eval::SimpleSource(make_store(n, 2)),
+      eval::SimpleSource(make_store(n, 3)),
+      eval::SimpleSource(make_store(n, 4)),
+      eval::SimpleSource(make_store(n, 5)),
+      eval::SimpleSource(make_store(n, 6)),
+      eval::SimpleSource(make_store(n, 7)),
+      eval::SimpleSource(make_store(n, 8)),
+      eval::SimpleSource(make_store(n, 9)),
+      eval::SimpleSource(make_store(n, 10)),
+      eval::SimpleSource(make_store(n, 11)),
+      eval::SimpleSource(make_store(n, 12)),
+      eval::SimpleSource(make_store(n, 13)),
+      eval::SimpleSource(make_store(n, 14)),
+      eval::SimpleSource(make_store(n, 15)),
+      eval::SimpleSource(make_store(n, 16)));
+  static constexpr auto sources_size = decltype(sources)::size;
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 0; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(1, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 10-source plan evaluation", "[plan_eval_10_sources]") {
+TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 10;           // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_store(n, 1)),
+      eval::SimpleSource(make_store(n, 2)),
+      eval::SimpleSource(make_store(n, 3)),
+      eval::SimpleSource(make_store(n, 4)),
+      eval::SimpleSource(make_store(n, 5)),
+      eval::SimpleSource(make_store(n, 6)),
+      eval::SimpleSource(make_store(n, 7)),
+      eval::SimpleSource(make_store(n, 8)),
+      eval::SimpleSource(make_store(n, 9)),
+      eval::SimpleSource(make_store(n, 10)),
+      eval::SimpleSource(make_store(n, 11)),
+      eval::SimpleSource(make_store(n, 12)),
+      eval::SimpleSource(make_store(n, 13)),
+      eval::SimpleSource(make_store(n, 14)),
+      eval::SimpleSource(make_store(n, 15)),
+      eval::SimpleSource(make_store(n, 16)),
+      eval::SimpleSource(make_store(n, 17)),
+      eval::SimpleSource(make_store(n, 18)),
+      eval::SimpleSource(make_store(n, 19)),
+      eval::SimpleSource(make_store(n, 20)),
+      eval::SimpleSource(make_store(n, 21)),
+      eval::SimpleSource(make_store(n, 22)),
+      eval::SimpleSource(make_store(n, 23)),
+      eval::SimpleSource(make_store(n, 24)),
+      eval::SimpleSource(make_store(n, 25)),
+      eval::SimpleSource(make_store(n, 26)),
+      eval::SimpleSource(make_store(n, 27)),
+      eval::SimpleSource(make_store(n, 28)),
+      eval::SimpleSource(make_store(n, 29)),
+      eval::SimpleSource(make_store(n, 30)),
+      eval::SimpleSource(make_store(n, 31)),
+      eval::SimpleSource(make_store(n, 32)));
+  static constexpr auto sources_size = decltype(sources)::size;
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 0; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(1, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 16-source plan evaluation", "[plan_eval_16_sources]") {
+TEST_CASE("Benchmark mixed 1-source evaluation", "[eval_mixed_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 16;           // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool<eval::MixSourceBase>(
+      eval::MixSource<int>(make_store(n, 1)));
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_mixed<int>(
+        [](const eval::Mix* v) {
+          auto v_0 = std::get<int>(v[0]);
+          return 2 * v_0;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = 2 * std::get<int>(sources[0].val(i));
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark mixed 2-source evaluation", "[eval_mixed_2]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool<eval::MixSourceBase>(
+      eval::MixSource<int>(make_store(n, 1)),
+      eval::MixSource<int>(make_store(n, 2)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_mixed<int>(
+        [](const eval::Mix* v) {
+          auto v_0 = std::get<int>(v[0]);
+          auto v_1 = std::get<int>(v[1]);
+          return v_0 * v_1;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = std::get<int>(sources[0].val(i));
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= std::get<int>(sources[j].val(i));
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 20-source plan evaluation", "[plan_eval_20_sources]") {
+TEST_CASE("Benchmark mixed 4-source evaluation", "[eval_mixed_4]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 20;           // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool<eval::MixSourceBase>(
+      eval::MixSource<int>(make_store(n, 1)),
+      eval::MixSource<int>(make_store(n, 2)),
+      eval::MixSource<int>(make_store(n, 3)),
+      eval::MixSource<int>(make_store(n, 4)));
+  static constexpr auto sources_size = decltype(sources)::size;
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_mixed<int>(
+        [](const eval::Mix* v) {
+          auto v_0 = std::get<int>(v[0]);
+          auto v_1 = std::get<int>(v[1]);
+          auto v_2 = std::get<int>(v[2]);
+          auto v_3 = std::get<int>(v[3]);
+          return v_0 * v_1 * v_2 * v_3;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = std::get<int>(sources[0].val(i));
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= std::get<int>(sources[j].val(i));
         }
       }
     });
   };
 }
 
-TEST_CASE("Benchmark 32-source plan evaluation", "[plan_eval_32_sources]") {
+TEST_CASE("Benchmark mixed 8-source evaluation", "[eval_mixed_8]") {
   static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 32;           // number of input stores
 
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
+  auto sources = eval::make_pool<eval::MixSourceBase>(
+      eval::MixSource<int>(make_store(n, 1)),
+      eval::MixSource<int>(make_store(n, 2)),
+      eval::MixSource<int>(make_store(n, 3)),
+      eval::MixSource<int>(make_store(n, 4)),
+      eval::MixSource<int>(make_store(n, 5)),
+      eval::MixSource<int>(make_store(n, 6)),
+      eval::MixSource<int>(make_store(n, 7)),
+      eval::MixSource<int>(make_store(n, 8)));
+  static constexpr auto sources_size = decltype(sources)::size;
 
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_mixed<int>(
+        [](const eval::Mix* v) {
+          auto v_0 = std::get<int>(v[0]);
+          auto v_1 = std::get<int>(v[1]);
+          auto v_2 = std::get<int>(v[2]);
+          auto v_3 = std::get<int>(v[3]);
+          auto v_4 = std::get<int>(v[4]);
+          auto v_5 = std::get<int>(v[5]);
+          auto v_6 = std::get<int>(v[6]);
+          auto v_7 = std::get<int>(v[7]);
+          return v_0 * v_1 * v_2 * v_3 * v_4 * v_5 * v_6 * v_7;
+        },
+        sources);
   };
 
   BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
-        }
-      }
-    });
-  };
-}
-
-TEST_CASE("Benchmark 64-source plan evaluation", "[plan_eval_64_sources]") {
-  static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 64;           // number of input stores
-
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
-
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
-  };
-
-  BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
-      for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
-        }
-      }
-    });
-  };
-}
-
-TEST_CASE("Benchmark 128-source plan evaluation", "[plan_eval_128_sources]") {
-  static constexpr auto n = 1024 * 1024;  // size of input
-  static constexpr auto s = 8;            // number of steps
-  static constexpr auto q = 128;          // number of input stores
-
-  // Allocate the input stores.
-  std::shared_ptr<Store<int>> stores[q];
-  for (int j = 0; j < q; j += 1) {
-    stores[j] = std::make_shared<Store<int>>(n);
-  }
-
-  // Initialize the input stores.
-  const auto max_end = n;
-  BENCHMARK("init_input") {
-    for (int j = 0; j < q; j += 1) {
-      std::srand(j);
-      for (int i = 0; i < n; i += 1) {
-        stores[j]->ends[i] = i + 1;
-        stores[j]->vals[i] = j > 0 ? 1 : 1 + (std::rand() % 100);
-      }
-      stores[j]->ends[n - 1] = max_end;
-    }
-  };
-
-  // Initialize the evaluation function.
-  auto eval_fn = [](int* inputs) {
-    return [&](...) {
-      int ret = 0;
-      for (int j = 0; j < q; j += 2) {
-        ret += inputs[j] * inputs[j + 1];
-      }
-      return ret;
-    }();
-  };
-
-  // Initialize evaluation plan chunked into some number of steps.
-  EvalPlan<int> plan;
-  for (int64_t i = 0; i < s; i += 1) {
-    auto start = static_cast<int>(i * max_end / s);
-    auto stop = static_cast<int>((i + 1) * max_end / s);
-    EvalStep<int> step(start, stop, eval_fn);
-    for (int j = 0; j < q; j += 1) {
-      step.sources.emplace_back(stores[j], start, stop);
-    }
-    plan.steps.emplace_back(std::move(step));
-  }
-
-  // Evaluate the plan.
-  BENCHMARK("eval_plan") {
-    volatile auto dst = eval_plan(plan);
-  };
-
-  BENCHMARK("lower_bound") {
-    auto x = std::make_shared<Store<int>>(n);
-    parallel(8, n - 1, [&](int start, int end, ...) {
-      int ends[q];
-      int vals[q];
-      auto ends_ptr = &x->ends[start];
-      auto vals_ptr = &x->vals[start];
-      auto prev_end = 0;
-      for (int i = start; i < end; i += 1) {
-        for (int j = 0; j < q; j += 1) {
-          ends[j] = stores[j]->ends[i];
-          vals[j] = stores[j]->vals[i];
-          if (ends[j] != prev_end) {
-            *ends_ptr++ = ends[j];
-            *vals_ptr++ = eval_fn(vals);
-            prev_end = ends[j];
-          }
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = std::get<int>(sources[0].val(i));
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= std::get<int>(sources[j].val(i));
         }
       }
     });

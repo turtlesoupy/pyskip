@@ -12,9 +12,23 @@ namespace skimpy::detail::conv {
 
 using Pos = core::Pos;
 
+template <typename Val>
+auto to_store(const std::initializer_list<Val>& il) {
+  return to_store(std::vector<Val>(il));
+}
+
 template <typename Val, typename Allocator>
 auto to_store(const std::vector<Val, Allocator>& array) {
   return to_store(array.size(), array.data());
+}
+
+template <typename Allocator>
+auto to_store(const std::vector<bool, Allocator>& array) {
+  std::unique_ptr<bool[]> bools(new bool[array.size()]);
+  for (int i = 0; i < array.size(); i += 1) {
+    bools[i] = array[i];
+  }
+  return to_store(array.size(), &bools[0]);
 }
 
 template <typename Val>
