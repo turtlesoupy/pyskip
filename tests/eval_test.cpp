@@ -56,8 +56,8 @@ TEST_CASE("Test eval routine to weave two stores", "[eval_weave]") {
         return m ? t : s;
       },
       MixSource<int>(m),
-      MixSource<char>(s, 0, 3, shift(step_fn(1, 0, 1), 1)),
-      MixSource<char>(t, 0, 3, shift(step_fn(1, 0, 1), 1)));
+      MixSource<char, StepFn>(s, 0, 3, shift(step_fn(1, 0, 1), 1)),
+      MixSource<char, StepFn>(t, 0, 3, shift(step_fn(1, 0, 1), 1)));
 
   REQUIRE(to_string(*result) == "1=>a, 2=>b, 3=>c, 4=>d, 5=>e, 6=>f");
 }
@@ -75,8 +75,8 @@ TEST_CASE("Test eval routine to stack two stores", "[eval_stack]") {
         return m ? t : s;
       },
       MixSource<int>(m),
-      MixSource<char>(s, 0, 3, shift(step_fn(3, 0, 4, 1), -1)),
-      MixSource<char>(t, 0, 4, shift(step_fn(4, 0, 3, 0), 3)));
+      MixSource<char, StepFn>(s, 0, 3, shift(step_fn(3, 0, 4, 1), -1)),
+      MixSource<char, StepFn>(t, 0, 4, shift(step_fn(4, 0, 3, 0), 3)));
 
   REQUIRE(to_string(*result) == "1=>a, 2=>b, 3=>c, 4=>d, 5=>e, 6=>f, 7=>g");
 }

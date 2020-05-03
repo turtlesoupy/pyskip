@@ -7,6 +7,8 @@ namespace skimpy::detail::step {
 
 using Pos = core::Pos;
 
+using SimpleStepFn = Pos (*)(Pos);
+
 // Provides parameterization of monotonic integer functions that correspond
 // naturally to ways of stepping over sequential data. In particular, these
 // parameterizations can be used to represent n-dimensional array slicing.
@@ -124,6 +126,10 @@ class StepFn {
   mutable std::function<Pos(Pos)> fn_;
 };
 
+auto identity() {
+  return [](Pos p) { return p; };
+}
+
 StepFn step_fn(Pos run = 1, Pos skip = 0, Pos jump = 0, Pos lead = 0) {
   return StepFn(run, skip, jump, lead);
 }
@@ -146,11 +152,13 @@ StepFn shift(StepFn f, Pos p) {
   return StepFn(std::move(f), 1, 0, 0, p);
 }
 
-Pos span(Pos start, Pos stop, const StepFn& fn) {
+template <typename Fn>
+Pos span(Pos start, Pos stop, Fn&& fn) {
   return fn(stop) - fn(start);
 }
 
-Pos invert(Pos pos, Pos start, Pos stop, const StepFn& step) {
+template <typename Fn>
+Pos invert(Pos pos, Pos start, Pos stop, Fn&& step) {
   CHECK_ARGUMENT(start <= stop);
   auto l = start;
   auto h = stop;

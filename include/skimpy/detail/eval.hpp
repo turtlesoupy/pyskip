@@ -12,10 +12,10 @@
 
 namespace skimpy::detail::eval {
 
-template <typename Val>
-using Store = core::Store<Val>;
 using Pos = core::Pos;
-using StepFn = step::StepFn;
+
+template <typename Val>
+using StorePtr = std::shared_ptr<core::Store<Val>>;
 
 // Convenience wrapper for the pointers to the output store of an evaluation.
 template <typename Val>
@@ -181,19 +181,17 @@ void eval(Evaluator evaluator, EvalOutput<Val>& output) {
 
 // A source of input to an evaluation. A source provides iteration over a store
 // along with a mapping of end positions to output coordinates.
-template <typename Val>
+template <typename Val, typename StepFn = Pos (*)(Pos)>
 class SimpleSource {
  public:
   SimpleSource() = delete;
 
-  SimpleSource(std::shared_ptr<Store<Val>> store)
-      : SimpleSource(store, 0, store->span()) {}
+  SimpleSource(StorePtr<Val> store) : SimpleSource(store, 0, store->span()) {}
 
-  SimpleSource(std::shared_ptr<Store<Val>> store, Pos start, Pos stop)
-      : SimpleSource(std::move(store), start, stop, step::step_fn()) {}
+  SimpleSource(StorePtr<Val> store, Pos start, Pos stop)
+      : SimpleSource(std::move(store), start, stop, [](Pos p) { return p; }) {}
 
-  SimpleSource(
-      std::shared_ptr<Store<Val>> store, Pos start, Pos stop, StepFn step_fn)
+  SimpleSource(StorePtr<Val> store, Pos start, Pos stop, StepFn step_fn)
       : store_(std::move(store)),
         start_(start),
         stop_(stop),
@@ -229,7 +227,7 @@ class SimpleSource {
   }
 
   inline auto split(Pos start, Pos stop) const {
-    return std::make_shared<SimpleSource<Val>>(
+    return std::make_shared<SimpleSource<Val, StepFn>>(
         store_,
         step::invert(start + 1, start_, stop_, step_fn_) - 1,
         step::invert(stop, start_, stop_, step_fn_),
@@ -240,7 +238,7 @@ class SimpleSource {
     return step_fn_;
   }
 
-  inline const std::shared_ptr<Store<Val>>& store() const {
+  inline const StorePtr<Val>& store() const {
     return store_;
   }
 
@@ -253,7 +251,7 @@ class SimpleSource {
   }
 
  private:
-  std::shared_ptr<Store<Val>> store_;
+  StorePtr<Val> store_;
   Pos start_;
   Pos stop_;
   StepFn step_fn_;
@@ -274,17 +272,15 @@ struct MixSourceBase {
   virtual std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const = 0;
 };
 
-template <typename Val>
+template <typename Val, typename StepFn = Pos (*)(Pos)>
 class MixSource : public MixSourceBase {
  public:
-  MixSource(std::shared_ptr<Store<Val>> store)
-      : MixSource(store, 0, store->span()) {}
+  MixSource(StorePtr<Val> store) : MixSource(store, 0, store->span()) {}
 
-  MixSource(std::shared_ptr<Store<Val>> store, Pos start, Pos stop)
-      : MixSource(std::move(store), start, stop, step::step_fn()) {}
+  MixSource(StorePtr<Val> store, Pos start, Pos stop)
+      : MixSource(std::move(store), start, stop, [](Pos p) { return p; }) {}
 
-  MixSource(
-      std::shared_ptr<Store<Val>> store, Pos start, Pos stop, StepFn step_fn)
+  MixSource(StorePtr<Val> store, Pos start, Pos stop, StepFn step_fn)
       : store_(std::move(store)),
         start_(start),
         stop_(stop),
@@ -320,7 +316,7 @@ class MixSource : public MixSourceBase {
   }
 
   std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const override {
-    return std::make_shared<MixSource<Val>>(
+    return std::make_shared<MixSource<Val, StepFn>>(
         store_,
         step::invert(start + 1, start_, stop_, step_fn_) - 1,
         step::invert(stop, start_, stop_, step_fn_),
@@ -328,7 +324,7 @@ class MixSource : public MixSourceBase {
   }
 
  private:
-  std::shared_ptr<Store<Val>> store_;
+  StorePtr<Val> store_;
   Pos start_;
   Pos stop_;
   StepFn step_fn_;
@@ -378,6 +374,9 @@ struct Pool {
   }
 };
 
+template <typename Val, typename StepFn, int size>
+using SimplePool = Pool<SimpleSource<Val, StepFn>, size>;
+
 template <typename Source, typename Head, typename... Tail>
 auto make_pool(Head&& head, Tail&&... tail) {
   constexpr auto size = 1 + sizeof...(tail);
@@ -413,10 +412,10 @@ template <typename Arg, typename Ret>
 using EvalFn = std::function<Ret(const Arg*)>;
 
 // Provides evaluation over a pool of simple sources via an eval function.
-template <typename Ret, typename Arg, int size>
+template <typename Ret, typename Arg, typename StepFn, int size>
 class SimpleEvaluator {
  public:
-  SimpleEvaluator(Pool<SimpleSource<Arg>, size> pool, EvalFn<Arg, Ret> eval_fn)
+  SimpleEvaluator(SimplePool<Arg, StepFn, size> pool, EvalFn<Arg, Ret> eval_fn)
       : stop_(pool.stop()),
         pool_(std::move(pool)),
         eval_fn_(std::move(eval_fn)) {
@@ -441,7 +440,8 @@ class SimpleEvaluator {
   }
 
   inline auto next_end(int src) {
-    return step_fns_[src](*iter_ends_[src]++);
+    return *iter_ends_[src]++;
+    // return step_fns_[src](*iter_ends_[src]++);
   }
 
   inline auto eval() const {
@@ -450,7 +450,7 @@ class SimpleEvaluator {
 
  private:
   Pos stop_;
-  Pool<SimpleSource<Arg>, size> pool_;
+  SimplePool<Arg, StepFn, size> pool_;
   EvalFn<Arg, Ret> eval_fn_;
   StepFn step_fns_[size];
   Pos* iter_ends_[size];
@@ -505,7 +505,7 @@ class SourceEvaluator {
 };
 
 template <typename Val>
-auto fuse_stores(const std::vector<std::shared_ptr<Store<Val>>>& stores) {
+auto fuse_stores(const std::vector<StorePtr<Val>>& stores) {
   std::vector<std::tuple<int, int, int>> offsets(stores.size());
 
   // Compute the source and destination positives to copy the inputs stores
@@ -531,7 +531,7 @@ auto fuse_stores(const std::vector<std::shared_ptr<Store<Val>>>& stores) {
   }
 
   // Evaluate each part in parallel.
-  auto ret = std::make_shared<Store<Val>>(dst_b);
+  auto ret = std::make_shared<core::Store<Val>>(dst_b);
   std::vector<std::function<void()>> tasks;
   for (int i = 0; i < stores.size(); i += 1) {
     tasks.emplace_back([&, i] {
@@ -553,7 +553,7 @@ auto eval_generic(Evaluator evaluator) {
   using Val = decltype(evaluator.eval());
 
   // Allocate the output store.
-  auto store = std::make_shared<Store<Val>>(evaluator.pool().capacity());
+  auto store = std::make_shared<core::Store<Val>>(evaluator.pool().capacity());
 
   // Evaluate the output store.
   EvalOutput<Val> output(&store->ends[0], &store->vals[0]);
@@ -564,8 +564,8 @@ auto eval_generic(Evaluator evaluator) {
   return store;
 }
 
-template <typename Arg, typename Ret, int size>
-auto eval_simple(EvalFn<Arg, Ret> eval_fn, Pool<SimpleSource<Arg>, size> pool) {
+template <typename Ret, typename Arg, typename StepFn, int size>
+auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
   static constexpr auto kParallelizeThreshold = 8 * 1024;
   static auto kParallelizeParts = std::thread::hardware_concurrency();
 
@@ -578,7 +578,7 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, Pool<SimpleSource<Arg>, size> pool) {
 
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;
-  std::vector<std::shared_ptr<Store<Ret>>> stores(partition.size());
+  std::vector<StorePtr<Ret>> stores(partition.size());
   for (int i = 0; i < partition.size(); i += 1) {
     tasks.emplace_back([&, i] {
       SimpleEvaluator evaluator(std::move(partition[i]), eval_fn);
@@ -591,11 +591,13 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, Pool<SimpleSource<Arg>, size> pool) {
   return fuse_stores(stores);
 }
 
-template <typename Arg, typename Ret, typename... Sources>
+template <typename Ret, typename Arg, typename StepFn, typename... Sources>
 auto eval_simple(
-    EvalFn<Arg, Ret> eval_fn, SimpleSource<Arg> head, Sources&&... tail) {
+    EvalFn<Arg, Ret> eval_fn,
+    SimpleSource<Arg, StepFn> head,
+    Sources&&... tail) {
   constexpr auto size = 1 + sizeof...(tail);
-  return eval_simple<Arg, Ret, size>(
+  return eval_simple<Ret, Arg, StepFn, size>(
       std::move(eval_fn),
       make_pool(std::move(head), std::forward<Sources>(tail)...));
 }
@@ -614,7 +616,7 @@ auto eval_mixed(EvalFn<Mix, Ret> eval_fn, Pool<MixSourceBase, size> pool) {
 
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;
-  std::vector<std::shared_ptr<Store<Ret>>> stores(partition.size());
+  std::vector<StorePtr<Ret>> stores(partition.size());
   for (int i = 0; i < partition.size(); i += 1) {
     tasks.emplace_back([&, i] {
       SourceEvaluator evaluator(std::move(partition[i]), eval_fn);
