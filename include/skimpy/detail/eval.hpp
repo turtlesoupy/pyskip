@@ -95,7 +95,8 @@ struct HashTable {
   static constexpr int size = round_up_to_power_of_two(sources);
   std::unique_ptr<Node[]> nodes;
 
-  HashTable() : nodes(new Node[size]) {
+  HashTable()
+      : nodes(new Node[size, std::hardware_destructive_interference_size]) {
     for (int i = 0; i < size; i += 1) {
       nodes[i].key = 0;
     }
@@ -129,7 +130,7 @@ struct HashTable {
 // tournament tree to speed up min selection as well as a hasing trick to avoid
 // repeating the min-selection for repeated end position.
 template <int sources, typename Evaluator, typename Val>
-void eval(Evaluator&& evaluator, EvalOutput<Val>& output) {
+void eval(Evaluator evaluator, EvalOutput<Val>& output) {
   HashTable<sources> hash;
   TournamentTree<sources> tree(evaluator);
 
@@ -509,11 +510,22 @@ auto fuse_stores(const std::vector<std::shared_ptr<Store<Val>>>& stores) {
 
   // Compute the source and destination positives to copy the inputs stores
   // into the fused output store, handling compression at the edges.
-  // TODO: Implement the compression.
   auto dst_b = 0;
   for (int i = 0; i < stores.size(); i += 1) {
     auto src_b = 0;
     auto src_e = stores[i]->size;
+    CHECK_STATE(src_b < src_e);
+
+    // Adjust the offsets based on compression.
+    if (i > 0) {
+      auto prev = stores[i - 1];
+      if (prev->vals[prev->size - 1] == stores[i]->vals[0]) {
+        auto [b, e, d] = offsets[i - 1];
+        offsets[i - 1] = std::make_tuple(b, e - 1, d);
+        dst_b -= 1;
+      }
+    }
+
     offsets[i] = std::make_tuple(src_b, src_e, dst_b);
     dst_b += src_e - src_b;
   }
@@ -535,6 +547,8 @@ auto fuse_stores(const std::vector<std::shared_ptr<Store<Val>>>& stores) {
 
 template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
+  CHECK_ARGUMENT(evaluator.pool().span() > 0);
+
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
   using Val = decltype(evaluator.eval());
 
@@ -543,7 +557,7 @@ auto eval_generic(Evaluator evaluator) {
 
   // Evaluate the output store.
   EvalOutput<Val> output(&store->ends[0], &store->vals[0]);
-  eval<size>(evaluator, output);
+  eval<size>(std::move(evaluator), output);
 
   // Resize the output (due to compression).
   store->size = output.ends - &store->ends[0];

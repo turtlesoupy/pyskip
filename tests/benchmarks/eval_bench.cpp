@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 
+#include "skimpy/detail/conv.hpp"
 #include "skimpy/detail/core.hpp"
 #include "skimpy/detail/eval.hpp"
 #include "skimpy/detail/step.hpp"
@@ -49,7 +50,23 @@ auto make_store(int n, int seed) {
   return store;
 }
 
-/*
+TEST_CASE("Test post-parallelism fusing", "[eval_test_fuse]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_store(n, 0)),
+      eval::SimpleSource(make_store(n, 0)),
+      eval::SimpleSource(make_store(n, 0)),
+      eval::SimpleSource(make_store(n, 0)));
+
+  auto x = eval::eval_simple<int, int>(
+      [](const int* v) { return v[0] * v[1] * v[2] * v[3]; }, sources);
+
+  REQUIRE(x->size == 1);
+  REQUIRE(x->ends[0] == n);
+  REQUIRE(x->vals[0] == 0);
+}
+
 TEST_CASE("Benchmark 1-source evaluation", "[eval_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
@@ -143,7 +160,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[eval_8]") {
     volatile auto x = eval::eval_simple<int, int>(
         [](const int* v) {
           auto ret = v[0];
-          for (int i = 0; i < sources_size; i += 1) {
+          for (int i = 1; i < sources_size; i += 1) {
             ret *= v[i];
           }
           return ret;
@@ -189,9 +206,9 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
-        [](const int* v, ...) {
+        [](const int* v) {
           auto ret = v[0];
-          for (int i = 0; i < sources_size; i += 1) {
+          for (int i = 1; i < sources_size; i += 1) {
             ret *= v[i];
           }
           return ret;
@@ -255,7 +272,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
     volatile auto x = eval::eval_simple<int, int>(
         [](const int* v) {
           auto ret = v[0];
-          for (int i = 0; i < sources_size; i += 1) {
+          for (int i = 1; i < sources_size; i += 1) {
             ret *= v[i];
           }
           return ret;
@@ -276,7 +293,6 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
     });
   };
 }
-*/
 
 TEST_CASE("Benchmark mixed 1-source evaluation", "[eval_mixed_1]") {
   static constexpr auto n = 1024 * 1024;  // size of input
