@@ -440,8 +440,7 @@ class SimpleEvaluator {
   }
 
   inline auto next_end(int src) {
-    return *iter_ends_[src]++;
-    // return step_fns_[src](*iter_ends_[src]++);
+    return step_fns_[src](*iter_ends_[src]++);
   }
 
   inline auto eval() const {
