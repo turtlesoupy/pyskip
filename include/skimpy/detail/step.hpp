@@ -84,7 +84,9 @@ class CyclicTree {
     int size;
     std::shared_ptr<Node[]> nodes;
 
-    explicit NodeStore(int size) : size(size), nodes(new Node[size]) {}
+    explicit NodeStore(int size)
+        : size(size),
+          nodes(new Node[size, std::hardware_destructive_interference_size]) {}
 
     NodeStore(int size, std::shared_ptr<Node[]> nodes)
         : size(size), nodes(std::move(nodes)) {}
@@ -93,6 +95,15 @@ class CyclicTree {
       return nodes[i];
     };
   };
+
+  template <typename... Args>
+  static auto one_node_store(Args&&... args) {
+    NodeStore store(1);
+    store[0] = range_node(std::forward<Args>(args)...);
+    return store;
+  }
+
+  CyclicTree() : CyclicTree(one_node_store(1, [](Pos p) { return p; }), 0) {}
 
   CyclicTree(NodeStore nodes, int root)
       : nodes_(std::move(nodes)),
@@ -131,6 +142,8 @@ class CyclicTree {
 
 class CyclicStepFn {
  public:
+  CyclicStepFn() : CyclicStepFn(CyclicTree()) {}
+
   explicit CyclicStepFn(CyclicTree tree)
       : CyclicStepFn(0, std::numeric_limits<Pos>::max(), std::move(tree)) {}
 
@@ -141,11 +154,54 @@ class CyclicStepFn {
             other.tree_) {}
 
   CyclicStepFn(Pos start, Pos stop, CyclicTree tree)
-      : start_(start),
-        span_(stop - start),
-        tree_(std::move(tree)),
-        stack_(tree_.depth()),
-        curr_(&stack_[0]) {
+      : start_(start), span_(stop - start), tree_(std::move(tree)) {
+    reset();
+  }
+
+  // Copy and move constructors
+  CyclicStepFn(const CyclicStepFn& other) {
+    *this = other;
+  }
+  CyclicStepFn(CyclicStepFn&& other) {
+    *this = std::move(other);
+  }
+
+  // Copy and move assignment
+  CyclicStepFn& operator=(const CyclicStepFn& other) {
+    start_ = other.start_;
+    span_ = other.span_;
+    tree_ = other.tree_;
+    reset();
+    return *this;
+  }
+  CyclicStepFn& operator=(CyclicStepFn&& other) {
+    start_ = other.start_;
+    span_ = other.span_;
+    tree_ = std::move(other.tree_);
+    reset();
+    return *this;
+  }
+
+  Pos operator()(Pos pos) const {
+    pos -= start_;
+    if (curr_->base >= pos || pos > curr_->stop) {
+      if (pos <= 0) {
+        return 0;
+      }
+      if (pos >= span_) {
+        pos = span_;
+      }
+      if (curr_->base >= pos || pos > curr_->stop) {
+        search(pos - 1);
+      }
+    }
+    return curr_->step + curr_fn_(pos - curr_->base);
+  }
+
+ private:
+  void reset() {
+    stack_.resize(tree_.depth());
+    curr_ = &stack_[0];
     curr_->base = 0;
     curr_->stop = span_;
     curr_->step = 0;
@@ -155,22 +211,7 @@ class CyclicStepFn {
     }
   }
 
-  Pos operator()(Pos pos) {
-    pos -= start_;
-    if (pos <= 0) {
-      return 0;
-    }
-    if (pos >= span_) {
-      pos = span_;
-    }
-    if (curr_->base >= pos || pos > curr_->stop) {
-      search(pos - 1);
-    }
-    return curr_->step + curr_->node->range.fn(pos - curr_->base);
-  }
-
- private:
-  inline void search(int pos) {
+  inline void search(int pos) const {
     // Pop the stack until we find a node that includes pos.
     while (curr_->base > pos || pos >= curr_->stop) {
       --curr_;
@@ -204,9 +245,15 @@ class CyclicStepFn {
       // Push this child onto the stack.
       push_stack(base, base + child->span, step, child);
     }
+
+    curr_fn_ = curr_->node->range.fn;
+    curr_base_ = curr_->base;
+    curr_stop_ = curr_->stop;
+    curr_step_ = curr_->step;
   }
 
-  void push_stack(int base, int stop, int step, const CyclicTree::Node* node) {
+  void push_stack(
+      int base, int stop, int step, const CyclicTree::Node* node) const {
     ++curr_;
     curr_->base = base;
     curr_->stop = stop;
@@ -224,8 +271,12 @@ class CyclicStepFn {
   Pos start_;
   Pos span_;
   CyclicTree tree_;
-  std::vector<StackNode> stack_;
-  StackNode* curr_;
+  mutable std::vector<StackNode> stack_;
+  mutable StackNode* curr_;
+  mutable SimpleStepFn curr_fn_;
+  mutable Pos curr_base_;
+  mutable Pos curr_stop_;
+  mutable Pos curr_step_;
 };
 
 namespace cyclic {
@@ -246,14 +297,15 @@ struct CyclicExpr {
   CyclicExpr(Kind kind) : kind(kind) {}
 };
 
-auto range(int span, SimpleStepFn fn) {
+inline auto range(int span, SimpleStepFn fn) {
   auto ret = std::make_shared<CyclicExpr>(CyclicExpr::RANGE);
   ret->range.span = span;
   ret->range.fn = fn;
   return ret;
 }
 
-auto stack(int loops, CyclicExpr::Dep l_dep, CyclicExpr::Dep r_dep = nullptr) {
+inline auto stack(
+    int loops, CyclicExpr::Dep l_dep, CyclicExpr::Dep r_dep = nullptr) {
   CHECK_ARGUMENT(l_dep);
   auto ret = std::make_shared<CyclicExpr>(CyclicExpr::STACK);
   ret->stack.loops = loops;
@@ -262,7 +314,7 @@ auto stack(int loops, CyclicExpr::Dep l_dep, CyclicExpr::Dep r_dep = nullptr) {
   return ret;
 }
 
-auto build(int start, int stop, CyclicExpr::Dep expr) {
+inline auto build(int start, int stop, CyclicExpr::Dep expr) {
   // Count the number of nodes we need to allocate.
   auto size = Fix([](auto f, const CyclicExpr::Dep& expr) -> int {
     auto ret = 1;
@@ -293,11 +345,11 @@ auto build(int start, int stop, CyclicExpr::Dep expr) {
   return CyclicStepFn(start, stop, CyclicTree(std::move(nodes), 0));
 }
 
-auto build(int stop, CyclicExpr::Dep expr) {
+inline auto build(int stop, CyclicExpr::Dep expr) {
   return build(0, stop, std::move(expr));
 }
 
-auto build(CyclicExpr::Dep expr) {
+inline auto build(CyclicExpr::Dep expr) {
   return build(0, std::numeric_limits<Pos>::max(), std::move(expr));
 }
 

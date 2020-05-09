@@ -74,7 +74,7 @@ TEST_CASE("Benchmark cycle fn", "[step_cycle_fn]") {
     int64_t cnt = 0;
     int64_t sum = 0;
     auto prev_end = 0;
-    for (int i = i0; i <= i1; i += 1) {
+    for (int i = i0 + 1; i <= i1; i += 1) {
       auto end = fn(i);
       if (prev_end != end) {
         sum += v[end - 1];
@@ -95,7 +95,7 @@ TEST_CASE("Benchmark simple cycle fn", "[step_simple_cycle_fn]") {
     auto fn = identity();
     BENCHMARK("n=1024 * 1024; simple") {
       volatile int64_t sum = 0;
-      for (int i = 0; i <= n; i += 1) {
+      for (int i = 1; i <= n; i += 1) {
         sum += fn(i);
       }
     };
@@ -106,7 +106,7 @@ TEST_CASE("Benchmark simple cycle fn", "[step_simple_cycle_fn]") {
     auto fn = cyclic::build(0, n, cyclic::range(n, identity()));
     BENCHMARK("n=1024 * 1024; cyclic") {
       volatile int64_t sum = 0;
-      for (int i = 0; i <= n; i += 1) {
+      for (int i = 1; i <= n; i += 1) {
         sum += fn(i);
       }
     };

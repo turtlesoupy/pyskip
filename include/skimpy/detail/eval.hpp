@@ -170,7 +170,9 @@ void eval(Evaluator evaluator, EvalOutput<Val>& output) {
       if (hash.insert(src, new_end)) {
         break;
       }
-      new_end = evaluator.next_end(src);
+      for (auto old_end = new_end; old_end == new_end;) {
+        new_end = evaluator.next_end(src);
+      }
     }
     evaluator.next_val(src);
 
@@ -179,8 +181,8 @@ void eval(Evaluator evaluator, EvalOutput<Val>& output) {
   }
 }
 
-// A source of input to an evaluation. A source provides iteration over a store
-// along with a mapping of end positions to output coordinates.
+// A source of input to an evaluation. A source provides iteration over a
+// store along with a mapping of end positions to output coordinates.
 template <typename Val, typename StepFn = Pos (*)(Pos)>
 class SimpleSource {
  public:
@@ -257,8 +259,8 @@ class SimpleSource {
   StepFn step_fn_;
 };
 
-// Mix sources provide multi-typed input to an evaluation. Iteration is exposed
-// via an indexing method. End positions are mapped internally.
+// Mix sources provide multi-typed input to an evaluation. Iteration is
+// exposed via an indexing method. End positions are mapped internally.
 using Mix = std::variant<bool, char, int, float>;
 
 struct MixSourceBase {
@@ -330,9 +332,10 @@ class MixSource : public MixSourceBase {
   StepFn step_fn_;
 };
 
-// Encapsulates a collection of input sources. The set of input sources compose
-// an eval step and must have the same span. The pool is also designed to allow
-// for paritioning so that it can be processed in parallel on multiple threads.
+// Encapsulates a collection of input sources. The set of input sources
+// compose an eval step and must have the same span. The pool is also designed
+// to allow for paritioning so that it can be processed in parallel on
+// multiple threads.
 template <typename Source, int pool_size>
 struct Pool {
   static_assert(pool_size > 0);

@@ -431,3 +431,237 @@ TEST_CASE("Benchmark mixed 8-source evaluation", "[eval_mixed_8]") {
     });
   };
 }
+
+TEST_CASE("Benchmark strided 1-source evaluation", "[eval_strided_1]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource<int>(make_store(n, 1), 0, n, step::stride_fn<2>()));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return 2 * v[0]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = 2 * sources[0].store()->vals[i];
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark strided 2-source evaluation", "[eval_strided_2]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource<int>(make_store(n, 1), 0, n, step::stride_fn<2>()),
+      eval::SimpleSource<int>(make_store(n, 2), 0, n, step::stride_fn<2>()));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 2; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 1-source evaluation", "[eval_cyclic_1]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step;
+    using namespace step::cyclic;
+    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
+    return build(i0, i1, steps);
+  }();
+
+  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  auto sources = eval::make_pool(S(make_store(n, 1), i0, i1, step_fn));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return 2 * v[0]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = 2 * sources[0].store()->vals[i];
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 2-source evaluation", "[eval_cyclic_2]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step;
+    using namespace step::cyclic;
+    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
+    return build(i0, i1, steps);
+  }();
+
+  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), i0, i1, step_fn), S(make_store(n, 2), 0, n, step_fn));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 2; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 4-source evaluation", "[eval_cyclic_4]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step;
+    using namespace step::cyclic;
+    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
+    return build(i0, i1, steps);
+  }();
+
+  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), i0, i1, step_fn),
+      S(make_store(n, 2), i0, i1, step_fn),
+      S(make_store(n, 3), i0, i1, step_fn),
+      S(make_store(n, 4), i0, i1, step_fn));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1] * v[2] * v[3]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 4; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 8-source evaluation", "[eval_cyclic_8]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step;
+    using namespace step::cyclic;
+    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
+    return build(i0, i1, steps);
+  }();
+
+  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), i0, i1, step_fn),
+      S(make_store(n, 2), i0, i1, step_fn),
+      S(make_store(n, 3), i0, i1, step_fn),
+      S(make_store(n, 4), i0, i1, step_fn),
+      S(make_store(n, 5), i0, i1, step_fn),
+      S(make_store(n, 6), i0, i1, step_fn),
+      S(make_store(n, 7), i0, i1, step_fn),
+      S(make_store(n, 8), i0, i1, step_fn));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 8; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
+        }
+      }
+    });
+  };
+}
