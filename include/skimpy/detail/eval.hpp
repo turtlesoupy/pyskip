@@ -191,7 +191,7 @@ class SimpleSource {
   SimpleSource(StorePtr<Val> store) : SimpleSource(store, 0, store->span()) {}
 
   SimpleSource(StorePtr<Val> store, Pos start, Pos stop)
-      : SimpleSource(std::move(store), start, stop, [](Pos p) { return p; }) {}
+      : SimpleSource(std::move(store), start, stop, step::identity()) {}
 
   SimpleSource(StorePtr<Val> store, Pos start, Pos stop, StepFn step_fn)
       : store_(std::move(store)),
