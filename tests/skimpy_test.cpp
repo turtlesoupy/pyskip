@@ -1,4 +1,4 @@
- #define CATCH_CONFIG_MAIN
+#define CATCH_CONFIG_MAIN
 
 #include "skimpy/skimpy.hpp"
 
@@ -9,7 +9,7 @@
 #include "skimpy/detail/conv.hpp"
 
 TEST_CASE("Test arrays", "[arrays]") {
-  skimpy::Array<int> x(5, 0);
+  auto x = skimpy::make_array(5, 0);
 
   // Test initialization
   REQUIRE(x.get(0) == 0);
@@ -63,7 +63,7 @@ TEST_CASE("Test arrays", "[arrays]") {
 }
 
 TEST_CASE("Test array builders", "[array_builders]") {
-  skimpy::Array<char> x(5, 'x');
+  auto x = skimpy::make_array(5, 'x');
 
   x.set(0, 'a');
   x.set(1, 'b');
@@ -87,7 +87,7 @@ TEST_CASE("Test array builders", "[array_builders]") {
   REQUIRE(x.get(3) == 'g');
   REQUIRE(x.get(4) == 'f');
 
-  skimpy::Array<int> y(10, 1);
+  auto y = skimpy::make_array(10, 1);
   y = skimpy::ArrayBuilder<int>(y).set(1, 3).set(3, 4).build();
   REQUIRE(y.get(1) == 3);
   REQUIRE(y.get(3) == 4);
@@ -98,13 +98,14 @@ TEST_CASE("Test array builders", "[array_builders]") {
   REQUIRE(z.get(2) == 1);
   REQUIRE(z.get(3) == 1);
   REQUIRE(z.get(4) == 1);
-  REQUIRE(z.str() == "[1, 1, 1, 1, 1]");
+  REQUIRE(z.str() == "5=>1");
 
-  skimpy::Array<int> big(1024 * 1024, 1);
-  skimpy::ArrayBuilder<int> big_builder(big);
-  for (auto i = 0; i < 30; i += 1) {
-    big_builder.set(i, i);
-  }
-  big = big_builder.build();
+  auto big = [] {
+    skimpy::ArrayBuilder<int> b(skimpy::make_array(1024 * 1024, 1));
+    for (auto i = 0; i < 30; i += 1) {
+      b.set(i, i);
+    }
+    return b.build();
+  }();
   REQUIRE(big.get(23) == 23);
 }

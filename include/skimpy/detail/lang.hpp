@@ -62,15 +62,15 @@ struct MergeArgs {
   MergeArgs(MergeFn merge_fn) : merge_fn(merge_fn) {}
 };
 
-template <typename In, typename Out, Out (*fn)(In)>
+template <typename Out, typename In, Out (*fn)(In)>
 inline constexpr auto merge_fn() {
   return [](const box::Box* b) {
     auto in = b[0].get<In>();
     return box::Box(fn(in));
-  }
+  };
 }
 
-template <typename In1, typename In2, typename Out, Out (*fn)(In1, In2)>
+template <typename Out, typename In1, typename In2, Out (*fn)(In1, In2)>
 inline constexpr auto merge_fn() {
   return [](const box::Box* b) {
     auto in_1 = b[0].get<In1>();
@@ -80,10 +80,10 @@ inline constexpr auto merge_fn() {
 }
 
 template <
+    typename Out,
     typename In1,
     typename In2,
     typename In3,
-    typename Out,
     Out (*fn)(In1, In2, In3)>
 inline constexpr auto merge_fn() {
   return [](const box::Box* b) {
@@ -167,29 +167,60 @@ inline auto slice(TypedExpr<Val> in, core::Pos stop) {
   return slice(std::move(in), step::cyclic::slice(stop));
 }
 
-template <typename In, typename Fn>
-inline auto merge(TypedExpr<In> in, Fn fn) {
-  using Out = decltype(fn(std::declval<In>()));
+template <typename Out, typename In, Out (*fn)(In)>
+inline auto merge(TypedExpr<In> in) {
   auto ret = Expr::make_ptr();
   ret->data.size = 1 + in->data.size;
   ret->data.span = in->data.span;
   ret->data.kind = ExprArgs::MERGE_1;
-  ret->data.args.emplace<MergeArgs>(merge_fn<In, Out, fn>());
+  ret->data.args.emplace<MergeArgs>(merge_fn<Out, In, fn>());
   ret->deps[0] = std::move(in.expr);
+  return TypedExpr<Out>{ret};
+}
+
+template <typename In, typename Fn>
+inline auto merge(TypedExpr<In> in, Fn fn) {
+  using Out = decltype(fn(std::declval<In>()));
+  return merge<Out, In, fn>(in);
+}
+
+template <typename Out, typename In1, typename In2, Out (*fn)(In1, In2)>
+inline auto merge(TypedExpr<In1> in_1, TypedExpr<In2> in_2) {
+  CHECK_ARGUMENT(in_1->data.span == in_2->data.span);
+  auto ret = Expr::make_ptr();
+  ret->data.size = 1 + in_1->data.size + in_2->data.size;
+  ret->data.span = in_1->data.span;
+  ret->data.kind = ExprArgs::MERGE_2;
+  ret->data.args.emplace<MergeArgs>(merge_fn<Out, In1, In2, fn>());
+  ret->deps[0] = std::move(in_1.expr);
+  ret->deps[1] = std::move(in_2.expr);
   return TypedExpr<Out>{ret};
 }
 
 template <typename In1, typename In2, typename Fn>
 inline auto merge(TypedExpr<In1> in_1, TypedExpr<In2> in_2, Fn fn) {
   using Out = decltype(fn(std::declval<In1>(), std::declval<In2>()));
+  return merge<Out, In1, In2, fn>(in_1, in_2);
+}
+
+template <
+    typename Out,
+    typename In1,
+    typename In2,
+    typename In3,
+    Out (*fn)(In1, In2, In3)>
+inline auto merge(
+    TypedExpr<In1> in_1, TypedExpr<In2> in_2, TypedExpr<In3> in_3) {
   CHECK_ARGUMENT(in_1->data.span == in_2->data.span);
+  CHECK_ARGUMENT(in_1->data.span == in_3->data.span);
   auto ret = Expr::make_ptr();
-  ret->data.size = 1 + in_1->data.size + in_2->data.size;
+  ret->data.size = 1 + in_1->data.size + in_2->data.size + in_3->data.size;
   ret->data.span = in_1->data.span;
-  ret->data.kind = ExprArgs::MERGE_2;
-  ret->data.args.emplace<MergeArgs>(merge_fn<In1, In2, Out, fn>());
+  ret->data.kind = ExprArgs::MERGE_3;
+  ret->data.args.emplace<MergeArgs>(merge_fn<Out, In1, In2, In3, fn>());
   ret->deps[0] = std::move(in_1.expr);
   ret->deps[1] = std::move(in_2.expr);
+  ret->deps[2] = std::move(in_3.expr);
   return TypedExpr<Out>{ret};
 }
 
@@ -198,17 +229,7 @@ inline auto merge(
     TypedExpr<In1> in_1, TypedExpr<In2> in_2, TypedExpr<In3> in_3, Fn fn) {
   using Out = decltype(
       fn(std::declval<In1>(), std::declval<In2>(), std::declval<In3>()));
-  CHECK_ARGUMENT(in_1->data.span == in_2->data.span);
-  CHECK_ARGUMENT(in_1->data.span == in_3->data.span);
-  auto ret = Expr::make_ptr();
-  ret->data.size = 1 + in_1->data.size + in_2->data.size + in_3->data.size;
-  ret->data.span = in_1->data.span;
-  ret->data.kind = ExprArgs::MERGE_3;
-  ret->data.args.emplace<MergeArgs>(merge_fn<In1, In2, In3, Out, fn>());
-  ret->deps[0] = std::move(in_1.expr);
-  ret->deps[1] = std::move(in_2.expr);
-  ret->deps[2] = std::move(in_3.expr);
-  return TypedExpr<Out>{ret};
+  return merge<Out, In1, In2, In3, fn>(in_1, in_2, in_3);
 }
 
 template <typename Fn>
@@ -303,6 +324,11 @@ inline void graph_dfs(ExprGraph::Handle handle, Fn&& fn) {
   });
 }
 
+template <typename Val>
+inline auto span(TypedExpr<Val> expr) {
+  return expr->data.span;
+}
+
 // Builds an expression recursively for a given DAG.
 template <typename Val>
 inline auto expressify(ExprGraph::Handle root) {
@@ -375,7 +401,7 @@ inline auto optimize(ExprGraph& graph, ExprGraph::Handle root) {
 inline auto schedule(ExprGraph::Handle root) {
   std::vector<ExprGraph::Handle> steps;
 
-  // Start by scheduling every node for materialization.
+  // Start by scheduling every non-store node for materialization.
   {
     std::unordered_set<ExprGraph::Handle> scheduled;
     graph_dfs(root, [&](auto h) {
@@ -387,7 +413,9 @@ inline auto schedule(ExprGraph::Handle root) {
             return true;
           }
         }
-        steps.push_back(h);
+        if (h->data.kind != ExprArgs::STORE) {
+          steps.push_back(h);
+        }
         scheduled.insert(h);
         return false;
       }

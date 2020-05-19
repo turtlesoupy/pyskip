@@ -8,24 +8,24 @@
 
 #include "skimpy/skimpy.hpp"
 
-TEST_CASE("Benchmark skimpy arrays", "[bench_arrays]") {
+TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
   // Assign to a random entry in a univariate array.
   BENCHMARK("univariate_assign_1") {
-    skimpy::Array<int> x(1000 * 1000, 0);
+    auto x = skimpy::make_array(1000 * 1000, 0);
     x.set(892, 1);
     x.eval();
   };
 
   // Assign 10 random entries in a univariate array.
   BENCHMARK("univariate_assign_10") {
-    skimpy::Array<int> x(1000 * 1000, 0);
+    auto x = skimpy::make_array(1000 * 1000, 0);
     x.set(skimpy::Slice(872, 882), 1);
     x.eval();
   };
 
   // Assign 10 random entries in a univariate array.
   BENCHMARK("univariate_assign_100") {
-    skimpy::Array<int> x(1000 * 1000, 0);
+    auto x = skimpy::make_array(1000 * 1000, 0);
     x.set(skimpy::Slice(872, 972), 1);
     x.eval();
   };
@@ -96,7 +96,7 @@ TEST_CASE("Benchmark skimpy arrays", "[bench_arrays]") {
   };
 }
 
-TEST_CASE("Benchmark skimpy array builders", "[bench_builders]") {
+TEST_CASE("Benchmark skimpy array builders", "[builders]") {
   BENCHMARK("build_10k") {
     skimpy::ArrayBuilder<int> b(10 * 1000, 0);
     for (int i = 0; i < 10 * 1000; i += 1) {

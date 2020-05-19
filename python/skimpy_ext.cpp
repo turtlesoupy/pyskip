@@ -6,6 +6,33 @@
 
 namespace py = pybind11;
 
+auto convert_band(skimpy::Pos length, py::slice slice) {
+  CHECK_ARGUMENT(slice.attr("step").is_none());
+  skimpy::Pos start = 0;
+  skimpy::Pos stop = length;
+
+  // Set non-default slice values.
+  if (!slice.attr("start").is_none()) {
+    start = slice.attr("start").cast<skimpy::Pos>();
+  }
+  if (!slice.attr("stop").is_none()) {
+    stop = slice.attr("stop").cast<skimpy::Pos>();
+  }
+
+  // Handle negative values.
+  if (start < 0) {
+    start = length + start;
+  }
+  if (stop < 0) {
+    stop = length + stop;
+  }
+
+  // Truncate start and stop values before returning.
+  stop = std::min(stop, length);
+  start = std::min(start, stop);
+  return skimpy::Band(start, stop);
+}
+
 auto convert_slice(skimpy::Pos length, py::slice slice) {
   skimpy::Pos start = 0;
   skimpy::Pos stop = length;
@@ -63,21 +90,23 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "__setitem__",
           [](IntArrayBuilder& self, py::slice slice, int val) {
-            self.set(convert_slice(self.len(), slice), val);
+            self.set(convert_band(self.len(), slice), val);
           })
       .def(
           "__setitem__",
           [](IntArrayBuilder& self,
              py::slice slice,
              const skimpy::Array<int>& other) {
-            self.set(convert_slice(self.len(), slice), other);
+            self.set(convert_band(self.len(), slice), other);
           })
       .def("build", &IntArrayBuilder::build);
 
   // Array class for int value types
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
-      .def(py::init<int, int>())
+      .def(py::init([](int span, int fill) {
+        return skimpy::make_array<int>(span, fill);
+      }))
       .def("__len__", &IntArray::len)
       .def("__repr__", &IntArray::repr)
       .def("clone", &IntArray::clone)
@@ -111,7 +140,7 @@ PYBIND11_MODULE(skimpy, m) {
           })
       .def("__neg__", [](const IntArray& self) { return -self; })
       .def("__pos__", [](const IntArray& self) { return +self; })
-      .def("__abs__", [](const IntArray& self) { return self.abs(); })
+      .def("__abs__", [](const IntArray& self) { return skimpy::abs(self); })
       .def("__invert__", [](const IntArray& self) { return ~self; })
       .def("__add__", [](const IntArray& self, int val) { return self + val; })
       .def("__radd__", [](const IntArray& self, int val) { return val + self; })
@@ -151,17 +180,6 @@ PYBIND11_MODULE(skimpy, m) {
           "__mod__",
           [](const IntArray& self, const IntArray& other) {
             return self % other;
-          })
-      .def(
-          "__pow__",
-          [](const IntArray& self, int val) { return skimpy::pow(self, val); })
-      .def(
-          "__rpow__",
-          [](const IntArray& self, int val) { return skimpy::pow(val, self); })
-      .def(
-          "__pow__",
-          [](const IntArray& self, const IntArray& other) {
-            return self.pow(other);
           })
       .def("__and__", [](const IntArray& self, int val) { return self & val; })
       .def("__rand__", [](const IntArray& self, int val) { return val & self; })
@@ -215,7 +233,7 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "min",
           [](const IntArray& self, const IntArray& other) {
-            return self.min(other);
+            return skimpy::min(self, other);
           })
       .def(
           "max",
@@ -226,9 +244,7 @@ PYBIND11_MODULE(skimpy, m) {
       .def(
           "max",
           [](const IntArray& self, const IntArray& other) {
-            return self.max(other);
+            return skimpy::min(self, other);
           })
-      .def("abs", [](const IntArray& self) { return self.abs(); })
-      .def("sqrt", [](const IntArray& self) { return self.abs(); })
-      .def("exp", [](const IntArray& self) { return self.abs(); });
+      .def("abs", [](const IntArray& self) { return skimpy::abs(self); });
 }

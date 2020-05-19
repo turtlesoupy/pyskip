@@ -297,7 +297,7 @@ inline auto fixed(Pos span, Pos step) {
   return ret;
 }
 
-inline auto scaled(int span, Pos scale) -> ExprNode::Ptr {
+inline auto scaled(Pos span, Pos scale) -> ExprNode::Ptr {
   CHECK_ARGUMENT(span > 0);
   CHECK_ARGUMENT(scale > 0);
   if (span > kMaxLutSize) {
@@ -318,7 +318,7 @@ inline auto scaled(int span, Pos scale) -> ExprNode::Ptr {
   }
 }
 
-inline auto strided(int span, Pos stride) -> ExprNode::Ptr {
+inline auto strided(Pos span, Pos stride) -> ExprNode::Ptr {
   CHECK_ARGUMENT(span > 0);
   CHECK_ARGUMENT(stride > 0);
   if (stride > kMaxLutSize) {
@@ -332,10 +332,10 @@ inline auto strided(int span, Pos stride) -> ExprNode::Ptr {
     auto loop_span = kMaxLutSize - (kMaxLutSize % stride);
     auto quo = span / loop_span, rem = span % loop_span;
     if (rem == 0) {
+      return stack(quo, strided(loop_span, stride));
+    } else {
       return stack(
           stack(quo, strided(loop_span, stride)), strided(rem, stride));
-    } else {
-      return stack(quo, strided(loop_span, stride));
     }
   } else {
     auto ret = ExprNode::make_ptr();
@@ -347,7 +347,7 @@ inline auto strided(int span, Pos stride) -> ExprNode::Ptr {
   }
 }
 
-inline auto build(int start, int stop, ExprNode::Ptr in) {
+inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
   CHECK_ARGUMENT(stop - start <= kMaxSpan);
 
   // Figure out how much space is required in the exec graph.
@@ -476,7 +476,7 @@ inline auto build(int start, int stop, ExprNode::Ptr in) {
           nodes_size, node_map.at(in), std::move(nodes), std::move(table)));
 }
 
-inline auto build(int stop, ExprNode::Ptr in) {
+inline auto build(Pos stop, ExprNode::Ptr in) {
   return build(0, stop, std::move(in));
 }
 
@@ -509,23 +509,23 @@ inline auto strided_lut() {
 }
 
 inline auto identity() {
-  return cyclic::build(cyclic::scaled<1>(cyclic::kMaxSpan));
+  return build(scaled<1>(kMaxSpan));
 }
 
-template <int k>
+template <Pos k>
 inline auto constant() {
-  return cyclic::build(cyclic::fixed<k>(cyclic::kMaxSpan));
+  return build(fixed<k>(kMaxSpan));
 }
 
 inline auto zero() {
   return constant<0>();
 }
 
-inline auto slice(Pos start, Pos stop, const cyclic::StepFn& fn) {
-  return cyclic::StepFn(start, stop - start, fn);
+inline auto slice(Pos start, Pos stop, const StepFn& fn) {
+  return StepFn(start, stop - start, fn);
 }
 
-inline auto slice(Pos stop, const cyclic::StepFn& fn) {
+inline auto slice(Pos stop, const StepFn& fn) {
   return slice(0, stop, fn);
 }
 
@@ -537,14 +537,39 @@ inline auto slice(Pos stop) {
   return slice(stop, identity());
 }
 
-template <int k>
+template <Pos k>
 inline auto scale_fn() {
-  return cyclic::build(cyclic::scaled<k>(cyclic::kMaxSpan));
+  return build(scaled<k>(kMaxSpan));
 }
 
-template <int k>
+template <Pos k>
 inline auto stride_fn() {
-  return cyclic::build(cyclic::strided<k>(cyclic::kMaxSpan));
+  return build(strided<k>(kMaxSpan));
+}
+
+inline auto scale_fn(Pos scale) {
+  return build(scaled(kMaxSpan, scale));
+}
+
+inline auto stride_fn(Pos stride) {
+  return build(strided(kMaxSpan, stride));
+}
+
+inline auto insert_fn(Pos span, Pos start, Pos stop, Pos stride) {
+  auto slice_span = 1 + (stop - start - 1) / stride;
+  CHECK_ARGUMENT(slice_span > 0);
+  if (slice_span == 1) {
+    return build(scaled(1, span));
+  } else if (slice_span == 2) {
+    auto head = scaled(1, start + stride);
+    auto tail = scaled(1, span - stride - start);
+    return build(stack(head, tail));
+  } else {
+    auto head = scaled(1, start + stride);
+    auto body = scaled(slice_span - 2, stride);
+    auto tail = scaled(1, span - (slice_span - 1) * stride - start);
+    return build(stack(head, stack(body, tail)));
+  }
 }
 
 }  // namespace cyclic

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include <cmath>
 #include <memory>
@@ -10,13 +10,17 @@
 #include "detail/conv.hpp"
 #include "detail/core.hpp"
 #include "detail/lang.hpp"
+#include "detail/mask.hpp"
+#include "detail/step.hpp"
 #include "detail/util.hpp"
 
 namespace skimpy {
 
-namespace core = detail::core;
+namespace box = detail::box;
 namespace conv = detail::conv;
+namespace core = detail::core;
 namespace lang = detail::lang;
+namespace mask = detail::mask;
 namespace step = detail::step;
 
 using Pos = core::Pos;
@@ -59,12 +63,16 @@ struct Slice {
     return 1 + (stop - start - 1) / stride;
   }
 
-  auto step_fn() const {
-    lang::StepFn ret;
-    if (stride > 1) {
-      ret = step::stride_fn(stride);
-    }
-    return ret;
+  auto get_fn() const {
+    return step::cyclic::slice(start, stop, step::cyclic::stride_fn(stride));
+  }
+
+  auto set_fn(Pos len) const {
+    return step::cyclic::insert_fn(len, start, stop, stride);
+  }
+
+  auto mask(Pos len) const {
+    return mask::stride_mask<box::Box, bool>(len, start, stop, stride);
   }
 };
 
@@ -146,11 +154,10 @@ class ArrayBuilder {
 
   // Builder methods
   Array<Val> build() {
-    auto out_capacity = 1 + capacity();
-    auto out_store = std::make_shared<Store<box::Box>>(1, out_capacity);
-    out_store->ends[0] = span_;
+    Store<Val> out_store(1, 1 + capacity());
+    out_store.ends[0] = span_;
     for (int i = 0; i < stores_.size(); i += 1) {
-      core::insert(*out_store, stores_[i], kBlockSize * i);
+      core::insert(out_store, stores_[i], kBlockSize * i);
     }
     return Array<Val>(out_store);
   }
@@ -177,6 +184,10 @@ class ArrayBuilder {
 template <typename Val>
 class Array {
  public:
+  Array(const Store<Val>& store) : op_(lang::store(store)) {}
+  Array(const Store<box::Box>& store) : op_(lang::store(store)) {}
+  Array(std::shared_ptr<Store<Val>> store)
+      : op_(lang::store(std::move(store))) {}
   Array(std::shared_ptr<Store<box::Box>> store)
       : op_(lang::store(std::move(store))) {}
 
@@ -196,22 +207,22 @@ class Array {
 
   // Metadata methods
   Pos len() const {
-    return op_->span();
+    return lang::span(op_);
   }
   std::string str() const {
-    return conv::to_string(store());
+    return conv::to_string(*store());
   }
   std::string repr() const {
     if (len() <= 10) {
       return fmt::format(
           "Array<{}>([{}])",
           typeid(Val).name(),
-          fmt::join(", ", conv::to_vector(store())));
+          fmt::join(conv::to_vector(*store()), ", "));
     } else {
       return fmt::format(
           "Array<{}>([{}, ..., {}])",
           typeid(Val).name(),
-          fmt::join(", ", conv::to_vector(get(Slice(4)).store())),
+          fmt::join(conv::to_vector(*get(Slice(4)).store()), ", "),
           get(len() - 1));
     }
   }
@@ -232,10 +243,10 @@ class Array {
     set(Slice(0, len()), val);
   }
   void set(Pos pos, Val val) {
-    set(pos, Array<Val>(1, std::move(val)));
+    set(pos, Array<Val>(lang::store(1, std::move(val))));
   }
   void set(const Slice& slice, Val val) {
-    set(slice, Array<Val>(slice.span(), std::move(val)));
+    set(slice, Array<Val>(lang::store(slice.span(), std::move(val))));
   }
   void set(const Array<Val>& other) {
     set(Slice(0, len()), other);
@@ -247,13 +258,9 @@ class Array {
     CHECK_ARGUMENT(slice.stop <= len());
     CHECK_ARGUMENT(slice.span() == other.len());
     *this = splat(
-        mask::stride_mask(len(), slice.start, slice.stop, slice.stride),
-        *this,
-        lang::slice(
-            other,
-            0,
-            other.len(),
-            step::insert_fn(len(), slice.start, slice.stop, slice.stride)));
+        Array<bool>(slice.mask(len())),
+        Array<Val>(lang::slice(other.op_, slice.set_fn(len()))),
+        *this);
   }
 
   // Value access methods
@@ -262,22 +269,39 @@ class Array {
   }
   Array<Val> get(const Slice& slice) const {
     CHECK_ARGUMENT(slice.stop <= len());
-    return Array<Val>(
-        lang::slice(op_, slice.start, slice.stop, slice.step_fn()));
+    return Array<Val>(lang::slice(op_, slice.get_fn()));
   }
 
-  // General-purpose merge and apply operations
+  // General-purpose merge operations
+  template <typename Out, Out (*fn)(Val)>
+  Array<Out> merge() const {
+    return Array<Out>(lang::merge<Out, Val, fn>(op_));
+  }
+  template <typename Out, typename Arg, Out (*fn)(Val, Arg)>
+  Array<Out> merge(const Array<Arg>& other) const {
+    return Array<Out>(lang::merge<Out, Val, Arg, fn>(op_, other.op_));
+  }
+  template <
+      typename Out,
+      typename Arg1,
+      typename Arg2,
+      Out (*fn)(Val, Arg1, Arg2)>
+  Array<Out> merge(const Array<Arg1>& a, const Array<Arg2>& b) const {
+    return Array<Out>(lang::merge<Out, Val, Arg1, Arg2, fn>(op_, a.op_, b.op_));
+  }
+
+  // Type-preserving merge operations
   template <Val (*fn)(Val)>
   Array<Val> merge() const {
-    return Array<Val>(lang::merge(op_, fn));
+    return merge<Val, fn>();
   }
   template <Val (*fn)(Val, Val)>
   Array<Val> merge(const Array<Val>& other) const {
-    return Array<Val>(lang::merge(op_, other.op_, fn));
+    return merge<Val, Val, fn>(other);
   }
   template <Val (*fn)(Val, Val, Val)>
   Array<Val> merge(const Array<Val>& a, const Array<Val>& b) const {
-    return Array<Val>(lang::merge(op_, a.op_, b.op_, fn));
+    return merge<Val, Val, Val, fn>(a, b);
   }
 
  private:
@@ -296,20 +320,23 @@ class Array {
   lang::TypedExpr<Val> op_;
 
   friend class ArrayBuilder<Val>;
+
+  template <typename OtherVal>
+  friend class Array;
 };
 
 // Convenience constructors
 template <typename Val>
 auto make_array(Pos span, Val fill) {
-  return Array<Val>(lang::store(span, fill));
+  return Array<Val>(core::make_shared_store(span, fill));
 }
 template <typename Val>
 auto make_array(std::shared_ptr<Store<Val>> store) {
-  return Array<Val>(lang::store(store));
+  return Array<Val>(store);
 }
 template <typename Val>
 auto make_array(const Store<Val>& store) {
-  return Array<Val>(lang::store(store));
+  return Array<Val>(store);
 }
 
 // Conversion routines
@@ -516,7 +543,8 @@ Array<Val> max(Val lhs, const Array<Val>& rhs) {
 template <typename Val>
 Array<Val> splat(
     const Array<bool>& mask, const Array<Val>& lhs, const Array<Val>& rhs) {
-  return mask.merge<[](bool m, Val a, Val b) { return m ? a : b; }>(lhs, rhs);
+  constexpr auto fn = [](bool m, Val a, Val b) { return m ? a : b; };
+  return mask.merge<Val, Val, Val, fn>(lhs, rhs);
 }
 template <typename Val>
 Array<Val> splat(const Array<bool>& mask, const Array<Val>& lhs, Val rhs) {
