@@ -6,16 +6,14 @@
 namespace skimpy::detail::box {
 
 // We store data in boxes between  merge function calls to unify the value type.
-struct Box {
-  union {
-    int_fast8_t i8;
-    int_fast16_t i16;
-    int_fast32_t i32;
-    uint_fast8_t u8;
-    uint_fast16_t u16;
-    uint_fast32_t u32;
-    float f32;
-  };
+class Box {
+ public:
+  Box() = default;
+
+  template <typename T>
+  Box(T t) {
+    put(t);
+  }
 
   template <typename T>
   constexpr inline const auto& ref() const {
@@ -61,14 +59,7 @@ struct Box {
     return const_cast<R&>(const_this->ref<T>());
   }
 
-  Box() = default;
-
-  template <typename T>
-  Box(T t) {
-    put(t);
-  }
-
-  auto zero() {
+  auto clear() {
     ref<uint32_t>() = 0;
   }
 
@@ -79,7 +70,7 @@ struct Box {
 
   template <typename T>
   auto& put(T v) {
-    zero();
+    clear();
     using A = std::decay_t<T>;
     using B = std::decay_t<decltype(ref<std::decay_t<T>>())>;
     return ref<A>() = static_cast<B>(v);
@@ -93,6 +84,17 @@ struct Box {
   bool operator==(const Box& other) {
     return get<uint32_t>() == other.get<uint32_t>();
   }
+
+ private:
+  union {
+    int_fast8_t i8;
+    int_fast16_t i16;
+    int_fast32_t i32;
+    uint_fast8_t u8;
+    uint_fast16_t u16;
+    uint_fast32_t u32;
+    float f32;
+  };
 };
 
 }  // namespace skimpy::detail::box
