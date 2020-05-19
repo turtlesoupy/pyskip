@@ -58,9 +58,9 @@ TEST_CASE("Benchmark cycle fn", "[step_cycle_fn]") {
     using namespace cyclic;
     auto steps = stack(
         z_s,
-        stack(y_s, range(x_s, identity()), range(d - x_s, zero())),
-        range(d * d - d * y_s, zero()));
-    return build(i0, i1, steps);
+        stack(y_s, scaled<1>(x_s), fixed<0>(d - x_s)),
+        fixed<0>(d * d - d * y_s));
+    return build(stack(fixed<0>(i0), steps));
   }();
 
   // Initialize some indexable data to access by the step function.
@@ -103,7 +103,7 @@ TEST_CASE("Benchmark simple cycle fn", "[step_simple_cycle_fn]") {
 
   // Run the cyclic benchmark.
   {
-    auto fn = cyclic::build(0, n, cyclic::range(n, identity()));
+    auto fn = cyclic::build(cyclic::scaled<1>(n));
     BENCHMARK("n=1024 * 1024; cyclic") {
       volatile int64_t sum = 0;
       for (int i = 1; i <= n; i += 1) {

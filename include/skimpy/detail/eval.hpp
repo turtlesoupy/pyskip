@@ -183,7 +183,7 @@ void eval(Evaluator evaluator, EvalOutput<Val>& output) {
 
 // A source of input to an evaluation. A source provides iteration over a
 // store along with a mapping of end positions to output coordinates.
-template <typename Val, typename StepFn = Pos (*)(Pos)>
+template <typename Val, typename StepFn = step::IdentityStepFn>
 class SimpleSource {
  public:
   SimpleSource() = delete;
@@ -191,7 +191,7 @@ class SimpleSource {
   SimpleSource(StorePtr<Val> store) : SimpleSource(store, 0, store->span()) {}
 
   SimpleSource(StorePtr<Val> store, Pos start, Pos stop)
-      : SimpleSource(std::move(store), start, stop, step::identity()) {}
+      : SimpleSource(std::move(store), start, stop, StepFn()) {}
 
   SimpleSource(StorePtr<Val> store, Pos start, Pos stop, StepFn step_fn)
       : store_(std::move(store)),
@@ -274,13 +274,13 @@ struct MixSourceBase {
   virtual std::shared_ptr<MixSourceBase> split(Pos start, Pos stop) const = 0;
 };
 
-template <typename Val, typename StepFn = Pos (*)(Pos)>
+template <typename Val, typename StepFn = step::IdentityStepFn>
 class MixSource : public MixSourceBase {
  public:
   MixSource(StorePtr<Val> store) : MixSource(store, 0, store->span()) {}
 
   MixSource(StorePtr<Val> store, Pos start, Pos stop)
-      : MixSource(std::move(store), start, stop, [](Pos p) { return p; }) {}
+      : MixSource(std::move(store), start, stop, StepFn()) {}
 
   MixSource(StorePtr<Val> store, Pos start, Pos stop, StepFn step_fn)
       : store_(std::move(store)),

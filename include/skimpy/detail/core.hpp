@@ -110,6 +110,11 @@ auto make_store(Pos span, Val fill) {
 }
 
 template <typename Val>
+auto make_shared_store(Pos span, Val fill) {
+  return std::make_shared<Store<Val>>(make_store(span, std::move(fill)));
+}
+
+template <typename Val>
 auto make_range(const Store<Val>& store, Pos start, Pos stop) {
   return Range<Val>(store, start, stop);
 }

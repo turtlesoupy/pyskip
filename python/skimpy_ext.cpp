@@ -43,8 +43,7 @@ PYBIND11_MODULE(skimpy, m) {
 
   // Module routines
   m.def("from_numpy", [](py::array_t<int>& array) {
-    auto store = skimpy::conv::to_store(array.size(), array.data());
-    return skimpy::Array<int>(store);
+    return skimpy::from_buffer(array.size(), array.data());
   });
 
   // ArrayBuilder class for int value types
@@ -80,23 +79,16 @@ PYBIND11_MODULE(skimpy, m) {
   py::class_<IntArray>(m, "IntArray")
       .def(py::init<int, int>())
       .def("__len__", &IntArray::len)
-      .def(
-          "__repr__",
-          [](IntArray& self) {
-            return fmt::format("Array<int>({})", self.str());
-          })
+      .def("__repr__", &IntArray::repr)
       .def("clone", &IntArray::clone)
-      .def("eval", [](IntArray& self) { return IntArray(self.store()); })
-      .def(
-          "dumps",
-          [](IntArray& self) { return skimpy::conv::to_string(*self.store()); })
+      .def("eval", &IntArray::eval)
+      .def("dumps", &IntArray::str)
       .def(
           "to_numpy",
           [](IntArray& self) {
-            auto store = self.store();
-            int* buffer = new int[store->span()];
-            skimpy::conv::to_buffer(*store, buffer);
-            return py::array_t<int>(store->span(), buffer);
+            int size, *buffer;
+            skimpy::to_buffer(self, &size, &buffer);
+            return py::array_t<int>(size, buffer);
           })
       .def("__getitem__", [](IntArray& self, int pos) { return self.get(pos); })
       .def(

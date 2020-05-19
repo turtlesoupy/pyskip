@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 
+#include "skimpy/detail/box.hpp"
 #include "skimpy/detail/conv.hpp"
 #include "skimpy/detail/core.hpp"
 #include "skimpy/detail/eval.hpp"
@@ -13,6 +14,7 @@
 #include "skimpy/detail/threads.hpp"
 
 using namespace skimpy::detail;
+using box::Box;
 
 template <typename FnRange>
 void run_in_parallel(const FnRange& fns) {
@@ -50,7 +52,25 @@ auto make_store(int n, int seed) {
   return store;
 }
 
-TEST_CASE("Test post-parallelism fusing", "[eval_test_fuse]") {
+auto make_mask_store(int n) {
+  auto store = std::make_shared<core::Store<Box>>(n);
+  for (int i = 0; i < n; i += 1) {
+    store->ends[i] = i + 1;
+    store->vals[i] = i % 2 == 0;
+  }
+  return store;
+}
+
+auto make_box_store(int n, int seed) {
+  auto store = std::make_shared<core::Store<Box>>(n);
+  for (int i = 0; i < n; i += 1) {
+    store->ends[i] = i + 1;
+    store->vals[i] = (7909 * seed * (i + 7703)) & 4095;
+  }
+  return store;
+}
+
+TEST_CASE("Test post-parallelism fusing", "[fuse]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -67,7 +87,7 @@ TEST_CASE("Test post-parallelism fusing", "[eval_test_fuse]") {
   REQUIRE(x->vals[0] == 0);
 }
 
-TEST_CASE("Benchmark 1-source evaluation", "[eval_1]") {
+TEST_CASE("Benchmark 1-source evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(eval::SimpleSource<int>(make_store(n, 1)));
@@ -88,7 +108,7 @@ TEST_CASE("Benchmark 1-source evaluation", "[eval_1]") {
   };
 }
 
-TEST_CASE("Benchmark 2-source plan evaluation", "[eval_2]") {
+TEST_CASE("Benchmark 2-source plan evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -114,7 +134,7 @@ TEST_CASE("Benchmark 2-source plan evaluation", "[eval_2]") {
   };
 }
 
-TEST_CASE("Benchmark 4-source plan evaluation", "[eval_4]") {
+TEST_CASE("Benchmark 4-source plan evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -142,7 +162,7 @@ TEST_CASE("Benchmark 4-source plan evaluation", "[eval_4]") {
   };
 }
 
-TEST_CASE("Benchmark 8-source plan evaluation", "[eval_8]") {
+TEST_CASE("Benchmark 8-source plan evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -182,7 +202,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[eval_8]") {
   };
 }
 
-TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
+TEST_CASE("Benchmark 16-source plan evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -230,7 +250,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[eval_16]") {
   };
 }
 
-TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
+TEST_CASE("Benchmark 32-source plan evaluation", "[simple]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool(
@@ -294,7 +314,163 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[eval_32]") {
   };
 }
 
-TEST_CASE("Benchmark mixed 1-source evaluation", "[eval_mixed_1]") {
+TEST_CASE("Benchmark boxed 1-source evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(eval::SimpleSource(make_box_store(n, 1)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) { return 2 * v[0].get<int>(); }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = 2 * sources[0].val(i).get<int>();
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark boxed 2-source evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_box_store(n, 1)),
+      eval::SimpleSource(make_box_store(n, 2)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) { return v[0].get<int>() * v[1].get<int>(); },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] =
+            sources[0].val(i).get<int>() * sources[1].val(i).get<int>();
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark boxed 4-source evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_box_store(n, 1)),
+      eval::SimpleSource(make_box_store(n, 2)),
+      eval::SimpleSource(make_box_store(n, 3)),
+      eval::SimpleSource(make_box_store(n, 4)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) {
+          auto v_0 = v[0].get<int>();
+          auto v_1 = v[1].get<int>();
+          auto v_2 = v[2].get<int>();
+          auto v_3 = v[3].get<int>();
+          return v_0 * v_1 * v_2 * v_3;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = sources[0].val(i).get<int>();
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= sources[j].val(i).get<int>();
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark boxed 8-source evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_box_store(n, 1)),
+      eval::SimpleSource(make_box_store(n, 2)),
+      eval::SimpleSource(make_box_store(n, 3)),
+      eval::SimpleSource(make_box_store(n, 4)),
+      eval::SimpleSource(make_box_store(n, 5)),
+      eval::SimpleSource(make_box_store(n, 6)),
+      eval::SimpleSource(make_box_store(n, 7)),
+      eval::SimpleSource(make_box_store(n, 8)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) {
+          auto v_0 = v[0].get<int>();
+          auto v_1 = v[1].get<int>();
+          auto v_2 = v[2].get<int>();
+          auto v_3 = v[3].get<int>();
+          auto v_4 = v[4].get<int>();
+          auto v_5 = v[5].get<int>();
+          auto v_6 = v[6].get<int>();
+          auto v_7 = v[7].get<int>();
+          return v_0 * v_1 * v_2 * v_3 * v_4 * v_5 * v_6 * v_7;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].end(i);
+        x->vals[i] = sources[0].val(i).get<int>();
+        for (int j = 1; j < sources_size; j += 1) {
+          x->vals[i] *= sources[j].val(i).get<int>();
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark boxed ternary evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_mask_store(n)),
+      eval::SimpleSource(make_box_store(n, 1)),
+      eval::SimpleSource(make_box_store(n, 2)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) {
+          return v[0].get<bool>() ? v[1].get<int>() : v[2].get<int>();
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        auto m = sources[0].val(i).get<bool>();
+        auto a = sources[1].val(i).get<int>();
+        auto b = sources[2].val(i).get<int>();
+        x->vals[i] = m ? a : b;
+        x->ends[i] = sources[0].end(i);
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark mixed 1-source evaluation", "[mixed]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool<eval::MixSourceBase>(
@@ -320,7 +496,7 @@ TEST_CASE("Benchmark mixed 1-source evaluation", "[eval_mixed_1]") {
   };
 }
 
-TEST_CASE("Benchmark mixed 2-source evaluation", "[eval_mixed_2]") {
+TEST_CASE("Benchmark mixed 2-source evaluation", "[mixed]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool<eval::MixSourceBase>(
@@ -352,7 +528,7 @@ TEST_CASE("Benchmark mixed 2-source evaluation", "[eval_mixed_2]") {
   };
 }
 
-TEST_CASE("Benchmark mixed 4-source evaluation", "[eval_mixed_4]") {
+TEST_CASE("Benchmark mixed 4-source evaluation", "[mixed]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool<eval::MixSourceBase>(
@@ -388,7 +564,7 @@ TEST_CASE("Benchmark mixed 4-source evaluation", "[eval_mixed_4]") {
   };
 }
 
-TEST_CASE("Benchmark mixed 8-source evaluation", "[eval_mixed_8]") {
+TEST_CASE("Benchmark mixed 8-source evaluation", "[mixed]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
   auto sources = eval::make_pool<eval::MixSourceBase>(
@@ -432,11 +608,12 @@ TEST_CASE("Benchmark mixed 8-source evaluation", "[eval_mixed_8]") {
   };
 }
 
-TEST_CASE("Benchmark strided 1-source evaluation", "[eval_strided_1]") {
+TEST_CASE("Benchmark strided 1-source evaluation", "[strided]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
-  auto sources = eval::make_pool(
-      eval::SimpleSource<int>(make_store(n, 1), 0, n, step::stride_fn<2>()));
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
+  auto sources =
+      eval::make_pool(S(make_store(n, 1), 0, n, step::cyclic::stride_fn<2>()));
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -454,12 +631,13 @@ TEST_CASE("Benchmark strided 1-source evaluation", "[eval_strided_1]") {
   };
 }
 
-TEST_CASE("Benchmark strided 2-source evaluation", "[eval_strided_2]") {
+TEST_CASE("Benchmark strided 2-source evaluation", "[strided]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
   auto sources = eval::make_pool(
-      eval::SimpleSource<int>(make_store(n, 1), 0, n, step::stride_fn<2>()),
-      eval::SimpleSource<int>(make_store(n, 2), 0, n, step::stride_fn<2>()));
+      S(make_store(n, 1), 0, n, step::cyclic::stride_fn<2>()),
+      S(make_store(n, 2), 0, n, step::cyclic::stride_fn<2>()));
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -480,7 +658,36 @@ TEST_CASE("Benchmark strided 2-source evaluation", "[eval_strided_2]") {
   };
 }
 
-TEST_CASE("Benchmark cyclic 1-source evaluation", "[eval_cyclic_1]") {
+TEST_CASE("Benchmark strided 4-source evaluation", "[strided]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), 0, n, step::cyclic::stride_fn<2>()),
+      S(make_store(n, 2), 0, n, step::cyclic::stride_fn<2>()),
+      S(make_store(n, 3), 0, n, step::cyclic::stride_fn<2>()),
+      S(make_store(n, 4), 0, n, step::cyclic::stride_fn<2>()));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1] * v[2] * v[3]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(8, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = sources[0].store()->vals[i];
+        for (int j = 1; j < 4; j += 1) {
+          x->vals[i] *= sources[j].store()->vals[i];
+        }
+      }
+    });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 1-source evaluation", "[cyclic]") {
   static constexpr auto d = 1024;
   static constexpr auto n = d * d;
 
@@ -494,13 +701,11 @@ TEST_CASE("Benchmark cyclic 1-source evaluation", "[eval_cyclic_1]") {
   auto i1 = i0 + x_s + d * (y_s - 1);
 
   auto step_fn = [&] {
-    using namespace step;
     using namespace step::cyclic;
-    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
-    return build(i0, i1, steps);
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), scaled<0>(d - x_s)));
   }();
 
-  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
   auto sources = eval::make_pool(S(make_store(n, 1), i0, i1, step_fn));
 
   BENCHMARK("eval") {
@@ -519,7 +724,7 @@ TEST_CASE("Benchmark cyclic 1-source evaluation", "[eval_cyclic_1]") {
   };
 }
 
-TEST_CASE("Benchmark cyclic 2-source evaluation", "[eval_cyclic_2]") {
+TEST_CASE("Benchmark cyclic 2-source evaluation", "[cyclic]") {
   static constexpr auto d = 1024;
   static constexpr auto n = d * d;
 
@@ -533,13 +738,11 @@ TEST_CASE("Benchmark cyclic 2-source evaluation", "[eval_cyclic_2]") {
   auto i1 = i0 + x_s + d * (y_s - 1);
 
   auto step_fn = [&] {
-    using namespace step;
     using namespace step::cyclic;
-    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
-    return build(i0, i1, steps);
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), scaled<0>(d - x_s)));
   }();
 
-  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
   auto sources = eval::make_pool(
       S(make_store(n, 1), i0, i1, step_fn), S(make_store(n, 2), 0, n, step_fn));
 
@@ -562,7 +765,7 @@ TEST_CASE("Benchmark cyclic 2-source evaluation", "[eval_cyclic_2]") {
   };
 }
 
-TEST_CASE("Benchmark cyclic 4-source evaluation", "[eval_cyclic_4]") {
+TEST_CASE("Benchmark cyclic 4-source evaluation", "[cyclic]") {
   static constexpr auto d = 1024;
   static constexpr auto n = d * d;
 
@@ -576,13 +779,11 @@ TEST_CASE("Benchmark cyclic 4-source evaluation", "[eval_cyclic_4]") {
   auto i1 = i0 + x_s + d * (y_s - 1);
 
   auto step_fn = [&] {
-    using namespace step;
     using namespace step::cyclic;
-    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
-    return build(i0, i1, steps);
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), scaled<0>(d - x_s)));
   }();
 
-  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
   auto sources = eval::make_pool(
       S(make_store(n, 1), i0, i1, step_fn),
       S(make_store(n, 2), i0, i1, step_fn),
@@ -608,7 +809,7 @@ TEST_CASE("Benchmark cyclic 4-source evaluation", "[eval_cyclic_4]") {
   };
 }
 
-TEST_CASE("Benchmark cyclic 8-source evaluation", "[eval_cyclic_8]") {
+TEST_CASE("Benchmark cyclic 8-source evaluation", "[cyclic]") {
   static constexpr auto d = 1024;
   static constexpr auto n = d * d;
 
@@ -622,13 +823,11 @@ TEST_CASE("Benchmark cyclic 8-source evaluation", "[eval_cyclic_8]") {
   auto i1 = i0 + x_s + d * (y_s - 1);
 
   auto step_fn = [&] {
-    using namespace step;
     using namespace step::cyclic;
-    auto steps = stack(y_s, range(x_s, identity()), range(d - x_s, zero()));
-    return build(i0, i1, steps);
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), scaled<0>(d - x_s)));
   }();
 
-  using S = eval::SimpleSource<int, step::CyclicStepFn>;
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
   auto sources = eval::make_pool(
       S(make_store(n, 1), i0, i1, step_fn),
       S(make_store(n, 2), i0, i1, step_fn),

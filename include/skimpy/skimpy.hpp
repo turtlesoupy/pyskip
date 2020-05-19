@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "detail/box.hpp"
 #include "detail/conv.hpp"
 #include "detail/core.hpp"
 #include "detail/lang.hpp"
@@ -16,19 +17,34 @@ namespace skimpy {
 namespace core = detail::core;
 namespace conv = detail::conv;
 namespace lang = detail::lang;
+namespace step = detail::step;
 
 using Pos = core::Pos;
 
 template <typename Val>
 using Store = core::Store<Val>;
 
+struct Band {
+  Pos start;
+  Pos stop;
+
+  Band(Pos start, Pos stop) : start(start), stop(stop) {
+    CHECK_ARGUMENT(0 <= start);
+    CHECK_ARGUMENT(start <= stop);
+  }
+
+  explicit Band(Pos stop) : Band(0, stop) {}
+
+  Pos span() const {
+    return stop - start;
+  }
+};
+
 struct Slice {
   Pos start;
   Pos stop;
   Pos stride;
 
-  explicit Slice(Pos stop) : Slice(0, stop) {}
-  Slice(Pos start, Pos stop) : Slice(start, stop, 1) {}
   Slice(Pos start, Pos stop, Pos stride)
       : start(start), stop(stop), stride(stride) {
     CHECK_ARGUMENT(0 <= start);
@@ -36,8 +52,19 @@ struct Slice {
     CHECK_ARGUMENT(stride > 0);
   }
 
+  Slice(Pos start, Pos stop) : Slice(start, stop, 1) {}
+  explicit Slice(Pos stop) : Slice(0, stop) {}
+
   Pos span() const {
     return 1 + (stop - start - 1) / stride;
+  }
+
+  auto step_fn() const {
+    lang::StepFn ret;
+    if (stride > 1) {
+      ret = step::stride_fn(stride);
+    }
+    return ret;
   }
 };
 
@@ -74,7 +101,7 @@ class ArrayBuilder {
 
   // Value assign methods
   ArrayBuilder<Val>& set(Val val) {
-    set(Slice(span_), make_store(span_, std::move(val)));
+    set(Band(span_), make_store(span_, std::move(val)));
     return *this;
   }
   ArrayBuilder<Val>& set(Pos pos, Val val) {
@@ -85,32 +112,31 @@ class ArrayBuilder {
     reserve(dst);
     return *this;
   }
-  ArrayBuilder<Val>& set(const Slice& slice, Val val) {
-    set(slice, core::make_store(slice.span(), std::move(val)));
+  ArrayBuilder<Val>& set(const Band& band, Val val) {
+    set(band, core::make_store(band.span(), std::move(val)));
     return *this;
   }
   ArrayBuilder<Val>& set(const Array<Val>& other) {
-    set(Slice(span_), other);
+    set(Band(span_), other);
     return *this;
   }
-  ArrayBuilder<Val>& set(const Slice& slice, const Array<Val>& other) {
-    set(slice, *other.store());
+  ArrayBuilder<Val>& set(const Band& band, const Array<Val>& other) {
+    set(band, *other.store());
     return *this;
   }
   ArrayBuilder<Val>& set(const Store<Val>& other) {
-    set(Slice(span_), other);
+    set(Band(span_), other);
     return *this;
   }
-  ArrayBuilder<Val>& set(const Slice& slice, const Store<Val>& other) {
-    CHECK_ARGUMENT(slice.stride == 1);
-    CHECK_ARGUMENT(0 <= slice.start && slice.stop <= len());
-    CHECK_ARGUMENT(slice.span() == other.span());
+  ArrayBuilder<Val>& set(const Band& band, const Store<Val>& other) {
+    CHECK_ARGUMENT(band.stop <= len());
+    CHECK_ARGUMENT(band.span() == other.span());
 
     // Assign the array into each intersecting block.
-    auto o = slice.start;
+    auto o = band.start;
     auto b = kBlockSize;
-    for (auto s = o; s < slice.stop; s += b - (s % b)) {
-      auto l = std::min(slice.stop - s, b - (s % b));
+    for (auto s = o; s < band.stop; s += b - (s % b)) {
+      auto l = std::min(band.stop - s, b - (s % b));
       auto& dst = stores_.at(s / b);
       core::insert(dst, core::Range(other, s - o, s + l - o), s % b);
       reserve(dst);
@@ -121,7 +147,7 @@ class ArrayBuilder {
   // Builder methods
   Array<Val> build() {
     auto out_capacity = 1 + capacity();
-    auto out_store = std::make_shared<Store<Val>>(1, out_capacity);
+    auto out_store = std::make_shared<Store<box::Box>>(1, out_capacity);
     out_store->ends[0] = span_;
     for (int i = 0; i < stores_.size(); i += 1) {
       core::insert(*out_store, stores_[i], kBlockSize * i);
@@ -151,9 +177,8 @@ class ArrayBuilder {
 template <typename Val>
 class Array {
  public:
-  // Value constructors
-  explicit Array(std::shared_ptr<Store<Val>> store) : op_(lang::store(store)) {}
-  Array(Pos span, Val fill) : op_(lang::store(span, fill)) {}
+  Array(std::shared_ptr<Store<box::Box>> store)
+      : op_(lang::store(std::move(store))) {}
 
   // Copy and move constructors
   Array(const Array<Val>& other) : op_(other.op_) {}
@@ -174,27 +199,32 @@ class Array {
     return op_->span();
   }
   std::string str() const {
-    std::string ret = fmt::format("[{}", get(0));
+    return conv::to_string(store());
+  }
+  std::string repr() const {
     if (len() <= 10) {
-      for (int i = 1; i < len(); i += 1) {
-        ret += fmt::format(", {}", get(i));
-      }
+      return fmt::format(
+          "Array<{}>([{}])",
+          typeid(Val).name(),
+          fmt::join(", ", conv::to_vector(store())));
     } else {
-      auto last = get(len() - 1);
-      ret += fmt::format(", {}, {}, {}, ..., {}", get(1), get(2), get(3), last);
+      return fmt::format(
+          "Array<{}>([{}, ..., {}])",
+          typeid(Val).name(),
+          fmt::join(", ", conv::to_vector(get(Slice(4)).store())),
+          get(len() - 1));
     }
-    return fmt::format("{}]", ret);
   }
 
   // Utility methods
-  std::shared_ptr<Store<Val>> store() const {
+  auto store() const {
     return lang::materialize(op_);
   }
-  Array<Val> clone() const {
-    return Array<Val>(op_);
+  auto clone() const {
+    return Array<Val>(*this);
   }
-  void eval() {
-    *this = Array<Val>(lang::materialize(op_));
+  auto eval() const {
+    return Array<Val>(lang::evaluate(op_));
   }
 
   // Value assign methods
@@ -214,13 +244,16 @@ class Array {
     set(Slice(pos, pos + 1), other);
   }
   void set(const Slice& slice, const Array<Val>& other) {
-    // TODO: Implement strided assignment.
-    CHECK_ARGUMENT(slice.stride == 1);
+    CHECK_ARGUMENT(slice.stop <= len());
     CHECK_ARGUMENT(slice.span() == other.len());
-    *this = Array<Val>(lang::stack(
-        lang::slice(op_, 0, slice.start, 1),
-        other.op_,
-        lang::slice(op_, slice.stop, len(), 1)));
+    *this = splat(
+        mask::stride_mask(len(), slice.start, slice.stop, slice.stride),
+        *this,
+        lang::slice(
+            other,
+            0,
+            other.len(),
+            step::insert_fn(len(), slice.start, slice.stop, slice.stride)));
   }
 
   // Value access methods
@@ -228,275 +261,278 @@ class Array {
     return get(Slice(pos, pos + 1)).store()->vals[0];
   }
   Array<Val> get(const Slice& slice) const {
-    CHECK_ARGUMENT(0 <= slice.start && slice.stop <= len());
-    return Array<Val>(lang::slice(op_, slice.start, slice.stop, slice.stride));
+    CHECK_ARGUMENT(slice.stop <= len());
+    return Array<Val>(
+        lang::slice(op_, slice.start, slice.stop, slice.step_fn()));
   }
 
   // General-purpose merge and apply operations
-  Array<Val> merge(const Array<Val>& other, Val (*fn)(Val, Val)) const {
+  template <Val (*fn)(Val)>
+  Array<Val> merge() const {
+    return Array<Val>(lang::merge(op_, fn));
+  }
+  template <Val (*fn)(Val, Val)>
+  Array<Val> merge(const Array<Val>& other) const {
     return Array<Val>(lang::merge(op_, other.op_, fn));
   }
-  Array<Val> apply(Val (*fn)(Val)) const {
-    return Array<Val>(lang::apply(op_, fn));
-  }
-
-  // Component-wise operations
-  // TODO: Add logical operations
-  // TODO: Add casting operations
-  // TODO: Need to modify eval to support distinct input/output types
-  // TODO: Figure out how to handle cross-type math operations
-  template <typename ArrayOrVal>
-  Array<Val> min(const ArrayOrVal& other) const {
-    return skimpy::min(*this, other);
-  }
-  template <typename ArrayOrVal>
-  Array<Val> max(const ArrayOrVal& other) const {
-    return skimpy::max(*this, other);
-  }
-  template <typename ArrayOrVal>
-  Array<Val> pow(const ArrayOrVal& other) const {
-    return skimpy::pow(*this, other);
-  }
-  Array<Val> abs() const {
-    return skimpy::abs(*this);
-  }
-  Array<Val> sqrt() const {
-    return skimpy::sqrt(*this);
-  }
-  Array<Val> exp() const {
-    return skimpy::exp(*this);
+  template <Val (*fn)(Val, Val, Val)>
+  Array<Val> merge(const Array<Val>& a, const Array<Val>& b) const {
+    return Array<Val>(lang::merge(op_, a.op_, b.op_, fn));
   }
 
  private:
-  explicit Array(lang::OpPtr<Val> op) : op_(std::move(op)) {
-    // There is some cost-criterion for deciding when it's better to evaluate
-    // an op. One reason to eagerly evaluate is to share work across separate
-    // arrays with shared histories. Another reason to eagerly evaluate is to
-    // account for the non-linear costs of lang parsing and array evaluation.
-    // TODO: Figure out the right way to model the cost threshold here.
+  explicit Array(lang::TypedExpr<Val> op) : op_(std::move(op)) {
+    // The lang evaluation precedure benefits from lazy evaluation since it can
+    // choose an optimal coaslescing of sources and expression. The overhead of
+    // managing too large expressions however will eventually dominate the cost
+    // of evaluation. We thus eagerly evaluate once expressions become too big.
+    // TODO: Run experiments to measure the ideal threshold here.
     constexpr auto kFlushThreshold = 32;
-    if (op_->count() > kFlushThreshold) {
-      op_ = lang::store(lang::materialize(op_));
+    if (op_->data.size > kFlushThreshold) {
+      op_ = lang::evaluate(op_);
     }
   }
 
-  lang::OpPtr<Val> op_;
+  lang::TypedExpr<Val> op_;
 
   friend class ArrayBuilder<Val>;
 };
 
+// Convenience constructors
+template <typename Val>
+auto make_array(Pos span, Val fill) {
+  return Array<Val>(lang::store(span, fill));
+}
+template <typename Val>
+auto make_array(std::shared_ptr<Store<Val>> store) {
+  return Array<Val>(lang::store(store));
+}
+template <typename Val>
+auto make_array(const Store<Val>& store) {
+  return Array<Val>(lang::store(store));
+}
+
+// Conversion routines
+template <typename Val>
+auto from_buffer(int size, const Val* data) {
+  return Array<Val>(conv::to_store(size, data));
+}
+
+template <typename Val>
+auto to_vector(const Array<Val>& array) {
+  return conv::to_vector(array.store());
+}
+
+template <typename Val>
+void to_buffer(const Array<Val>& array, int* size, Val** buffer) {
+  auto store = array.store();
+  *size = store->span();
+  *buffer = new Val[*size];
+  conv::to_buffer(*store, *buffer);
+}
+
 // Unary arithmetic operations
 template <typename Val>
 Array<Val> operator+(const Array<Val>& array) {
-  return array.apply([](Val a) { return +a; });
+  return array.merge<[](Val a) { return +a; }>();
 }
 
 template <typename Val>
 Array<Val> operator-(const Array<Val>& array) {
-  return array.apply([](Val a) { return -a; });
+  return array.merge<[](Val a) { return -a; }>();
 }
 
 template <typename Val>
 Array<Val> operator~(const Array<Val>& array) {
-  return array.apply([](Val a) { return ~a; });
+  return array.merge<[](Val a) { return ~a; }>();
 }
 
 // Binary arithmetic operations
 template <typename Val>
 Array<Val> operator+(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a + b; });
+  return lhs.merge<[](Val a, Val b) { return a + b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator+(const Array<Val>& lhs, Val rhs) {
-  return lhs + Array<Val>(lhs.len(), rhs);
+  return lhs + make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator+(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) + rhs;
+  return make_array<Val>(rhs.len(), lhs) + rhs;
 }
 
 template <typename Val>
 Array<Val> operator-(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a - b; });
+  return lhs.merge<[](Val a, Val b) { return a - b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator-(const Array<Val>& lhs, Val rhs) {
-  return lhs - Array<Val>(lhs.len(), rhs);
+  return lhs - make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator-(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) - rhs;
+  return make_array<Val>(rhs.len(), lhs) - rhs;
 }
 
 template <typename Val>
 Array<Val> operator*(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a * b; });
+  return lhs.merge<[](Val a, Val b) { return a * b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator*(const Array<Val>& lhs, Val rhs) {
-  return lhs * Array<Val>(lhs.len(), rhs);
+  return lhs * make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator*(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) * rhs;
+  return make_array<Val>(rhs.len(), lhs) * rhs;
 }
 
 template <typename Val>
 Array<Val> operator/(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a / b; });
+  return lhs.merge<[](Val a, Val b) { return a / b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator/(const Array<Val>& lhs, Val rhs) {
-  return lhs / Array<Val>(lhs.len(), rhs);
+  return lhs / make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator/(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) / rhs;
+  return make_array<Val>(rhs.len(), lhs) / rhs;
 }
 
 template <typename Val>
 Array<Val> operator%(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a % b; });
+  return lhs.merge<[](Val a, Val b) { return a % b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator%(const Array<Val>& lhs, Val rhs) {
-  return lhs % Array<Val>(lhs.len(), rhs);
+  return lhs % make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator%(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) % rhs;
+  return make_array<Val>(rhs.len(), lhs) % rhs;
 }
 
 // Binary bitwise operations
 template <typename Val>
 Array<Val> operator&(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a & b; });
+  return lhs.merge<[](Val a, Val b) { return a & b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator&(const Array<Val>& lhs, Val rhs) {
-  return lhs & Array<Val>(lhs.len(), rhs);
+  return lhs & make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator&(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) & rhs;
+  return make_array<Val>(rhs.len(), lhs) & rhs;
 }
 
 template <typename Val>
 Array<Val> operator|(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a | b; });
+  return lhs.merge<[](Val a, Val b) { return a | b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator|(const Array<Val>& lhs, Val rhs) {
-  return lhs | Array<Val>(lhs.len(), rhs);
+  return lhs | make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator|(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) | rhs;
+  return make_array<Val>(rhs.len(), lhs) | rhs;
 }
 
 template <typename Val>
 Array<Val> operator^(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a ^ b; });
+  return lhs.merge<[](Val a, Val b) { return a ^ b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator^(const Array<Val>& lhs, Val rhs) {
-  return lhs ^ Array<Val>(lhs.len(), rhs);
+  return lhs ^ make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator^(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) ^ rhs;
+  return make_array<Val>(rhs.len(), lhs) ^ rhs;
 }
 
 template <typename Val>
 Array<Val> operator<<(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a << b; });
+  return lhs.merge<[](Val a, Val b) { return a << b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator<<(const Array<Val>& lhs, Val rhs) {
-  return lhs << Array<Val>(lhs.len(), rhs);
+  return lhs << make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator<<(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) << rhs;
+  return make_array<Val>(rhs.len(), lhs) << rhs;
 }
 
 template <typename Val>
 Array<Val> operator>>(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return a >> b; });
+  return lhs.merge<[](Val a, Val b) { return a >> b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator>>(const Array<Val>& lhs, Val rhs) {
-  return lhs >> Array<Val>(lhs.len(), rhs);
+  return lhs >> make_array<Val>(lhs.len(), rhs);
 }
 template <typename Val>
 Array<Val> operator>>(Val lhs, const Array<Val>& rhs) {
-  return Array<Val>(rhs.len(), lhs) >> rhs;
+  return make_array<Val>(rhs.len(), lhs) >> rhs;
 }
 
 // Unary math operations
 template <typename Val>
 Array<Val> abs(const Array<Val>& array) {
-  return array.apply([](Val a) { return std::abs(a); });
-}
-
-template <typename Val>
-Array<Val> sqrt(const Array<Val>& array) {
-  return array.apply([](Val a) {
-    auto d_a = static_cast<double>(a);
-    return static_cast<Val>(std::sqrt(d_a));
-  });
-}
-
-template <typename Val>
-Array<Val> exp(const Array<Val>& array) {
-  return array.apply([](Val a) {
-    auto d_a = static_cast<double>(a);
-    return static_cast<Val>(std::exp(d_a));
-  });
+  return array.merge<[](Val a) { return std::abs(a); }>();
 }
 
 // Binary math operations
 template <typename Val>
 Array<Val> min(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return std::min(a, b); });
+  return lhs.merge<[](Val a, Val b) { return std::min(a, b); }>(rhs);
 }
 template <typename Val>
 Array<Val> min(const Array<Val>& lhs, Val rhs) {
-  return min(lhs, Array<Val>(lhs.len(), rhs));
+  return min(lhs, make_array<Val>(lhs.len(), rhs));
 }
 template <typename Val>
 Array<Val> min(Val lhs, const Array<Val>& rhs) {
-  return min(Array<Val>(rhs.len(), lhs), rhs);
+  return min(make_array<Val>(rhs.len(), lhs), rhs);
 }
 
 template <typename Val>
 Array<Val> max(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) { return std::max(a, b); });
+  return lhs.merge<[](Val a, Val b) { return std::max(a, b); }>(rhs);
 }
 template <typename Val>
 Array<Val> max(const Array<Val>& lhs, Val rhs) {
-  return max(lhs, Array<Val>(lhs.len(), rhs));
+  return max(lhs, make_array<Val>(lhs.len(), rhs));
 }
 template <typename Val>
 Array<Val> max(Val lhs, const Array<Val>& rhs) {
-  return max(Array<Val>(rhs.len(), lhs), rhs);
+  return max(make_array<Val>(rhs.len(), lhs), rhs);
 }
 
+// Ternary math oeprators
 template <typename Val>
-Array<Val> pow(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge(rhs, [](Val a, Val b) {
-    auto d_a = static_cast<double>(a);
-    auto d_b = static_cast<double>(b);
-    return static_cast<Val>(std::pow(d_a, d_b));
-  });
+Array<Val> splat(
+    const Array<bool>& mask, const Array<Val>& lhs, const Array<Val>& rhs) {
+  return mask.merge<[](bool m, Val a, Val b) { return m ? a : b; }>(lhs, rhs);
 }
 template <typename Val>
-Array<Val> pow(const Array<Val>& lhs, Val rhs) {
-  return pow(lhs, Array<Val>(lhs.len(), rhs));
+Array<Val> splat(const Array<bool>& mask, const Array<Val>& lhs, Val rhs) {
+  return splat(mask, lhs, make_array<Val>(mask.len(), rhs));
 }
 template <typename Val>
-Array<Val> pow(Val lhs, const Array<Val>& rhs) {
-  return pow(Array<Val>(rhs.len(), lhs), rhs);
+Array<Val> splat(const Array<bool>& mask, Val lhs, const Array<Val>& rhs) {
+  return splat(mask, make_array<Val>(mask.len(), lhs), rhs);
 }
+template <typename Val>
+Array<Val> splat(const Array<bool>& mask, Val lhs, Val rhs) {
+  auto len = mask.len();
+  return splat(mask, make_array<Val>(len, lhs), make_array<Val>(len, rhs));
+}
+
+// TODO: Add logical operations
+// TODO: Add casting operations
 
 }  // namespace skimpy
