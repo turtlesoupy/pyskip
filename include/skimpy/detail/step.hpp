@@ -90,6 +90,7 @@ class StepFn {
     CHECK_ARGUMENT(start >= 0);
     CHECK_ARGUMENT(span >= 0);
     CHECK_ARGUMENT(span_ <= graph.root->span);
+    CHECK_ARGUMENT(span_ <= kMaxSpan);
   }
 
   StepFn(Pos start, Pos span, const StepFn& other)

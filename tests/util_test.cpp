@@ -34,11 +34,11 @@ TEST_CASE("Test power of two util functions", "[util_power_of_two]") {
 }
 
 TEST_CASE("Test fixed-point combinator pattern", "[y_combinator]") {
-  Fix fib([](auto f, size_t n) {
+  Fix fib([](auto fib, size_t n) {
     if (n == 0 || n == 1) {
       return n;
     } else {
-      return f(n - 1) + f(n - 2);
+      return fib(n - 1) + fib(n - 2);
     }
   });
 
