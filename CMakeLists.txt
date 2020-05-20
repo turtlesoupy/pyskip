@@ -30,7 +30,6 @@ target_compile_features(skimpy INTERFACE cxx_std_17)
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(skimpy INTERFACE OpenMP::OpenMP_CXX)
-target_link_libraries(skimpy INTERFACE fmt::fmt)
 endif()
 
 # fmtlib has propensity to cause "Fatal Error C1128":
