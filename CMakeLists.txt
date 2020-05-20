@@ -24,6 +24,7 @@ add_subdirectory(third_party)
 # Add the skimpy library.
 add_library(skimpy INTERFACE)
 target_include_directories(skimpy INTERFACE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(skimpy INTERFACE fmt::fmt)
 target_compile_features(skimpy INTERFACE cxx_std_17)
 
 # Build with OpenMP support if available.
