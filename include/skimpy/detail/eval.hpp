@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <variant>
+#include <new>
 
 #include "core.hpp"
 #include "step.hpp"
@@ -83,6 +84,14 @@ struct TournamentTree {
   }
 };
 
+constexpr auto cache_line() {
+  #ifdef WIN32
+    returns std:: hardware_destructive_interference_size;  
+  #else
+    return 64;
+  #endif
+}
+
 // Provides a light-weight hash table to test for redundant insertions into the
 // tournament tree. Insertion is best-effort as we care only about performance.
 template <int sources>
@@ -96,7 +105,7 @@ struct HashTable {
   std::unique_ptr<Node[]> nodes;
 
   HashTable()
-      : nodes(new Node[size, std::hardware_destructive_interference_size]) {
+      : nodes(new Node[size, cache_line()]) {
     for (int i = 0; i < size; i += 1) {
       nodes[i].key = 0;
     }

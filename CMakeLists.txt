@@ -12,6 +12,9 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 #== BUILD TARGETS ==#
 
@@ -21,7 +24,6 @@ add_subdirectory(third_party)
 # Add the skimpy library.
 add_library(skimpy INTERFACE)
 target_include_directories(skimpy INTERFACE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(skimpy INTERFACE fmt::fmt)
 target_compile_features(skimpy INTERFACE cxx_std_17)
 
 # Build with OpenMP support if available.
