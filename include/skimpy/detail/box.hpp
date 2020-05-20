@@ -47,8 +47,6 @@ class Box {
       return u32;
     } else if constexpr (std::is_same<T, float>()) {
       return f32;
-    } else {
-      static_assert(false, "Invalid Box reference type.");
     }
   }
 

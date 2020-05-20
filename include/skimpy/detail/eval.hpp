@@ -92,7 +92,7 @@ struct HashTable {
     int size;
     int vals[sources];
   };
-  static constexpr int size = round_up_to_power_of_two(sources);
+  static constexpr size_t size = round_up_to_power_of_two(sources);
   std::unique_ptr<Node[]> nodes;
 
   HashTable()

@@ -246,5 +246,18 @@ PYBIND11_MODULE(skimpy, m) {
           [](const IntArray& self, const IntArray& other) {
             return skimpy::min(self, other);
           })
-      .def("abs", [](const IntArray& self) { return skimpy::abs(self); });
+      .def(
+          "__pow__",
+          [](const IntArray& self, int val) { return skimpy::pow(self, val); })
+      .def(
+          "__pow__",
+          [](const IntArray& self, int val) { return skimpy::pow(val, self); })
+      .def(
+          "__pow__",
+          [](const IntArray& self, const IntArray& other) {
+            return skimpy::pow(self, other);
+          })
+      .def("abs", [](const IntArray& self) { return skimpy::abs(self); })
+      .def("sqrt", [](const IntArray& self) { return skimpy::sqrt(self); })
+      .def("exp", [](const IntArray& self) { return skimpy::exp(self); });
 }

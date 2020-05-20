@@ -20,4 +20,6 @@ skimpy_test(skimpy_test skimpy_test.cpp)
 skimpy_test(util_test util_test.cpp)
 
 # Add benchmark tests.
-add_subdirectory(benchmarks)
+if(SKIMPY_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()

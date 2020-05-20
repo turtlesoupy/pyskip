@@ -47,6 +47,8 @@ TEST_CASE("Test eval routine to weave two stores", "[eval_weave]") {
   auto s = to_store({'a', 'c', 'e'});
   auto t = to_store({'b', 'd', 'f'});
 
+  auto step_fn = cyclic::build(cyclic::scaled<2>(3));
+
   auto result = eval_mixed<char>(
       [](const Mix* args) {
         auto m = std::get<int>(args[0]);
@@ -55,8 +57,8 @@ TEST_CASE("Test eval routine to weave two stores", "[eval_weave]") {
         return m ? t : s;
       },
       MixSource<int>(m),
-      MixSource<char, StepFn>(s, 0, 3, shift(step_fn(1, 0, 1), 1)),
-      MixSource<char, StepFn>(t, 0, 3, shift(step_fn(1, 0, 1), 1)));
+      MixSource<char, cyclic::StepFn>(s, 0, 3, step_fn),
+      MixSource<char, cyclic::StepFn>(t, 0, 3, step_fn));
 
   REQUIRE(to_string(*result) == "1=>a, 2=>b, 3=>c, 4=>d, 5=>e, 6=>f");
 }
@@ -66,6 +68,11 @@ TEST_CASE("Test eval routine to stack two stores", "[eval_stack]") {
   auto s = to_store({'a', 'b', 'c'});
   auto t = to_store({'d', 'e', 'f', 'g'});
 
+  auto s_step_fn =
+      cyclic::build(cyclic::stack(cyclic::scaled<1>(2), cyclic::fixed<5>(1)));
+  auto t_step_fn =
+      cyclic::build(cyclic::stack(cyclic::fixed<4>(1), cyclic::scaled<1>(3)));
+
   auto result = eval_mixed<char>(
       [](const Mix* args) {
         auto m = std::get<int>(args[0]);
@@ -74,8 +81,8 @@ TEST_CASE("Test eval routine to stack two stores", "[eval_stack]") {
         return m ? t : s;
       },
       MixSource<int>(m),
-      MixSource<char, StepFn>(s, 0, 3, shift(step_fn(3, 0, 4, 1), -1)),
-      MixSource<char, StepFn>(t, 0, 4, shift(step_fn(4, 0, 3, 0), 3)));
+      MixSource<char, cyclic::StepFn>(s, 0, 3, s_step_fn),
+      MixSource<char, cyclic::StepFn>(t, 0, 4, t_step_fn));
 
   REQUIRE(to_string(*result) == "1=>a, 2=>b, 3=>c, 4=>d, 5=>e, 6=>f, 7=>g");
 }

@@ -11,8 +11,7 @@ project(
 
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
 
 #== BUILD TARGETS ==#
 

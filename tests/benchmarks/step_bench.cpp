@@ -92,7 +92,7 @@ TEST_CASE("Benchmark simple cycle fn", "[step_simple_cycle_fn]") {
 
   // Run the simple benchmark.
   {
-    auto fn = identity();
+    IdentityStepFn fn;
     BENCHMARK("n=1024 * 1024; simple") {
       volatile int64_t sum = 0;
       for (int i = 1; i <= n; i += 1) {

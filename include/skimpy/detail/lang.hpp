@@ -401,7 +401,7 @@ inline auto optimize(ExprGraph& graph, ExprGraph::Handle root) {
 inline auto schedule(ExprGraph::Handle root) {
   std::vector<ExprGraph::Handle> steps;
 
-  // Start by scheduling every non-store node for materialization.
+  // Start by scheduling every node for materialization.
   {
     std::unordered_set<ExprGraph::Handle> scheduled;
     graph_dfs(root, [&](auto h) {
@@ -413,14 +413,25 @@ inline auto schedule(ExprGraph::Handle root) {
             return true;
           }
         }
-        if (h->data.kind != ExprArgs::STORE) {
-          steps.push_back(h);
-        }
         scheduled.insert(h);
+        steps.push_back(h);
         return false;
       }
     });
   }
+
+  // Remove stores from the schedule, except for the final node.
+  CHECK_STATE(steps.size() > 0);
+  steps = [&] {
+    std::vector<ExprGraph::Handle> filtered;
+    for (int i = 0; i < steps.size() - 1; i += 1) {
+      if (steps[i]->data.kind != ExprArgs::STORE) {
+        filtered.push_back(steps[i]);
+      }
+    }
+    filtered.push_back(steps.back());
+    return filtered;
+  }();
 
   // TODO: Via a greedy bottom-up optimization, decide to skip evaluation for
   // some nodes. The process conserves "feasibility" (e.g. max step sources),
@@ -445,7 +456,7 @@ inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
       h->data.size = 2;
       h->data.span = c->data.span;
       h->data.kind = ExprArgs::SLICE;
-      h->data.args.emplace<SliceArgs>();
+      h->data.args.template emplace<SliceArgs>();
       h->deps[0] = c;
     } else if (h->data.kind == ExprArgs::SLICE) {
       auto c = h->deps[0];
@@ -456,7 +467,7 @@ inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
         auto&& c_args = std::move(std::get<SliceArgs>(c->data.args));
         h->data.size -= 1;
         h->data.span = slice_eval(h_args, c->data.span);
-        h->data.args.emplace<SliceArgs>(slice_compose(h_args, c_args));
+        h->data.args.template emplace<SliceArgs>(slice_compose(h_args, c_args));
         h->deps[0] = c->deps[0];
         q.push_back(h);
       } else {
@@ -665,7 +676,7 @@ inline auto execute_plan_fixed(EvalPlan plan) {
       }
     }
 
-    return (sp - 1)->get<Val>();
+    return (sp - 1)->template get<Val>();
   };
 
   return std::visit(
@@ -786,7 +797,7 @@ inline auto materialize(TypedExpr<Val> in) {
     step->data.size = 1;
     step->data.span = store->span();
     step->data.kind = ExprArgs::STORE;
-    step->data.args.emplace<StoreArgs>(std::move(store));
+    step->data.args.template emplace<StoreArgs>(std::move(store));
   }
 
   // Materialize the final step.

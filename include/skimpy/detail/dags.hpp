@@ -200,7 +200,7 @@ class Graph {
   std::vector<int> free_;
   std::vector<Node> nodes_;  // must be destroyed first due to node refs
 
-  friend class Handle;
+  friend class GraphHandle<k, T>;
 };
 
 }  // namespace skimpy::detail::dags

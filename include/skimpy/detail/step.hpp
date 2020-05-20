@@ -211,6 +211,30 @@ inline void expr_dfs(ExprNode::Ptr expr, Fn&& fn) {
   });
 };
 
+template <Pos k>
+inline auto scaled_lut() {
+  static const std::unique_ptr<Pos[]> lut = [] {
+    std::unique_ptr<Pos[]> lut(new Pos[kMaxLutSize]);
+    for (int i = 0; i < kMaxLutSize; i += 1) {
+      lut[i] = (i + 1) * k;
+    }
+    return lut;
+  }();
+  return &lut[0];
+}
+
+template <Pos k>
+inline auto strided_lut() {
+  static const std::unique_ptr<Pos[]> lut = [] {
+    std::unique_ptr<Pos[]> lut(new Pos[kMaxLutSize]);
+    for (int i = 0; i < kMaxLutSize; i += 1) {
+      lut[i] = 1 + i / k;
+    }
+    return lut;
+  }();
+  return &lut[0];
+}
+
 inline auto stack(int reps, ExprNode::Ptr l, ExprNode::Ptr r = nullptr) {
   CHECK_ARGUMENT(l);
   auto ret = ExprNode::make_ptr();
@@ -482,30 +506,6 @@ inline auto build(Pos stop, ExprNode::Ptr in) {
 
 inline auto build(ExprNode::Ptr in) {
   return build(kMaxSpan, std::move(in));
-}
-
-template <Pos k>
-inline auto scaled_lut() {
-  static const std::unique_ptr<Pos[]> lut = [] {
-    std::unique_ptr<Pos[]> lut(new Pos[kMaxLutSize]);
-    for (int i = 0; i < kMaxLutSize; i += 1) {
-      lut[i] = (i + 1) * k;
-    }
-    return lut;
-  }();
-  return &lut[0];
-}
-
-template <Pos k>
-inline auto strided_lut() {
-  static const std::unique_ptr<Pos[]> lut = [] {
-    std::unique_ptr<Pos[]> lut(new Pos[kMaxLutSize]);
-    for (int i = 0; i < kMaxLutSize; i += 1) {
-      lut[i] = 1 + i / k;
-    }
-    return lut;
-  }();
-  return &lut[0];
 }
 
 inline auto identity() {

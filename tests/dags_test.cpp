@@ -71,5 +71,8 @@ TEST_CASE("Test rooted graph creation and allocation", "[dags]") {
   root->deps[1] = nullptr;
   REQUIRE(graph.size() == 5);
   REQUIRE(root->deps[0]->deps[0]->deps[1]);
-  REQUIRE(!root->deps[1]->deps[1]->deps[1]->deps[1]);
+  REQUIRE(root->deps[0]->deps[1]->data == 2);
+  REQUIRE(root->deps[0]->deps[1]->deps[1]->data == 6);
+  REQUIRE(root->deps[0]->deps[1]->deps[1]->deps[1]->data == 14);
+  REQUIRE(!root->deps[1]);
 }

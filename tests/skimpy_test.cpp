@@ -62,6 +62,33 @@ TEST_CASE("Test arrays", "[arrays]") {
   REQUIRE(x.get(4) == 4);
 }
 
+TEST_CASE("Test arrays merge routines", "[arrays]") {
+  auto x = skimpy::make_array(5, 1);
+  auto y = skimpy::make_array(5, 2);
+
+  REQUIRE_THAT(skimpy::to_vector(x + y), Catch::Equals<int>({3, 3, 3, 3, 3}));
+  REQUIRE_THAT(
+      skimpy::to_vector(2 * x + 3 * y), Catch::Equals<int>({8, 8, 8, 8, 8}));
+
+  x.set(skimpy::Slice(1, 2), 3);
+  x.set(skimpy::Slice(2, 4), 2);
+  y.set(1, 3);
+  y.set(skimpy::Slice(2, 5, 2), 4);
+
+  REQUIRE_THAT(skimpy::to_vector(x), Catch::Equals<int>({1, 3, 2, 2, 1}));
+  REQUIRE_THAT(skimpy::to_vector(y), Catch::Equals<int>({2, 3, 4, 2, 4}));
+
+  x.set(skimpy::Slice(2, 5, 2), y.get(skimpy::Slice(1, 4, 2)));
+  y.set(
+      skimpy::Slice(2, 5, 2),
+      x.get(skimpy::Slice(0, 2)) * y.get(skimpy::Slice(1, 4, 2)));
+
+  REQUIRE_THAT(skimpy::to_vector(x), Catch::Equals<int>({1, 3, 3, 2, 2}));
+  REQUIRE_THAT(skimpy::to_vector(y), Catch::Equals<int>({2, 3, 3, 2, 6}));
+  REQUIRE(x.str() == "1=>1, 3=>3, 5=>2");
+  REQUIRE(y.str() == "1=>2, 3=>3, 4=>2, 5=>6");
+}
+
 TEST_CASE("Test array builders", "[array_builders]") {
   auto x = skimpy::make_array(5, 'x');
 

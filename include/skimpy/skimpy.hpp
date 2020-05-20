@@ -347,7 +347,7 @@ auto from_buffer(int size, const Val* data) {
 
 template <typename Val>
 auto to_vector(const Array<Val>& array) {
-  return conv::to_vector(array.store());
+  return conv::to_vector(*array.store());
 }
 
 template <typename Val>
@@ -358,26 +358,32 @@ void to_buffer(const Array<Val>& array, int* size, Val** buffer) {
   conv::to_buffer(*store, *buffer);
 }
 
+// Casting operations
+template <typename Out, typename Val>
+Array<Out> cast(const Array<Val>& array) {
+  return array.template merge<[](Val a) { return static_cast<Out>(a); }>();
+}
+
 // Unary arithmetic operations
 template <typename Val>
 Array<Val> operator+(const Array<Val>& array) {
-  return array.merge<[](Val a) { return +a; }>();
+  return array.template merge<[](Val a) { return +a; }>();
 }
 
 template <typename Val>
 Array<Val> operator-(const Array<Val>& array) {
-  return array.merge<[](Val a) { return -a; }>();
+  return array.template merge<[](Val a) { return -a; }>();
 }
 
 template <typename Val>
 Array<Val> operator~(const Array<Val>& array) {
-  return array.merge<[](Val a) { return ~a; }>();
+  return array.template merge<[](Val a) { return ~a; }>();
 }
 
 // Binary arithmetic operations
 template <typename Val>
 Array<Val> operator+(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a + b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a + b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator+(const Array<Val>& lhs, Val rhs) {
@@ -390,7 +396,7 @@ Array<Val> operator+(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator-(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a - b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a - b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator-(const Array<Val>& lhs, Val rhs) {
@@ -403,7 +409,7 @@ Array<Val> operator-(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator*(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a * b; }>(rhs);
+  return lhs.template merge<+[](Val a, Val b) { return a * b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator*(const Array<Val>& lhs, Val rhs) {
@@ -416,7 +422,7 @@ Array<Val> operator*(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator/(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a / b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a / b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator/(const Array<Val>& lhs, Val rhs) {
@@ -429,7 +435,7 @@ Array<Val> operator/(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator%(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a % b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a % b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator%(const Array<Val>& lhs, Val rhs) {
@@ -443,7 +449,7 @@ Array<Val> operator%(Val lhs, const Array<Val>& rhs) {
 // Binary bitwise operations
 template <typename Val>
 Array<Val> operator&(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a & b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a & b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator&(const Array<Val>& lhs, Val rhs) {
@@ -456,7 +462,7 @@ Array<Val> operator&(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator|(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a | b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a | b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator|(const Array<Val>& lhs, Val rhs) {
@@ -469,7 +475,7 @@ Array<Val> operator|(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator^(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a ^ b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a ^ b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator^(const Array<Val>& lhs, Val rhs) {
@@ -482,7 +488,7 @@ Array<Val> operator^(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator<<(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a << b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a << b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator<<(const Array<Val>& lhs, Val rhs) {
@@ -495,7 +501,7 @@ Array<Val> operator<<(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> operator>>(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return a >> b; }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return a >> b; }>(rhs);
 }
 template <typename Val>
 Array<Val> operator>>(const Array<Val>& lhs, Val rhs) {
@@ -509,13 +515,25 @@ Array<Val> operator>>(Val lhs, const Array<Val>& rhs) {
 // Unary math operations
 template <typename Val>
 Array<Val> abs(const Array<Val>& array) {
-  return array.merge<[](Val a) { return std::abs(a); }>();
+  return array.template merge<[](Val a) { return std::abs(a); }>();
+}
+
+template <typename Val>
+Array<Val> sqrt(const Array<Val>& array) {
+  constexpr auto fn = [](Val a) { return static_cast<Val>(std::sqrt(a)); };
+  return array.template merge<fn>();
+}
+
+template <typename Val>
+Array<Val> exp(const Array<Val>& array) {
+  constexpr auto fn = [](Val a) { return static_cast<Val>(std::exp(a)); };
+  return array.template merge<fn>();
 }
 
 // Binary math operations
 template <typename Val>
 Array<Val> min(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return std::min(a, b); }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return std::min(a, b); }>(rhs);
 }
 template <typename Val>
 Array<Val> min(const Array<Val>& lhs, Val rhs) {
@@ -528,7 +546,7 @@ Array<Val> min(Val lhs, const Array<Val>& rhs) {
 
 template <typename Val>
 Array<Val> max(const Array<Val>& lhs, const Array<Val>& rhs) {
-  return lhs.merge<[](Val a, Val b) { return std::max(a, b); }>(rhs);
+  return lhs.template merge<[](Val a, Val b) { return std::max(a, b); }>(rhs);
 }
 template <typename Val>
 Array<Val> max(const Array<Val>& lhs, Val rhs) {
@@ -539,12 +557,28 @@ Array<Val> max(Val lhs, const Array<Val>& rhs) {
   return max(make_array<Val>(rhs.len(), lhs), rhs);
 }
 
+template <typename Val>
+Array<Val> pow(const Array<Val>& lhs, const Array<Val>& rhs) {
+  constexpr auto fn = [](Val a, Val b) {
+    return static_cast<Val>(std::pow(a, b));
+  };
+  return lhs.template merge<fn>(rhs);
+}
+template <typename Val>
+Array<Val> pow(const Array<Val>& lhs, Val rhs) {
+  return pow(lhs, make_array<Val>(lhs.len(), rhs));
+}
+template <typename Val>
+Array<Val> pow(Val lhs, const Array<Val>& rhs) {
+  return pow(make_array<Val>(rhs.len(), lhs), rhs);
+}
+
 // Ternary math oeprators
 template <typename Val>
 Array<Val> splat(
     const Array<bool>& mask, const Array<Val>& lhs, const Array<Val>& rhs) {
   constexpr auto fn = [](bool m, Val a, Val b) { return m ? a : b; };
-  return mask.merge<Val, Val, Val, fn>(lhs, rhs);
+  return mask.template merge<Val, Val, Val, fn>(lhs, rhs);
 }
 template <typename Val>
 Array<Val> splat(const Array<bool>& mask, const Array<Val>& lhs, Val rhs) {

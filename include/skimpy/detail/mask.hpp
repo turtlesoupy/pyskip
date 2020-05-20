@@ -136,7 +136,7 @@ inline auto stride_mask(
   auto reps = (stop - start) / stride;
   auto body = stack(reps, range(1, include), range(stride - 1, exclude));
 
-  // End with p.
+  // End with possibly a one and trailing zeros.
   auto lead = (stop - start) % stride == 0 ? 0 : 1;
   auto last = span - start - stride * reps - lead;
   auto tail = stack(1, range(lead, include), range(last, exclude));
