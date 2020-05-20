@@ -32,22 +32,26 @@ static constexpr auto kMaxExecDeps = 2;
 static constexpr auto kMaxLutSize = 1 << 8;
 static constexpr auto kMaxSpan = 1 << 30;
 
+struct StackArgs {
+  int reps;
+  Pos loop_span;
+  Pos loop_step;
+  int bit_shift;
+};
+
+struct TableArgs {
+  Pos* lut;
+  int mask;
+};
+
 struct ExecNode {
   int span;
   int step;
   ExecNode* deps[kMaxExecDeps];
   enum { EMPTY, TABLE, STACK } kind;
   union {
-    struct StackArgs {
-      int reps;
-      Pos loop_span;
-      Pos loop_step;
-      int bit_shift;
-    } stack;
-    struct TableArgs {
-      Pos* lut;
-      int mask;
-    } table;
+    StackArgs stack;
+    TableArgs table;
   };
 
   ExecNode() : span(0), step(0), kind(EMPTY) {
