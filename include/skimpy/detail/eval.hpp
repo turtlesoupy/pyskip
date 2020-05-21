@@ -39,7 +39,7 @@ struct EvalOutput {
 // Provides a priority queue to select the source with the lowest end position.
 template <int sources>
 struct TournamentTree {
-  static constexpr int base = round_up_to_power_of_two(sources);
+  static constexpr int base = util::round_up_to_power_of_two(sources);
   uint64_t keys[2 * base];
 
   template <typename Evaluator>
@@ -92,22 +92,21 @@ struct HashTable {
     int size;
     int vals[sources];
   };
-  static constexpr size_t size = round_up_to_power_of_two(sources);
-  std::unique_ptr<Node[]> nodes;
+  static constexpr auto buckets = 2 * util::round_up_to_power_of_two(sources);
+  Node nodes[buckets];
 
-  HashTable()
-      : nodes(new Node[size, std::hardware_destructive_interference_size]) {
-    for (int i = 0; i < size; i += 1) {
+  HashTable() {
+    for (int i = 0; i < buckets; i += 1) {
       nodes[i].key = 0;
     }
   }
 
   inline Node& lookup(Pos end) {
-    return nodes[end & (size - 1)];
+    return nodes[end & (buckets - 1)];
   }
 
   inline const Node& lookup(Pos end) const {
-    return nodes[end & (size - 1)];
+    return nodes[end & (buckets - 1)];
   }
 
   inline bool insert(int src, Pos end) {

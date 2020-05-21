@@ -22,6 +22,7 @@ namespace core = detail::core;
 namespace lang = detail::lang;
 namespace mask = detail::mask;
 namespace step = detail::step;
+namespace util = detail::util;
 
 using Pos = core::Pos;
 
@@ -99,7 +100,7 @@ class ArrayBuilder {
   }
   explicit ArrayBuilder(std::shared_ptr<Store<Val>> store)
       : ArrayBuilder(store.span(), 0) {
-    set(ArrayVal<Val>(store));
+    set(Array<Val>(store));
   }
 
   // Metadata methods
@@ -172,8 +173,8 @@ class ArrayBuilder {
   }
 
   void reserve(Store<Val>& store) {
-    if (!detail::is_power_of_two(store.capacity)) {
-      store.reserve(detail::round_up_to_power_of_two(store.capacity));
+    if (!util::is_power_of_two(store.capacity)) {
+      store.reserve(util::round_up_to_power_of_two(store.capacity));
     }
   }
 
@@ -189,7 +190,7 @@ class Array {
   Array(std::shared_ptr<Store<Val>> store)
       : op_(lang::store(std::move(store))) {}
   Array(std::shared_ptr<Store<box::Box>> store)
-      : op_(lang::store(std::move(store))) {}
+      : op_(lang::store<Val>(std::move(store))) {}
 
   // Copy and move constructors
   Array(const Array<Val>& other) : op_(other.op_) {}

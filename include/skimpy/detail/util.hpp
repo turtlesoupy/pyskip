@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <new>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -9,7 +10,7 @@
 
 #include "errors.hpp"
 
-namespace skimpy::detail {
+namespace skimpy::detail::util {
 
 inline constexpr bool is_power_of_two(uint32_t x) {
   // NOTE: Zero return true.
@@ -29,22 +30,6 @@ inline constexpr uint32_t round_up_to_power_of_two(uint32_t x) {
 
 inline constexpr uint32_t lg2(uint32_t x) {
   return x < 2 ? 0 : 1 + lg2(x >> 1);
-}
-
-template <typename T>
-inline auto make_array_ptr(std::initializer_list<T> vals) {
-  std::unique_ptr<T[]> ret(new T[vals.size()]);
-  std::move(vals.begin(), vals.end(), ret.get());
-  return ret;
-}
-
-template <typename Range, typename Fn>
-inline auto map(Range&& r, Fn&& fn) {
-  std::vector<decltype(fn(*r.begin()))> ret;
-  for (const auto& x : r) {
-    ret.push_back(fn(x));
-  }
-  return ret;
 }
 
 template <typename Fn>
@@ -103,4 +88,4 @@ inline auto hash_combine(const std::vector<T>& v) {
   return ret;
 }
 
-}  // namespace skimpy::detail
+}  // namespace skimpy::detail::util

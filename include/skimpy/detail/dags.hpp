@@ -98,7 +98,7 @@ class GraphHandle {
   }
 
   size_t hash() const {
-    return hash_combine(graph_, index_);
+    return util::hash_combine(graph_, index_);
   }
 
   bool operator==(const GraphHandle& other) const {

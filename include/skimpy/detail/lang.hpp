@@ -420,22 +420,43 @@ inline auto schedule(ExprGraph::Handle root) {
     });
   }
 
-  // Remove stores from the schedule, except for the final node.
+  // Via a greedy bottom-up optimization, decide to skip evaluation for some
+  // nodes. The process conserves "feasibility" (e.g. max step sources), while
+  // choosing a materialization schedule with lower cost.
   CHECK_STATE(steps.size() > 0);
+  std::unordered_map<ExprGraph::Handle, int> depth_map;
+  std::unordered_map<ExprGraph::Handle, int> width_map;
   steps = [&] {
     std::vector<ExprGraph::Handle> filtered;
     for (int i = 0; i < steps.size() - 1; i += 1) {
-      if (steps[i]->data.kind != ExprArgs::STORE) {
-        filtered.push_back(steps[i]);
+      auto& step = steps[i];
+      if (step->data.kind == ExprArgs::STORE) {
+        depth_map[step] = 1;
+        width_map[step] = 1;
+        continue;
+      }
+
+      auto width = 0;
+      auto depth = 1;
+      for (int j = 0; j < kMaxExprDeps; j += 1) {
+        if (auto dep = step->deps[j]) {
+          width += width_map.at(dep);
+          depth = std::max(depth, 1 + depth_map.at(dep));
+        }
+      }
+
+      if (width <= 16 && depth < 128) {
+        width_map[step] = width;
+        depth_map[step] = depth;
+      } else {
+        width_map[step] = 1;
+        depth_map[step] = 1;
+        filtered.push_back(step);
       }
     }
     filtered.push_back(steps.back());
     return filtered;
   }();
-
-  // TODO: Via a greedy bottom-up optimization, decide to skip evaluation for
-  // some nodes. The process conserves "feasibility" (e.g. max step sources),
-  // while choosing a materialization schedule with lower cost.
 
   return steps;
 }
@@ -646,18 +667,13 @@ inline auto make_pool(const EvalPlan& plan) -> EvalPool<size> {
 
 template <typename Val, int size>
 inline auto execute_plan_fixed(EvalPlan plan) {
-  constexpr auto kMaxBranchFactor = 3;
-
-  // Build the evaluation function for the current plan.
-  struct EvalFnState {
-    std::vector<box::Box> stack;
-    std::vector<EvalPlan::Node>* nodes;
-    EvalFnState(EvalPlan& plan)
-        : stack(kMaxBranchFactor * plan.depth), nodes(&plan.nodes) {}
-  };
-  auto eval_fn = [state = EvalFnState(plan)](const box::Box* b) mutable {
-    auto sp = &state.stack[0];
-    for (auto node : *state.nodes) {
+  static constexpr auto kStackCapacity = 128;
+  static constexpr auto kMaxBranchFactor = 3;
+  CHECK_ARGUMENT(kMaxBranchFactor * plan.depth <= kStackCapacity);
+  auto eval_fn = [&](const box::Box* b, ...) mutable {
+    thread_local box::Box stack[kStackCapacity];
+    auto sp = &stack[0];
+    for (auto node : plan.nodes) {
       switch (node.kind) {
         case EvalPlan::Node::SOURCE:
           *sp++ = b[node.index];
@@ -703,7 +719,6 @@ inline auto execute_plan(EvalPlan plan) {
       return execute_plan_fixed<Val, 5>(std::move(plan));
     case 6:
       return execute_plan_fixed<Val, 6>(std::move(plan));
-      /*
     case 7:
       return execute_plan_fixed<Val, 7>(std::move(plan));
     case 8:
@@ -756,7 +771,6 @@ inline auto execute_plan(EvalPlan plan) {
       return execute_plan_fixed<Val, 31>(std::move(plan));
     case 32:
       return execute_plan_fixed<Val, 32>(std::move(plan));
-      */
     default:
       CHECK_UNREACHABLE("Invalid number of sources.");
   }

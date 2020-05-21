@@ -7,7 +7,7 @@
 #include <catch2/catch.hpp>
 #include <unordered_map>
 
-using namespace skimpy::detail;
+using namespace skimpy::detail::util;
 
 TEST_CASE("Test power of two util functions", "[util_power_of_two]") {
   for (int i = 0; i < 31; i += 1) {

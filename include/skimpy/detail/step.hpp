@@ -436,8 +436,8 @@ inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
       node->stack.reps = args.reps;
       node->stack.loop_span = args.loop_span;
       node->stack.loop_step = args.loop_step;
-      if (is_power_of_two(args.loop_span)) {
-        node->stack.bit_shift = lg2(args.loop_span);
+      if (util::is_power_of_two(args.loop_span)) {
+        node->stack.bit_shift = util::lg2(args.loop_span);
       } else {
         node->stack.bit_shift = 0;
       }
@@ -477,8 +477,8 @@ inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
       node->kind = ExecNode::TABLE;
       node->table.lut = table_ptr;
       node->table.mask = 0xFFFFFFFF;
-      if (is_power_of_two(args.stride)) {
-        auto s = lg2(args.stride);
+      if (util::is_power_of_two(args.stride)) {
+        auto s = util::lg2(args.stride);
         for (int i = 0; i < e->data.span; i += 1) {
           *table_ptr++ = 1 + (i >> s);
         }
