@@ -99,7 +99,7 @@ TEST_CASE("Benchmark 1-source evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = 2 * sources[0].store()->vals[i];
@@ -122,7 +122,7 @@ TEST_CASE("Benchmark 2-source plan evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -150,7 +150,7 @@ TEST_CASE("Benchmark 4-source plan evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -190,7 +190,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -238,7 +238,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -302,7 +302,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -326,7 +326,7 @@ TEST_CASE("Benchmark boxed 1-source evaluation", "[boxed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = 2 * sources[0].val(i).get<int>();
@@ -350,7 +350,7 @@ TEST_CASE("Benchmark boxed 2-source evaluation", "[boxed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] =
@@ -384,7 +384,7 @@ TEST_CASE("Benchmark boxed 4-source evaluation", "[boxed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = sources[0].val(i).get<int>();
@@ -428,7 +428,7 @@ TEST_CASE("Benchmark boxed 8-source evaluation", "[boxed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = sources[0].val(i).get<int>();
@@ -458,7 +458,7 @@ TEST_CASE("Benchmark boxed ternary evaluation", "[boxed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         auto m = sources[0].val(i).get<bool>();
         auto a = sources[1].val(i).get<int>();
@@ -487,7 +487,7 @@ TEST_CASE("Benchmark mixed 1-source evaluation", "[mixed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = 2 * std::get<int>(sources[0].val(i));
@@ -516,7 +516,7 @@ TEST_CASE("Benchmark mixed 2-source evaluation", "[mixed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = std::get<int>(sources[0].val(i));
@@ -552,7 +552,7 @@ TEST_CASE("Benchmark mixed 4-source evaluation", "[mixed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = std::get<int>(sources[0].val(i));
@@ -596,7 +596,7 @@ TEST_CASE("Benchmark mixed 8-source evaluation", "[mixed]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].end(i);
         x->vals[i] = std::get<int>(sources[0].val(i));
@@ -622,7 +622,7 @@ TEST_CASE("Benchmark strided 1-source evaluation", "[strided]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = 2 * sources[0].store()->vals[i];
@@ -646,7 +646,7 @@ TEST_CASE("Benchmark strided 2-source evaluation", "[strided]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -675,7 +675,7 @@ TEST_CASE("Benchmark strided 4-source evaluation", "[strided]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -715,7 +715,7 @@ TEST_CASE("Benchmark cyclic 1-source evaluation", "[cyclic]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = 2 * sources[0].store()->vals[i];
@@ -753,7 +753,7 @@ TEST_CASE("Benchmark cyclic 2-source evaluation", "[cyclic]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -797,7 +797,7 @@ TEST_CASE("Benchmark cyclic 4-source evaluation", "[cyclic]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];
@@ -853,7 +853,7 @@ TEST_CASE("Benchmark cyclic 8-source evaluation", "[cyclic]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(8, n, [&](int start, int end, ...) {
+    partition(std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
       for (int i = start; i < end; i += 1) {
         x->ends[i] = sources[0].store()->ends[i];
         x->vals[i] = sources[0].store()->vals[i];

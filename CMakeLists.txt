@@ -12,6 +12,19 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if (NOT MSVC)
+  set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+  set(CMAKE_CXX_FLAGS_DEBUG "-g")
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+endif()
 
 #== BUILD TARGETS ==#
 

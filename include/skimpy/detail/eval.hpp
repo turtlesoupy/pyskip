@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <new>
 #include <variant>
 
 #include "core.hpp"
@@ -82,6 +83,14 @@ struct TournamentTree {
     }
   }
 };
+
+constexpr auto cache_line() {
+#ifdef WIN32
+  returns std::hardware_destructive_interference_size;
+#else
+  return 64;
+#endif
+}
 
 // Provides a light-weight hash table to test for redundant insertions into the
 // tournament tree. Insertion is best-effort as we care only about performance.

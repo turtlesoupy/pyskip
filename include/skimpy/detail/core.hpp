@@ -96,7 +96,8 @@ struct Range {
   }
 
   Val get(Pos pos) const {
-    return *std::upper_bound(&store.ends[0], &store.ends[size], start + pos);
+    return *std::upper_bound(
+        &store.ends[0], &store.ends[store.size], start + pos);
   }
 };
 
