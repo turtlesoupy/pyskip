@@ -13,6 +13,7 @@
 #include "detail/mask.hpp"
 #include "detail/step.hpp"
 #include "detail/util.hpp"
+#include "macros.hpp"
 
 namespace skimpy {
 
@@ -345,12 +346,10 @@ template <typename Val>
 auto from_buffer(int size, const Val* data) {
   return Array<Val>(conv::to_store(size, data));
 }
-
 template <typename Val>
 auto to_vector(const Array<Val>& array) {
   return conv::to_vector(*array.store());
 }
-
 template <typename Val>
 void to_buffer(const Array<Val>& array, int* size, Val** buffer) {
   auto store = array.store();
@@ -358,261 +357,67 @@ void to_buffer(const Array<Val>& array, int* size, Val** buffer) {
   *buffer = new Val[*size];
   conv::to_buffer(*store, *buffer);
 }
+template <typename Val>
+auto to_string(const Array<Val>& array) {
+  return array.str();
+}
 
 // Casting operations
 template <typename Out, typename Val>
 Array<Out> cast(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return static_cast<Out>(a); }; 
+  constexpr Val (*fn)(Val) = [](Val a) { return static_cast<Out>(a); };
   return array.template merge<fn>();
 }
 
 // Unary arithmetic operations
-template <typename Val>
-Array<Val> operator+(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return +a; }; 
-  return array.template merge<fn>();
-}
-
-template <typename Val>
-Array<Val> operator-(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return -a; }; 
-  return array.template merge<fn>();
-}
-
-template <typename Val>
-Array<Val> operator~(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return ~a; }; 
-  return array.template merge<fn>();
-}
+UNARY_ARRAY_OP_SIMPLE(operator+, [](Val a) { return +a; })
+UNARY_ARRAY_OP_SIMPLE(operator-, [](Val a) { return -a; })
+UNARY_ARRAY_OP_SIMPLE(operator~, [](Val a) { return ~a; })
 
 // Binary arithmetic operations
-template <typename Val>
-Array<Val> operator+(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a + b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator+(const Array<Val>& lhs, Val rhs) {
-  return lhs + make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator+(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) + rhs;
-}
-
-template <typename Val>
-Array<Val> operator-(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a - b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator-(const Array<Val>& lhs, Val rhs) {
-  return lhs - make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator-(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) - rhs;
-}
-
-template <typename Val>
-Array<Val> operator*(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a * b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator*(const Array<Val>& lhs, Val rhs) {
-  return lhs * make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator*(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) * rhs;
-}
-
-template <typename Val>
-Array<Val> operator/(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a / b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator/(const Array<Val>& lhs, Val rhs) {
-  return lhs / make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator/(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) / rhs;
-}
-
-template <typename Val>
-Array<Val> operator%(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a % b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator%(const Array<Val>& lhs, Val rhs) {
-  return lhs % make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator%(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) % rhs;
-}
+BINARY_ARRAY_OP_SIMPLE(operator+, [](Val a, Val b) { return a + b; })
+BINARY_ARRAY_OP_SIMPLE(operator-, [](Val a, Val b) { return a - b; })
+BINARY_ARRAY_OP_SIMPLE(operator*, [](Val a, Val b) { return a * b; })
+BINARY_ARRAY_OP_SIMPLE(operator/, [](Val a, Val b) { return a / b; })
+BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 
 // Binary bitwise operations
-template <typename Val>
-Array<Val> operator&(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a & b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator&(const Array<Val>& lhs, Val rhs) {
-  return lhs & make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator&(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) & rhs;
-}
-
-template <typename Val>
-Array<Val> operator|(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a | b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator|(const Array<Val>& lhs, Val rhs) {
-  return lhs | make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator|(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) | rhs;
-}
-
-template <typename Val>
-Array<Val> operator^(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a ^ b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator^(const Array<Val>& lhs, Val rhs) {
-  return lhs ^ make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator^(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) ^ rhs;
-}
-
-template <typename Val>
-Array<Val> operator<<(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a << b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator<<(const Array<Val>& lhs, Val rhs) {
-  return lhs << make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator<<(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) << rhs;
-}
-
-template <typename Val>
-Array<Val> operator>>(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return a >> b; }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> operator>>(const Array<Val>& lhs, Val rhs) {
-  return lhs >> make_array<Val>(lhs.len(), rhs);
-}
-template <typename Val>
-Array<Val> operator>>(Val lhs, const Array<Val>& rhs) {
-  return make_array<Val>(rhs.len(), lhs) >> rhs;
-}
+BINARY_ARRAY_OP_SIMPLE(operator&, [](Val a, Val b) { return a & b; })
+BINARY_ARRAY_OP_SIMPLE(operator|, [](Val a, Val b) { return a | b; })
+BINARY_ARRAY_OP_SIMPLE(operator^, [](Val a, Val b) { return a ^ b; })
+BINARY_ARRAY_OP_SIMPLE(operator<<, [](Val a, Val b) { return a << b; })
+BINARY_ARRAY_OP_SIMPLE(operator>>, [](Val a, Val b) { return a >> b; })
 
 // Unary math operations
-template <typename Val>
-Array<Val> abs(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return std::abs(a); }; 
-  return array.template merge<fn>();
-}
-
-template <typename Val>
-Array<Val> sqrt(const Array<Val>& array) {
-  constexpr auto fn = [](Val a) { return static_cast<Val>(std::sqrt(a)); };
-  return array.template merge<fn>();
-}
-
-template <typename Val>
-Array<Val> exp(const Array<Val>& array) {
-  constexpr auto fn = [](Val a) { return static_cast<Val>(std::exp(a)); };
-  return array.template merge<fn>();
-}
+UNARY_ARRAY_OP_SIMPLE(abs, [](Val a) { return std::abs(a); })
+UNARY_ARRAY_OP_SIMPLE(exp, [](Val a) { return static_cast<Val>(std::exp(a)); })
+UNARY_ARRAY_OP_SIMPLE(sqrt, [](Val a) {
+  return static_cast<Val>(std::sqrt(a));
+})
 
 // Binary math operations
-template <typename Val>
-Array<Val> min(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return std::min(a, b); }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> min(const Array<Val>& lhs, Val rhs) {
-  return min(lhs, make_array<Val>(lhs.len(), rhs));
-}
-template <typename Val>
-Array<Val> min(Val lhs, const Array<Val>& rhs) {
-  return min(make_array<Val>(rhs.len(), lhs), rhs);
-}
+BINARY_ARRAY_OP_SIMPLE(min, [](Val a, Val b) { return std::min(a, b); })
+BINARY_ARRAY_OP_SIMPLE(max, [](Val a, Val b) { return std::max(a, b); })
+BINARY_ARRAY_OP_SIMPLE(pow, [](Val a, Val b) {
+  return static_cast<Val>(std::pow(a, b));
+})
 
-template <typename Val>
-Array<Val> max(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr Val (*fn)(Val, Val) = [](Val a, Val b) { return std::max(a, b); }; 
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> max(const Array<Val>& lhs, Val rhs) {
-  return max(lhs, make_array<Val>(lhs.len(), rhs));
-}
-template <typename Val>
-Array<Val> max(Val lhs, const Array<Val>& rhs) {
-  return max(make_array<Val>(rhs.len(), lhs), rhs);
-}
+// Ternary math operations
+TERNARY_ARRAY_OP(splat, bool, Val, Val, Val, [](bool m, Val a, Val b) {
+  return m ? a : b;
+})
 
-template <typename Val>
-Array<Val> pow(const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr auto fn = [](Val a, Val b) {
-    return static_cast<Val>(std::pow(a, b));
-  };
-  return lhs.template merge<fn>(rhs);
-}
-template <typename Val>
-Array<Val> pow(const Array<Val>& lhs, Val rhs) {
-  return pow(lhs, make_array<Val>(lhs.len(), rhs));
-}
-template <typename Val>
-Array<Val> pow(Val lhs, const Array<Val>& rhs) {
-  return pow(make_array<Val>(rhs.len(), lhs), rhs);
-}
+// Logical operations
+UNARY_ARRAY_OP(operator!, bool, [](Val a) { return !a; })
+BINARY_ARRAY_OP(operator&&, Val, Val, bool, [](Val a, Val b) { return a && b; })
+BINARY_ARRAY_OP(operator||, Val, Val, bool, [](Val a, Val b) { return a || b; })
+BINARY_ARRAY_OP(operator==, Val, Val, bool, [](Val a, Val b) { return a == b; })
+BINARY_ARRAY_OP(operator!=, Val, Val, bool, [](Val a, Val b) { return a != b; })
 
-// Ternary math oeprators
-template <typename Val>
-Array<Val> splat(
-    const Array<bool>& mask, const Array<Val>& lhs, const Array<Val>& rhs) {
-  constexpr auto fn = [](bool m, Val a, Val b) { return m ? a : b; };
-  return mask.template merge<Val, Val, Val, fn>(lhs, rhs);
-}
-template <typename Val>
-Array<Val> splat(const Array<bool>& mask, const Array<Val>& lhs, Val rhs) {
-  return splat(mask, lhs, make_array<Val>(mask.len(), rhs));
-}
-template <typename Val>
-Array<Val> splat(const Array<bool>& mask, Val lhs, const Array<Val>& rhs) {
-  return splat(mask, make_array<Val>(mask.len(), lhs), rhs);
-}
-template <typename Val>
-Array<Val> splat(const Array<bool>& mask, Val lhs, Val rhs) {
-  auto len = mask.len();
-  return splat(mask, make_array<Val>(len, lhs), make_array<Val>(len, rhs));
-}
-
-// TODO: Add logical operations
-// TODO: Add casting operations
+// Comparison operations
+BINARY_ARRAY_OP(operator<, Val, Val, bool, [](Val a, Val b) { return a < b; })
+BINARY_ARRAY_OP(operator>, Val, Val, bool, [](Val a, Val b) { return a > b; })
+BINARY_ARRAY_OP(operator<=, Val, Val, bool, [](Val a, Val b) { return a <= b; })
+BINARY_ARRAY_OP(operator>=, Val, Val, bool, [](Val a, Val b) { return a >= b; })
 
 }  // namespace skimpy
