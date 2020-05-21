@@ -99,7 +99,6 @@ TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
   };
 }
 
-/*
 TEST_CASE("Benchmark skimpy array builders", "[builders]") {
   BENCHMARK("build_10k") {
     skimpy::ArrayBuilder<int> b(10 * 1000, 0);
@@ -125,4 +124,3 @@ TEST_CASE("Benchmark skimpy array builders", "[builders]") {
     b.build();
   };
 }
-*/

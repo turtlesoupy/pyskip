@@ -742,7 +742,7 @@ inline auto execute_plan_fixed(EvalPlan plan) {
   static constexpr auto kStackCapacity = 128;
   static constexpr auto kMaxBranchFactor = 3;
   CHECK_ARGUMENT(kMaxBranchFactor * plan.depth <= kStackCapacity);
-  auto eval_fn = [&](const box::Box* b, ...) mutable {
+  auto eval_fn = [&](const box::Box* b) {
     thread_local box::Box stack[kStackCapacity];
     auto sp = &stack[0];
     for (auto node : plan.nodes) {
