@@ -32,26 +32,21 @@ static constexpr auto kMaxExecDeps = 2;
 static constexpr auto kMaxLutSize = 1 << 8;
 static constexpr auto kMaxSpan = 1 << 30;
 
-struct StackArgs {
-  int reps;
-  Pos loop_span;
-  Pos loop_step;
-  int bit_shift;
-};
-
-struct TableArgs {
-  Pos* lut;
-  int mask;
-};
-
 struct ExecNode {
   int span;
   int step;
   ExecNode* deps[kMaxExecDeps];
   enum { EMPTY, TABLE, STACK } kind;
   union {
-    StackArgs stack;
-    TableArgs table;
+    struct {
+      Pos loop_span;
+      Pos loop_step;
+      int bit_shift;
+    } stack;
+    struct {
+      Pos* lut;
+      int mask;
+    } table;
   };
 
   ExecNode() : span(0), step(0), kind(EMPTY) {
@@ -79,10 +74,10 @@ struct ExecGraph {
 inline auto empty_exec_graph() {
   std::shared_ptr<ExecNode[]> nodes(new ExecNode[1]);
   auto root = &nodes[0];
-  root->span = kMaxSpan;
-  root->step = kMaxSpan;
+  root->span = 0;
+  root->step = 0;
   root->kind = ExecNode::TABLE;
-  root->table.lut = &kFixedPos<0>;
+  root->table.lut = nullptr;
   root->table.mask = 0;
   return ExecGraph(1, root, std::move(nodes), nullptr);
 }
@@ -103,19 +98,18 @@ class StepFn {
             std::min<Pos>(span, other.span_ - start),
             other.graph_) {
     CHECK_ARGUMENT(start >= 0);
-    CHECK_ARGUMENT(span >= 0);
   }
 
-  StepFn() : StepFn(0, kMaxSpan, empty_exec_graph()) {}
+  StepFn() : StepFn(0, 0, empty_exec_graph()) {}
 
   Pos operator()(Pos pos) const {
     pos -= start_ + 1;
     if (cache_.base > pos || pos >= cache_.stop) {
-      if (pos < 0) {
-        return 0;
-      }
       if (pos >= span_) {
         pos = span_ - 1;
+      }
+      if (pos < 0) {
+        return 0;
       }
       search(pos);
     }
@@ -127,6 +121,7 @@ class StepFn {
     // TODO: Consider adding a stack to speed up the search for nearby nodes.
     auto node = graph_.root;
     auto base = 0, step = 0;
+    auto stop = span_;
     while (node->kind != ExecNode::TABLE) {
       auto& args = node->stack;
 
@@ -152,11 +147,14 @@ class StepFn {
         step += l->step;
         node = node->deps[1];
       }
+
+      // Update the stop position on the way down to handle clamping.
+      stop = std::min<Pos>(stop, base + node->span);
     }
 
     cache_.base = base;
     cache_.step = step;
-    cache_.stop = std::min<Pos>(base + node->span, span_);
+    cache_.stop = stop;
     cache_.lut = node->table.lut;
     cache_.mask = node->table.mask;
   }
@@ -179,7 +177,6 @@ struct ExprData {
   int step;
   union {
     struct {
-      int reps;
       Pos loop_span;
       Pos loop_step;
     } stack;
@@ -243,7 +240,6 @@ inline auto strided_lut() {
 inline auto stack(int reps, ExprNode::Ptr l, ExprNode::Ptr r = nullptr) {
   CHECK_ARGUMENT(l);
   auto ret = ExprNode::make_ptr();
-  ret->data.stack.reps = reps;
   ret->data.stack.loop_span = l->data.span;
   ret->data.stack.loop_step = l->data.step;
   if (r) {
@@ -262,7 +258,15 @@ inline auto stack(ExprNode::Ptr l, ExprNode::Ptr r) {
   return stack(1, l, r);
 }
 
+inline auto clamp(Pos span, ExprNode::Ptr in) {
+  auto ret = ExprNode::make_ptr();
+  *ret = *in;
+  ret->data.span = std::min<Pos>(ret->data.span, span);
+  return ret;
+}
+
 inline auto table(Pos span, Pos* lut, Pos mask = 0xFFFFFFFF) {
+  CHECK_ARGUMENT(span > 0);
   CHECK_ARGUMENT((span & mask) <= kMaxLutSize);
   auto ret = ExprNode::make_ptr();
   ret->data.table.lut = lut;
@@ -274,46 +278,60 @@ inline auto table(Pos span, Pos* lut, Pos mask = 0xFFFFFFFF) {
 }
 
 template <Pos k>
+inline auto shift() {
+  static_assert(k >= 0);
+  auto ret = ExprNode::make_ptr();
+  ret->data.table.lut = nullptr;
+  ret->data.table.mask = 0;
+  ret->data.span = 0;
+  ret->data.step = k;
+  ret->data.kind = ExprData::TABLE;
+  return ret;
+}
+
+template <Pos k>
 inline auto fixed(int span = 1) {
+  static_assert(k >= 0);
   CHECK_ARGUMENT(span > 0);
   return table(span, &kFixedPos<k>, 0);
 }
 
 template <Pos k>
 inline auto scaled(int span) {
+  static_assert(k >= 1);
   CHECK_ARGUMENT(span > 0);
   if (span <= kMaxLutSize) {
     return table(span, scaled_lut<k>());
   } else {
     auto loop_span = kMaxLutSize;
-    auto quo = span / loop_span, rem = span % loop_span;
-    if (rem == 0) {
-      return stack(quo, table(loop_span, scaled_lut<k>()));
-    } else {
-      return stack(
-          stack(quo, table(loop_span, scaled_lut<k>())),
-          table(rem, scaled_lut<k>()));
-    }
+    auto reps = 1 + (span - 1) / loop_span;
+    return clamp(span, stack(reps, table(loop_span, scaled_lut<k>())));
   }
 }
 
 template <Pos k>
 inline auto strided(int span) {
+  static_assert(k >= 1);
   static_assert(k < kMaxLutSize, "Static strides cannot exceed max LUT size.");
   CHECK_ARGUMENT(span > 0);
   if (span <= kMaxLutSize) {
     return table(span, strided_lut<k>());
   } else {
     auto loop_span = kMaxLutSize - (kMaxLutSize % k);
-    auto quo = span / loop_span, rem = span % loop_span;
-    if (rem == 0) {
-      return stack(quo, table(loop_span, strided_lut<k>()));
-    } else {
-      return stack(
-          stack(quo, table(loop_span, strided_lut<k>())),
-          table(rem, strided_lut<k>()));
-    }
+    auto reps = 1 + (span - 1) / loop_span;
+    return clamp(span, stack(reps, table(loop_span, strided_lut<k>())));
   }
+}
+
+inline auto shift(Pos step) {
+  CHECK_ARGUMENT(step >= 0);
+  auto ret = ExprNode::make_ptr();
+  ret->data.table.lut = nullptr;
+  ret->data.table.mask = 0;
+  ret->data.span = 0;
+  ret->data.step = step;
+  ret->data.kind = ExprData::TABLE;
+  return ret;
 }
 
 inline auto fixed(Pos span, Pos step) {
@@ -331,12 +349,8 @@ inline auto scaled(Pos span, Pos scale) -> ExprNode::Ptr {
   CHECK_ARGUMENT(scale > 0);
   if (span > kMaxLutSize) {
     auto loop_span = kMaxLutSize;
-    auto quo = span / loop_span, rem = span % loop_span;
-    if (rem == 0) {
-      return stack(quo, scaled(loop_span, scale));
-    } else {
-      return stack(stack(quo, scaled(loop_span, scale)), scaled(rem, scale));
-    }
+    auto reps = 1 + (span - 1) / loop_span;
+    return clamp(span, stack(reps, scaled(loop_span, scale)));
   } else {
     auto ret = ExprNode::make_ptr();
     ret->data.scaled.scale = scale;
@@ -351,21 +365,12 @@ inline auto strided(Pos span, Pos stride) -> ExprNode::Ptr {
   CHECK_ARGUMENT(span > 0);
   CHECK_ARGUMENT(stride > 0);
   if (stride > kMaxLutSize) {
-    auto quo = span / stride, rem = span % stride;
-    if (rem == 0) {
-      return stack(quo, fixed<0>(stride - 1), fixed<1>(1));
-    } else {
-      return stack(stack(quo, fixed<0>(stride - 1), fixed<1>()), fixed<0>(rem));
-    }
+    auto reps = 1 + (span - 1) / stride;
+    return clamp(span, stack(reps, fixed<1>(1), fixed<0>(stride - 1)));
   } else if (span > kMaxLutSize) {
     auto loop_span = kMaxLutSize - (kMaxLutSize % stride);
-    auto quo = span / loop_span, rem = span % loop_span;
-    if (rem == 0) {
-      return stack(quo, strided(loop_span, stride));
-    } else {
-      return stack(
-          stack(quo, strided(loop_span, stride)), strided(rem, stride));
-    }
+    auto reps = 1 + (span - 1) / loop_span;
+    return clamp(span, stack(reps, strided(loop_span, stride)));
   } else {
     auto ret = ExprNode::make_ptr();
     ret->data.strided.stride = stride;
@@ -437,7 +442,6 @@ inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
     if (e->data.kind == ExprData::STACK) {
       auto& args = e->data.stack;
       node->kind = ExecNode::STACK;
-      node->stack.reps = args.reps;
       node->stack.loop_span = args.loop_span;
       node->stack.loop_step = args.loop_step;
       if (util::is_power_of_two(args.loop_span)) {
@@ -452,20 +456,17 @@ inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
         node->deps[1] = node_map.at(dep);
       }
     } else if (e->data.kind == ExprData::TABLE) {
-      CHECK_STATE(e->data.span > 0);
       CHECK_STATE((e->data.span & e->data.table.mask) <= kMaxLutSize);
       auto& args = e->data.table;
       node->kind = ExecNode::TABLE;
       node->table.lut = args.lut;
       node->table.mask = args.mask;
     } else if (e->data.kind == ExprData::FIXED) {
-      CHECK_STATE(e->data.span > 0);
       node->kind = ExecNode::TABLE;
       node->table.lut = table_ptr;
       node->table.mask = 0;
       *table_ptr++ = e->data.step;
     } else if (e->data.kind == ExprData::SCALED) {
-      CHECK_STATE(e->data.span > 0);
       CHECK_STATE(e->data.span <= kMaxLutSize);
       auto& args = e->data.scaled;
       node->kind = ExecNode::TABLE;
@@ -475,7 +476,6 @@ inline auto build(Pos start, Pos stop, ExprNode::Ptr in) {
         *table_ptr++ = (i + 1) * args.scale;
       }
     } else if (e->data.kind == ExprData::STRIDED) {
-      CHECK_STATE(e->data.span > 0);
       CHECK_STATE(e->data.span <= kMaxLutSize);
       auto& args = e->data.strided;
       node->kind = ExecNode::TABLE;

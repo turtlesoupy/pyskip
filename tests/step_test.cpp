@@ -131,6 +131,31 @@ TEST_CASE("Test step function spans", "[step]") {
   }
 }
 
+TEST_CASE("Test corner-case cyclic step function", "[step]") {
+  using namespace cyclic;
+
+  {
+    StepFn step_fn;
+    REQUIRE_THAT(
+        gen(step_fn, {-2, -1, 0, 1, 2, 3}),
+        Catch::Equals<Pos>({0, 0, 0, 0, 0, 0}));
+  }
+
+  {
+    auto step_fn = build(shift(2));
+    REQUIRE_THAT(
+        gen(step_fn, {-2, -1, 0, 1, 2, 3}),
+        Catch::Equals<Pos>({0, 0, 0, 0, 0, 0}));
+  }
+
+  {
+    auto step_fn = build(stack(shift<2>(), scaled<1>(3)));
+    REQUIRE_THAT(
+        gen(step_fn, {0, 1, 2, 3, 4, 5, 6}),
+        Catch::Equals<Pos>({0, 3, 4, 5, 5, 5, 5}));
+  }
+}
+
 TEST_CASE("Test step function inverse", "[step]") {
   // TODO: Add tests.
 }

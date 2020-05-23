@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "core.hpp"
+
 namespace skimpy::detail::box {
 
 // We store data in boxes between  merge function calls to unify the value type.
@@ -83,6 +85,10 @@ class Box {
     return get<uint32_t>() == other.get<uint32_t>();
   }
 
+  bool operator!=(const Box& other) {
+    return get<uint32_t>() != other.get<uint32_t>();
+  }
+
  private:
   union {
     int_fast8_t i8;
@@ -94,5 +100,17 @@ class Box {
     float f32;
   };
 };
+
+using BoxStore = core::Store<box::Box>;
+
+template <typename Val>
+inline auto box_store(const core::Store<Val>& store) {
+  core::Store<box::Box> ret(store.size);
+  for (int i = 0; i < store.size; i += 1) {
+    ret.ends[i] = store.ends[i];
+    ret.vals[i] = store.vals[i];
+  }
+  return ret;
+}
 
 }  // namespace skimpy::detail::box

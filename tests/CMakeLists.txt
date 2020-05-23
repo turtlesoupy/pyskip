@@ -17,6 +17,7 @@ skimpy_test(lang_test lang_test.cpp)
 skimpy_test(mask_test mask_test.cpp)
 skimpy_test(step_test step_test.cpp)
 skimpy_test(skimpy_test skimpy_test.cpp)
+skimpy_test(tensor_test tensor_test.cpp)
 skimpy_test(util_test util_test.cpp)
 
 # Add benchmark tests.
