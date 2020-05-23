@@ -64,6 +64,19 @@ auto convert_slice(skimpy::Pos length, py::slice slice) {
   return skimpy::Slice(start, stop, stride);
 }
 
+template <size_t dim>
+auto convert_tensor_slice(
+    skimpy::TensorShape<dim> shape, std::array<py::slice, dim> slices) {
+  std::array<std::array<skimpy::Pos, 3>, dim> components;
+  for (int i = 0; i < dim; i += 1) {
+    auto slice = convert_slice(shape[i], slices[i]);
+    components[i][0] = slice.start;
+    components[i][1] = slice.stop;
+    components[i][2] = slice.stride;
+  }
+  return skimpy::TensorSlice<dim>(std::move(components));
+}
+
 PYBIND11_MODULE(skimpy, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
@@ -76,7 +89,7 @@ PYBIND11_MODULE(skimpy, m) {
   // ArrayBuilder class for int value types
   using IntArrayBuilder = skimpy::ArrayBuilder<int>;
   py::class_<IntArrayBuilder>(m, "IntArrayBuilder")
-      .def(py::init<int, int>())
+      .def(py::init<skimpy::Pos, int>())
       .def(py::init<skimpy::Array<int>>())
       .def("__len__", &IntArrayBuilder::len)
       .def(
@@ -104,7 +117,7 @@ PYBIND11_MODULE(skimpy, m) {
   // Array class for int value types
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
-      .def(py::init([](int span, int fill) {
+      .def(py::init([](skimpy::Pos span, int fill) {
         return skimpy::make_array<int>(span, fill);
       }))
       .def("__len__", &IntArray::len)
@@ -112,6 +125,9 @@ PYBIND11_MODULE(skimpy, m) {
       .def("clone", &IntArray::clone)
       .def("eval", &IntArray::eval)
       .def("dumps", &IntArray::str)
+      .def(
+          "tensor",
+          [](IntArray& self) { skimpy::make_tensor<1>({self.len()}, self); })
       .def(
           "to_numpy",
           [](IntArray& self) {
@@ -260,4 +276,135 @@ PYBIND11_MODULE(skimpy, m) {
       .def("abs", [](const IntArray& self) { return skimpy::abs(self); })
       .def("sqrt", [](const IntArray& self) { return skimpy::sqrt(self); })
       .def("exp", [](const IntArray& self) { return skimpy::exp(self); });
+
+  // 1D Tensor class for int value types
+  {
+    using Tensor = skimpy::Tensor<1, int>;
+    py::class_<Tensor>(m, "Tensor1i")
+        .def(py::init([](int w, int val) {
+          return skimpy::make_tensor<1, int>({w}, val);
+        }))
+        .def("__len__", &Tensor::len)
+        .def("__repr__", &Tensor::repr)
+        .def("shape", &Tensor::shape)
+        .def("clone", &Tensor::clone)
+        .def("eval", &Tensor::eval)
+        .def("dumps", &Tensor::str)
+        .def("array", &Tensor::array)
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 1> pos) {
+              return self.get(pos);
+            })
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<py::slice, 1> slices) {
+              return self.get(convert_tensor_slice(self.shape(), slices));
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 1> pos, int val) {
+              self.set(pos, val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<py::slice, 1> slices, int val) {
+              self.set(convert_tensor_slice(self.shape(), slices), val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self,
+               std::array<py::slice, 1> slices,
+               const Tensor& other) {
+              self.set(convert_tensor_slice(self.shape(), slices), other);
+            });
+  }
+
+  // 2D Tensor class for int value types
+  {
+    using Tensor = skimpy::Tensor<2, int>;
+    py::class_<Tensor>(m, "Tensor2i")
+        .def(py::init([](std::array<skimpy::Pos, 2> shape, int val) {
+          auto [w, h] = shape;
+          return skimpy::make_tensor<2, int>({w, h}, val);
+        }))
+        .def("__len__", &Tensor::len)
+        .def("__repr__", &Tensor::repr)
+        .def("shape", &Tensor::shape)
+        .def("clone", &Tensor::clone)
+        .def("eval", &Tensor::eval)
+        .def("dumps", &Tensor::str)
+        .def("array", &Tensor::array)
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 2> pos) {
+              return self.get(pos);
+            })
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<py::slice, 2> slices) {
+              return self.get(convert_tensor_slice(self.shape(), slices));
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 2> pos, int val) {
+              self.set(pos, val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<py::slice, 2> slices, int val) {
+              self.set(convert_tensor_slice(self.shape(), slices), val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self,
+               std::array<py::slice, 2> slices,
+               const Tensor& other) {
+              self.set(convert_tensor_slice(self.shape(), slices), other);
+            });
+  }
+
+  // 3D Tensor class for int value types
+  {
+    using Tensor = skimpy::Tensor<3, int>;
+    py::class_<Tensor>(m, "Tensor3i")
+        .def(py::init([](std::array<skimpy::Pos, 3> shape, int val) {
+          auto [w, h, d] = shape;
+          return skimpy::make_tensor<3, int>({w, h, d}, val);
+        }))
+        .def("__len__", &Tensor::len)
+        .def("__repr__", &Tensor::repr)
+        .def("shape", &Tensor::shape)
+        .def("clone", &Tensor::clone)
+        .def("eval", &Tensor::eval)
+        .def("dumps", &Tensor::str)
+        .def("array", &Tensor::array)
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 3> pos) {
+              return self.get(pos);
+            })
+        .def(
+            "__getitem__",
+            [](Tensor& self, std::array<py::slice, 3> slices) {
+              return self.get(convert_tensor_slice(self.shape(), slices));
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<skimpy::Pos, 3> pos, int val) {
+              self.set(pos, val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self, std::array<py::slice, 3> slices, int val) {
+              self.set(convert_tensor_slice(self.shape(), slices), val);
+            })
+        .def(
+            "__setitem__",
+            [](Tensor& self,
+               std::array<py::slice, 3> slices,
+               const Tensor& other) {
+              self.set(convert_tensor_slice(self.shape(), slices), other);
+            });
+  }
 }

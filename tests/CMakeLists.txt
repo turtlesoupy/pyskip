@@ -9,14 +9,16 @@ function(SKIMPY_TEST TEST_NAME TEST_FILE)
 endfunction()
 
 # Add each test target and register it for ctest.
+skimpy_test(array_test array_test.cpp)
 skimpy_test(box_test box_test.cpp)
+skimpy_test(builder_test builder_test.cpp)
 skimpy_test(core_test core_test.cpp)
 skimpy_test(dags_test dags_test.cpp)
 skimpy_test(eval_test eval_test.cpp)
 skimpy_test(lang_test lang_test.cpp)
 skimpy_test(mask_test mask_test.cpp)
 skimpy_test(step_test step_test.cpp)
-skimpy_test(skimpy_test skimpy_test.cpp)
+skimpy_test(tensor_test tensor_test.cpp)
 skimpy_test(util_test util_test.cpp)
 
 # Add benchmark tests.

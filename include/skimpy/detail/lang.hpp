@@ -15,9 +15,9 @@
 
 namespace skimpy::detail::lang {
 
-constexpr int kMaxExprDeps = 3;
+using box::BoxStore;
 
-using BoxStore = core::Store<box::Box>;
+constexpr int kMaxExprDeps = 3;
 
 // Argument to a store expression
 struct StoreArgs {
@@ -108,6 +108,10 @@ using Expr = dags::SharedNode<kMaxExprDeps, ExprArgs>;
 template <typename Val>
 struct TypedExpr {
   Expr::Ptr expr;
+
+  operator bool() const {
+    return !!expr;
+  }
 
   Expr::Ptr operator->() {
     return expr;

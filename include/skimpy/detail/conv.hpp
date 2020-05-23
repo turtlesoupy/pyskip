@@ -12,7 +12,7 @@ namespace skimpy::detail::conv {
 
 using Pos = core::Pos;
 
-template <typename Val>
+template <typename Val, typename Out = Val>
 auto to_store(size_t size, const Val* buffer) {
   CHECK_ARGUMENT(size > 0);
 
@@ -26,7 +26,7 @@ auto to_store(size_t size, const Val* buffer) {
 
   // Create the store arrays.
   std::unique_ptr<Pos[]> ends(new Pos[store_size]);
-  std::unique_ptr<Val[]> vals(new Val[store_size]);
+  std::unique_ptr<Out[]> vals(new Out[store_size]);
   auto ends_ptr = &ends[0];
   auto vals_ptr = &vals[0];
   for (int i = 1; i < size; i += 1) {
@@ -38,31 +38,30 @@ auto to_store(size_t size, const Val* buffer) {
   *ends_ptr = size;
   *vals_ptr = buffer[size - 1];
 
-  return std::make_shared<core::Store<Val>>(
+  return std::make_shared<core::Store<Out>>(
       store_size, std::move(ends), std::move(vals));
 }
 
-template <typename Val>
+template <typename Val, typename Out = Val>
 auto to_store(const std::vector<Val>& array) {
-  return to_store(array.size(), array.data());
-}
-
-template <>
-auto to_store(const std::vector<bool>& array) {
-  std::unique_ptr<bool[]> bools(new bool[array.size()]);
-  for (int i = 0; i < array.size(); i += 1) {
-    bools[i] = array[i];
+  if constexpr (std::is_same_v<Val, bool>) {
+    std::unique_ptr<bool[]> bools(new bool[array.size()]);
+    for (int i = 0; i < array.size(); i += 1) {
+      bools[i] = array[i];
+    }
+    return to_store<Val, Out>(array.size(), &bools[0]);
+  } else {
+    return to_store<Val, Out>(array.size(), array.data());
   }
-  return to_store(array.size(), &bools[0]);
 }
 
-template <typename Val>
+template <typename Val, typename Out = Val>
 auto to_store(const std::initializer_list<Val>& il) {
-  return to_store(std::vector<Val>(il));
+  return to_store<Val, Out>(std::vector<Val>(il));
 }
 
-template <typename Val>
-void to_buffer(const core::Store<Val>& store, Val* buffer) {
+template <typename Val, typename Out = Val>
+void to_buffer(const core::Store<Val>& store, Out* buffer) {
   auto span = store.span();
   auto ends_ptr = &store.ends[0];
   auto vals_ptr = &store.vals[0];
@@ -75,13 +74,13 @@ void to_buffer(const core::Store<Val>& store, Val* buffer) {
   }
 }
 
-template <typename Val>
+template <typename Val, typename Out = Val>
 auto to_vector(const core::Store<Val>& store) {
   auto span = store.span();
   auto ends_ptr = &store.ends[0];
   auto vals_ptr = &store.vals[0];
 
-  std::vector<Val> ret;
+  std::vector<Out> ret;
   ret.reserve(span);
   for (int i = 0; i < store.span(); i += 1) {
     while (*ends_ptr <= i) {

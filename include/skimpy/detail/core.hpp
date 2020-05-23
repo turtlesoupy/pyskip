@@ -125,8 +125,8 @@ auto make_range(const Store<Val>& store, Pos stop) {
   return Range<Val>(store, 0, stop);
 }
 
-template <typename Val>
-void set(Store<Val>& dst, Pos pos, Val val) {
+template <typename S, typename Val>
+void set(Store<S>& dst, Pos pos, Val val) {
   CHECK_ARGUMENT(pos < dst.span());
 
   const auto out = dst.index(pos);
@@ -199,8 +199,8 @@ void set(Store<Val>& dst, Pos pos, Val val) {
   }
 }
 
-template <typename Val>
-void insert(Store<Val>& dst, const Range<Val>& src, Pos pos) {
+template <typename D, typename S>
+void insert(Store<D>& dst, const Range<S>& src, Pos pos) {
   CHECK_ARGUMENT(pos + src.span() <= dst.span());
 
   auto out_iter = dst.index(pos);
@@ -226,7 +226,7 @@ void insert(Store<Val>& dst, const Range<Val>& src, Pos pos) {
   }
 
   // A helper function to emit new ranges with value compression.
-  auto emit = [](auto& dst, auto& out, Pos end, Val val) {
+  auto emit = [](auto& dst, auto& out, Pos end, D val) {
     if (out > 0 && dst.vals[out - 1] == val) {
       --out;
     }
