@@ -284,6 +284,9 @@ PYBIND11_MODULE(skimpy, m) {
         .def(py::init([](int w, int val) {
           return skimpy::make_tensor<1, int>({w}, val);
         }))
+        .def(py::init([](int w, const skimpy::Array<int>& vals) {
+          return skimpy::make_tensor<1, int>({w}, vals);
+        }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)
         .def("shape", &Tensor::shape)
@@ -328,6 +331,11 @@ PYBIND11_MODULE(skimpy, m) {
           auto [w, h] = shape;
           return skimpy::make_tensor<2, int>({w, h}, val);
         }))
+        .def(py::init([](std::array<skimpy::Pos, 2> shape,
+                         const skimpy::Array<int>& vals) {
+          auto [w, h] = shape;
+          return skimpy::make_tensor<2, int>({w, h}, vals);
+        }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)
         .def("shape", &Tensor::shape)
@@ -371,6 +379,11 @@ PYBIND11_MODULE(skimpy, m) {
         .def(py::init([](std::array<skimpy::Pos, 3> shape, int val) {
           auto [w, h, d] = shape;
           return skimpy::make_tensor<3, int>({w, h, d}, val);
+        }))
+        .def(py::init([](std::array<skimpy::Pos, 3> shape,
+                         const skimpy::Array<int>& vals) {
+          auto [w, h, d] = shape;
+          return skimpy::make_tensor<3, int>({w, h, d}, vals);
         }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)

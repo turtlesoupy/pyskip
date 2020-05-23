@@ -291,17 +291,14 @@ class Tensor {
   }
 
   // Static initializer routines
-  template <size_t dim, typename Val>
   static auto make(
       const TensorShape<dim>& shape, const core::Store<Val>& store) {
     auto boxes = std::make_shared<box::BoxStore>(box::box_store(store));
     return Tensor<dim, Val>(shape, boxes);
   }
-  template <size_t dim, typename Val>
   static auto make(const TensorShape<dim>& shape, Val val) {
     return make(shape, core::make_store(shape.len(), val));
   }
-  template <size_t dim, typename Val>
   static auto make(const TensorShape<dim>& shape, const Array<Val>& array) {
     return Tensor<dim, Val>(shape, array.op_);
   }
