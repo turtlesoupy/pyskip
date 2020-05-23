@@ -41,6 +41,15 @@ struct TensorShape : public TensorPos<dim> {
 };
 
 template <size_t dim>
+inline auto make_shape(const std::array<core::Pos, dim>& shape) {
+  TensorShape<dim> ret;
+  for (int i = 0; i < dim; i += 1) {
+    ret[i] = shape[i];
+  }
+  return ret;
+}
+
+template <size_t dim>
 struct TensorSlice {
   static_assert(dim > 0, "Tensor slices must have positive dimension.");
 
@@ -238,8 +247,8 @@ class Tensor {
   auto eval() const {
     return Tensor<dim, Val>(shape(), lang::evaluate(op_));
   }
-  auto reshape(const TensorShape<dim>& shape) const {
-    return Tensor<dim, Val>(shape, op_);
+  auto array() const {
+    return Array<Val>(op_);
   }
 
   // Value access methods
@@ -292,6 +301,10 @@ class Tensor {
   static auto make(const TensorShape<dim>& shape, Val val) {
     return make(shape, core::make_store(shape.len(), val));
   }
+  template <size_t dim, typename Val>
+  static auto make(const TensorShape<dim>& shape, const Array<Val>& array) {
+    return Tensor<dim, Val>(shape, array.op_);
+  }
 
  private:
   explicit Tensor(const TensorShape<dim>& shape, lang::TypedExpr<Val> op)
@@ -324,16 +337,21 @@ inline auto make_tensor(
     const TensorShape<dim>& shape, const core::Store<Val>& store) {
   return Tensor<dim, Val>::make(shape, std::move(store));
 }
+template <size_t dim, typename Val>
+inline auto make_tensor(
+    const TensorShape<dim>& shape, const Array<Val>& array) {
+  return Tensor<dim, Val>::make(shape, std::move(array));
+}
 
 // Conversion routines
 template <size_t dim, typename Val>
 auto from_vector(const TensorShape<dim>& shape, const std::vector<Val>& vals) {
-  CHECK_ARGUMENT(span(shape) == vals.size());
+  CHECK_ARGUMENT(len(shape) == vals.size());
   return Tensor<dim, Val>(shape, conv::to_store<Val, box::Box>(vals));
 }
 template <size_t dim, typename Val>
 auto from_buffer(const TensorShape<dim>& shape, int size, const Val* data) {
-  CHECK_ARGUMENT(span(shape) == size);
+  CHECK_ARGUMENT(len(shape) == size);
   return Tensor<dim, Val>(shape, conv::to_store<Val, box::Box>(size, data));
 }
 

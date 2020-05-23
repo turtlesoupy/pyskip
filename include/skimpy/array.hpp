@@ -213,6 +213,9 @@ class Array {
 
   template <typename T>
   friend class Array;
+
+  template <size_t dim, typename T>
+  friend class Tensor;
 };
 
 // Convenience constructors
