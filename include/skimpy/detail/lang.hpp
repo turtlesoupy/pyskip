@@ -109,6 +109,10 @@ template <typename Val>
 struct TypedExpr {
   Expr::Ptr expr;
 
+  operator bool() const {
+    return !!expr;
+  }
+
   Expr::Ptr operator->() {
     return expr;
   };

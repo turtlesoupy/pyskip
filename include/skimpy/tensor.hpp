@@ -30,16 +30,15 @@ template <size_t dim>
 using TensorPos = std::array<core::Pos, dim>;
 
 template <size_t dim>
-using TensorShape = TensorPos<dim>;
-
-template <size_t dim>
-inline auto span(const TensorShape<dim>& shape) {
-  auto span = 1;
-  for (int i = 0; i < dim; i += 1) {
-    span *= shape[i];
+struct TensorShape : public TensorPos<dim> {
+  inline auto len() const {
+    auto ret = 1;
+    for (int i = 0; i < dim; i += 1) {
+      ret *= this->at(i);
+    }
+    return ret;
   }
-  return span;
-}
+};
 
 template <size_t dim>
 struct TensorSlice {
@@ -75,9 +74,13 @@ struct TensorSlice {
     TensorShape<dim> ret;
     for (int i = 0; i < dim; i += 1) {
       auto [c_0, c_1, c_s] = components[i];
-      ret[i] = 1 + (c_1 - c_0 - 1) / c_s;
+      ret[i] = (c_1 - c_0 + c_s - 1) / c_s;
     }
     return ret;
+  }
+
+  auto len() const {
+    return shape().len();
   }
 
   auto get_fn(const TensorShape<dim>& shape) const {
@@ -140,8 +143,8 @@ struct TensorSlice {
     // Shift everything up by the start position, and extend the final position
     // up to the span of the source array (i.e. the span of the given shape).
     expr = sc::stack(sc::shift(i_0), expr);
-    expr = sc::stack(expr, sc::scaled(1, 1 + span(shape) - i_1));
-    return sc::build(0, span(shape), expr);
+    expr = sc::stack(expr, sc::scaled(1, 1 + shape.len() - i_1));
+    return sc::build(0, shape.len(), expr);
   }
 
   auto mask(const TensorShape<dim>& shape) const {
@@ -169,7 +172,7 @@ struct TensorSlice {
     }
 
     auto head = mask::range<box::Box>(i_0, false);
-    auto tail = mask::range<box::Box>(span(shape) - i_1, false);
+    auto tail = mask::range<box::Box>(shape.len() - i_1, false);
     return mask::build(stack(head, stack(body, tail)));
   }
 };
@@ -196,31 +199,38 @@ class Tensor {
     return shape_;
   }
   auto len() const {
-    return lang::span(op_);
+    return op_ ? lang::span(op_) : 0;
+  }
+  auto empty() const {
+    return len() == 0;
   }
   auto str() const {
-    return conv::to_string(*store());
+    return empty() ? "" : conv::to_string(*store());
   }
   auto repr() const {
-    if (len() <= 10) {
+    if (empty()) {
+      return fmt::format("Tensor<{}, {}>([])", dim, typeid(Val).name());
+    } else if (len() <= 10) {
       return fmt::format(
           "Tensor<{}, {}>([{}])",
           dim,
           typeid(Val).name(),
           fmt::join(conv::to_vector(*store()), ", "));
     } else {
+      auto prefix = lang::materialize(lang::slice(op_, 4));
+      auto suffix = lang::materialize(lang::slice(op_, len() - 1, len()));
       return fmt::format(
           "Tensor<{}, {}>([{}, ..., {}])",
           dim,
           typeid(Val).name(),
-          fmt::join(conv::to_vector(*get(Slice(4)).store()), ", "),
-          get(len() - 1));
+          fmt::join(conv::to_vector(*prefix), ", "),
+          suffix->vals[0]);
     }
   }
 
   // Utility methods
   auto store() const {
-    return lang::materialize(op_);
+    return empty() ? nullptr : lang::materialize(op_);
   }
   auto clone() const {
     return Tensor<dim, Val>(*this);
@@ -235,8 +245,12 @@ class Tensor {
   }
   auto get(const TensorSlice<dim>& slice) const {
     CHECK_ARGUMENT(slice.valid(shape()));
-    return Tensor<dim, Val>(
-        slice.shape(), lang::slice(op_, slice.get_fn(shape())));
+    if (slice.len() == 0) {
+      return Tensor<dim, Val>();
+    } else {
+      return Tensor<dim, Val>(
+          slice.shape(), lang::slice(op_, slice.get_fn(shape())));
+    }
   }
 
   // Value assignment methods
@@ -252,18 +266,19 @@ class Tensor {
   auto set(const TensorSlice<dim>& slice, const Tensor<dim, Val>& other) {
     CHECK_ARGUMENT(slice.valid(shape()));
     CHECK_ARGUMENT(slice.shape() == other.shape());
-    constexpr auto fn = [](bool m, Val a, Val b) { return m ? a : b; };
-    op_ = lang::merge(
-        lang::store<bool>(slice.mask(shape())),
-        lang::slice(other.op_, slice.set_fn(shape())),
-        op_,
-        fn);
+    if (slice.len() > 0) {
+      op_ = lang::merge(
+          lang::store<bool>(slice.mask(shape())),
+          lang::slice(other.op_, slice.set_fn(shape())),
+          op_,
+          [](bool m, Val a, Val b) { return m ? a : b; });
+    }
   }
 
   // Static initializer routines
   template <size_t dim, typename Val>
   static auto make(const TensorShape<dim>& shape, Val fill) {
-    return Tensor<dim, Val>(shape, lang::store(span(shape), std::move(fill)));
+    return Tensor<dim, Val>(shape, lang::store(shape.len(), std::move(fill)));
   }
   template <size_t dim, typename Val>
   static auto make(
@@ -285,6 +300,9 @@ class Tensor {
       op_ = lang::evaluate(op_);
     }
   }
+
+  // Constructs an empty tensor
+  Tensor() : shape_(TensorShape<dim>()), op_{nullptr} {}
 
   TensorShape<dim> shape_;
   lang::TypedExpr<Val> op_;
