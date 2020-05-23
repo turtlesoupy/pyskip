@@ -77,7 +77,7 @@ auto convert_tensor_slice(
   return skimpy::TensorSlice<dim>(std::move(components));
 }
 
-PYBIND11_MODULE(skimpy, m) {
+PYBIND11_MODULE(_skimpy_cpp_ext, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
 

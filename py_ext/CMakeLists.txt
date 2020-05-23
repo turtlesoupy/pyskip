@@ -8,5 +8,5 @@ set_target_properties(
   PROPERTIES
     PREFIX "${PYTHON_MODULE_PREFIX}"
     SUFFIX "${PYTHON_MODULE_EXTENSION}"
-    OUTPUT_NAME "skimpy"
+    OUTPUT_NAME "_skimpy_cpp_ext"
 )

@@ -50,7 +50,7 @@ endif()
 
 # Add python extension targets.
 if(SKIMPY_ENABLE_PYTHON)
-  add_subdirectory(python)
+  add_subdirectory(py_ext)
 endif()
 
 #== BUILD TESTS ==#
