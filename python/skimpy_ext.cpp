@@ -76,7 +76,7 @@ PYBIND11_MODULE(skimpy, m) {
   // ArrayBuilder class for int value types
   using IntArrayBuilder = skimpy::ArrayBuilder<int>;
   py::class_<IntArrayBuilder>(m, "IntArrayBuilder")
-      .def(py::init<int, int>())
+      .def(py::init<skimpy::Pos, int>())
       .def(py::init<skimpy::Array<int>>())
       .def("__len__", &IntArrayBuilder::len)
       .def(
@@ -104,7 +104,7 @@ PYBIND11_MODULE(skimpy, m) {
   // Array class for int value types
   using IntArray = skimpy::Array<int>;
   py::class_<IntArray>(m, "IntArray")
-      .def(py::init([](int span, int fill) {
+      .def(py::init([](skimpy::Pos span, int fill) {
         return skimpy::make_array<int>(span, fill);
       }))
       .def("__len__", &IntArray::len)
@@ -260,4 +260,27 @@ PYBIND11_MODULE(skimpy, m) {
       .def("abs", [](const IntArray& self) { return skimpy::abs(self); })
       .def("sqrt", [](const IntArray& self) { return skimpy::sqrt(self); })
       .def("exp", [](const IntArray& self) { return skimpy::exp(self); });
+
+  // 2D Tensor class for int value types
+  using Tensor2i = skimpy::Tensor<2, int>;
+  py::class_<Tensor2i>(m, "Tensor2i")
+      .def(py::init([](int w, int h, int val) {
+        return skimpy::make_tensor<2, int>({w, h}, val);
+      }))
+      .def("__len__", &Tensor2i::len)
+      .def("__repr__", &Tensor2i::repr)
+      .def("clone", &Tensor2i::clone)
+      .def("eval", &Tensor2i::eval)
+      .def("dumps", &Tensor2i::str)
+      .def(
+          "__getitem__",
+          [](Tensor2i& self, std::tuple<int, int> pos) {
+            auto [w, h] = pos;
+            return self.get({w, h});
+          })
+      .def(
+          "__setitem__", [](Tensor2i& self, std::tuple<int, int> pos, int val) {
+            auto [w, h] = pos;
+            self.set({w, h}, val);
+          });
 }

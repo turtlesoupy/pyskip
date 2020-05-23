@@ -89,6 +89,31 @@ class Box {
     return get<uint32_t>() != other.get<uint32_t>();
   }
 
+  operator char() {
+    return get<char>();
+  }
+  operator short() {
+    return get<short>();
+  }
+  operator int() {
+    return get<int>();
+  }
+  operator bool() {
+    return get<bool>();
+  }
+  operator unsigned char() {
+    return get<unsigned char>();
+  }
+  operator unsigned short() {
+    return get<unsigned short>();
+  }
+  operator unsigned int() {
+    return get<unsigned int>();
+  }
+  operator float() {
+    return get<float>();
+  }
+
  private:
   union {
     int_fast8_t i8;

@@ -193,9 +193,9 @@ inline auto stride_mask(
   CHECK_ARGUMENT(start <= stop);
   CHECK_ARGUMENT(stop <= span);
   CHECK_ARGUMENT(stride > 0);
-  auto head = range(start, exclude);
-  auto body = strided(stop - start, stride, exclude, include);
-  auto tail = range(span - stop, exclude);
+  auto head = range<Val>(start, exclude);
+  auto body = strided<Val>(stop - start, stride, exclude, include);
+  auto tail = range<Val>(span - stop, exclude);
   return build<Val>(stack(head, stack(body, tail)));
 }
 

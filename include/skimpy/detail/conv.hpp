@@ -60,8 +60,8 @@ auto to_store(const std::initializer_list<Val>& il) {
   return to_store<Val, Out>(std::vector<Val>(il));
 }
 
-template <typename Val>
-void to_buffer(const core::Store<Val>& store, Val* buffer) {
+template <typename Val, typename Out = Val>
+void to_buffer(const core::Store<Val>& store, Out* buffer) {
   auto span = store.span();
   auto ends_ptr = &store.ends[0];
   auto vals_ptr = &store.vals[0];
@@ -74,13 +74,13 @@ void to_buffer(const core::Store<Val>& store, Val* buffer) {
   }
 }
 
-template <typename Val>
+template <typename Val, typename Out = Val>
 auto to_vector(const core::Store<Val>& store) {
   auto span = store.span();
   auto ends_ptr = &store.ends[0];
   auto vals_ptr = &store.vals[0];
 
-  std::vector<Val> ret;
+  std::vector<Out> ret;
   ret.reserve(span);
   for (int i = 0; i < store.span(); i += 1) {
     while (*ends_ptr <= i) {

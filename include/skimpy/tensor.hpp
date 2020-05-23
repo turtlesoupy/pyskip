@@ -7,6 +7,7 @@
 #include <tuple>
 #include <vector>
 
+#include "array.hpp"
 #include "detail/box.hpp"
 #include "detail/conv.hpp"
 #include "detail/core.hpp"
@@ -14,7 +15,6 @@
 #include "detail/mask.hpp"
 #include "detail/step.hpp"
 #include "detail/util.hpp"
-#include "macros.hpp"
 
 namespace skimpy {
 
@@ -236,7 +236,10 @@ class Tensor {
     return Tensor<dim, Val>(*this);
   }
   auto eval() const {
-    return Tensor<dim, Val>(lang::evaluate(op_));
+    return Tensor<dim, Val>(shape(), lang::evaluate(op_));
+  }
+  auto reshape(const TensorShape<dim>& shape) const {
+    return Tensor<dim, Val>(shape, op_);
   }
 
   // Value access methods
@@ -254,37 +257,40 @@ class Tensor {
   }
 
   // Value assignment methods
-  auto set(const TensorPos<dim>& pos, Val val) {
-    return set(to_slice(pos), std::move(val));
+  void set(const TensorPos<dim>& pos, Val val) {
+    set(to_slice(pos), val);
   }
-  auto set(const TensorPos<dim>& pos, const Tensor<dim, Val>& other) {
-    return set(to_slice(pos), other);
+  void set(const TensorPos<dim>& pos, const Tensor<dim, Val>& other) {
+    set(to_slice(pos), other);
   }
-  auto set(const TensorSlice<dim>& slice, Val val) {
-    return set(slice, Tensor<dim, Val>::make(slice.shape(), std::move(val)));
+  void set(const TensorSlice<dim>& slice, Val val) {
+    set(slice, Tensor<dim, Val>::make(slice.shape(), val));
   }
-  auto set(const TensorSlice<dim>& slice, const Tensor<dim, Val>& other) {
+  void set(const TensorSlice<dim>& slice, const Tensor<dim, Val>& other) {
     CHECK_ARGUMENT(slice.valid(shape()));
     CHECK_ARGUMENT(slice.shape() == other.shape());
     if (slice.len() > 0) {
-      op_ = lang::merge(
-          lang::store<bool>(slice.mask(shape())),
-          lang::slice(other.op_, slice.set_fn(shape())),
-          op_,
-          [](bool m, Val a, Val b) { return m ? a : b; });
+      constexpr auto fn = [](bool m, Val a, Val b) { return m ? a : b; };
+      *this = Tensor<dim, Val>(
+          shape(),
+          lang::merge(
+              lang::store<bool>(slice.mask(shape())),
+              lang::slice(other.op_, slice.set_fn(shape())),
+              op_,
+              fn));
     }
   }
 
   // Static initializer routines
   template <size_t dim, typename Val>
-  static auto make(const TensorShape<dim>& shape, Val fill) {
-    return Tensor<dim, Val>(shape, lang::store(shape.len(), std::move(fill)));
-  }
-  template <size_t dim, typename Val>
   static auto make(
       const TensorShape<dim>& shape, const core::Store<Val>& store) {
     auto boxes = std::make_shared<box::BoxStore>(box::box_store(store));
     return Tensor<dim, Val>(shape, boxes);
+  }
+  template <size_t dim, typename Val>
+  static auto make(const TensorShape<dim>& shape, Val val) {
+    return make(shape, core::make_store(shape.len(), val));
   }
 
  private:
@@ -310,8 +316,8 @@ class Tensor {
 
 // Convenience initializers
 template <size_t dim, typename Val>
-inline auto make_tensor(const TensorShape<dim>& shape, Val fill) {
-  return Tensor<dim, Val>::make(shape, std::move(fill));
+inline auto make_tensor(const TensorShape<dim>& shape, Val val) {
+  return Tensor<dim, Val>::make(shape, std::move(val));
 }
 template <size_t dim, typename Val>
 inline auto make_tensor(

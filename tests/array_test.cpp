@@ -1,8 +1,6 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/skimpy.hpp"
-
-#include <fmt/core.h>
+#include "skimpy/array.hpp"
 
 #include <catch2/catch.hpp>
 
@@ -87,52 +85,4 @@ TEST_CASE("Test arrays merge routines", "[arrays]") {
   REQUIRE_THAT(skimpy::to_vector(y), Catch::Equals<int>({2, 3, 3, 2, 6}));
   REQUIRE(x.str() == "1=>1, 3=>3, 5=>2");
   REQUIRE(y.str() == "1=>2, 3=>3, 4=>2, 5=>6");
-}
-
-TEST_CASE("Test array builders", "[array_builders]") {
-  auto x = skimpy::make_array(5, 'x');
-
-  x.set(0, 'a');
-  x.set(1, 'b');
-  x.set(2, 'c');
-  x.set(3, 'd');
-  x.set(4, 'e');
-
-  {
-    skimpy::ArrayBuilder<char> b(x);
-    b.set(4, 'f');
-    b.set(3, 'g');
-    b.set(2, 'h');
-    b.set(1, 'i');
-    b.set(0, 'j');
-    x = b.build();
-  }
-
-  REQUIRE(x.get(0) == 'j');
-  REQUIRE(x.get(1) == 'i');
-  REQUIRE(x.get(2) == 'h');
-  REQUIRE(x.get(3) == 'g');
-  REQUIRE(x.get(4) == 'f');
-
-  auto y = skimpy::make_array(10, 1);
-  y = skimpy::ArrayBuilder<int>(y).set(1, 3).set(3, 4).build();
-  REQUIRE(y.get(1) == 3);
-  REQUIRE(y.get(3) == 4);
-
-  skimpy::Array<int> z(y.get(skimpy::Slice(0, 10, 2)));
-  REQUIRE(z.get(0) == 1);
-  REQUIRE(z.get(1) == 1);
-  REQUIRE(z.get(2) == 1);
-  REQUIRE(z.get(3) == 1);
-  REQUIRE(z.get(4) == 1);
-  REQUIRE(z.str() == "5=>1");
-
-  auto big = [] {
-    skimpy::ArrayBuilder<int> b(skimpy::make_array(1024 * 1024, 1));
-    for (auto i = 0; i < 30; i += 1) {
-      b.set(i, i);
-    }
-    return b.build();
-  }();
-  REQUIRE(big.get(23) == 23);
 }

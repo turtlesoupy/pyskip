@@ -118,26 +118,4 @@ TEST_CASE("Test tensor slices", "[tensors]") {
     REQUIRE(step_fn(4) == 16);
     REQUIRE(step_fn(5) == 16);
   }
-
-  // Test get fn generator
-  {
-    skimpy::TensorSlice<2> slice({{1, 3, 1}, {1, 3, 1}});
-    auto step_fn = slice.get_fn({4, 4});
-    REQUIRE(step_fn(5) == 0);
-    REQUIRE(step_fn(1) == 6);
-    REQUIRE(step_fn(2) == 9);
-    REQUIRE(step_fn(3) == 10);
-    REQUIRE(step_fn(4) == 16);
-    REQUIRE(step_fn(5) == 16);
-  }
-  {
-    skimpy::TensorSlice<2> slice({{1, 3, 1}, {1, 4, 2}});
-    auto step_fn = slice.set_fn({4, 4});
-    REQUIRE(step_fn(0) == 0);
-    REQUIRE(step_fn(1) == 6);
-    REQUIRE(step_fn(2) == 13);
-    REQUIRE(step_fn(3) == 14);
-    REQUIRE(step_fn(4) == 16);
-    REQUIRE(step_fn(5) == 16);
-  }
 }

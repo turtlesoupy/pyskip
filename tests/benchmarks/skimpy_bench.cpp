@@ -9,7 +9,7 @@
 #include "skimpy/detail/box.hpp"
 #include "skimpy/skimpy.hpp"
 
-using skimpy::detail::box::Box;
+namespace box = skimpy::detail::box;
 
 TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
   // Assign to a random entry in a univariate array.
@@ -34,7 +34,7 @@ TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
   };
 
   // Populate a dense store for testing large batch operations.
-  auto store = std::make_shared<skimpy::Store<Box>>(1000 * 1000);
+  auto store = std::make_shared<box::BoxStore>(1000 * 1000);
   for (int i = 0; i < 1000 * 1000; i += 1) {
     store->ends[i] = i + 1;
     store->vals[i] = i;
