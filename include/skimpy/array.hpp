@@ -184,11 +184,10 @@ class Array {
   }
 
   // Static initializer routines
-  template <typename Val>
   static auto make(const core::Store<Val>& store) {
     return Array<Val>(std::make_shared<box::BoxStore>(box::box_store(store)));
   }
-  template <typename Val>
+
   static auto make(core::Pos len, Val val) {
     return make(core::make_store(len, val));
   }
