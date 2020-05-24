@@ -1,0 +1,1 @@
+class InvalidTensorError(RuntimeError): pass
