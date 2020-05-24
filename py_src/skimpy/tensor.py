@@ -7,6 +7,16 @@ _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
 
 
 class Tensor:
+    @classmethod
+    def wrap(cls, cpp_tensor):
+        return cls(cpp_tensor=cpp_tensor)
+
+    @classmethod
+    def from_numpy(cls, np_arr):
+        np_shape = np_arr.shape
+        skimpy_arr = _skimpy_cpp_ext.from_numpy(np_arr.flatten("C"))
+        return cls(shape=np_shape, val=skimpy_arr)
+
     def __init__(self, shape=None, val=0, dtype="int32", cpp_tensor=None):
         if cpp_tensor:
             self._init_from_cpp_tensor(cpp_tensor)
@@ -44,10 +54,6 @@ class Tensor:
         self.dtype = _type_mapping_reverse[m.group(2)]
         self.shape = self._tensor.shape()
         return self
-
-    @classmethod
-    def wrap(cls, cpp_tensor):
-        return cls(cpp_tensor=cpp_tensor)
 
     @classmethod
     def _validate_or_cast(cls, a, b):
@@ -99,6 +105,10 @@ class Tensor:
 
     def __getitem__(self, index):
         return Tensor.wrap(self._tensor[index])
+
+    def to_numpy(self):
+        np_arr = self._tensor.array().to_numpy()
+        return np_arr.reshape(self.shape)
 
     @classmethod
     def _array_str(cls, arr):
