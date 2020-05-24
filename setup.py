@@ -75,7 +75,7 @@ HEADERS = glob.glob("include/**/*.hpp")
 
 setup(
     name="skimpy",
-    version="0.1.1",
+    version="0.1.2",
     author="Taylor Gordon",
     description="A test library to build C++/Cuda Python extensions",
     long_description="",

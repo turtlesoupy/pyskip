@@ -1,6 +1,6 @@
 import re
 import _skimpy_cpp_ext
-from .exceptions import InvalidTensorError, IncompatibleTensorError
+from .exceptions import InvalidTensorError, IncompatibleTensorError, UnimplementedOperationError
 
 _type_mapping = {"int32": "i"}
 _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
@@ -65,11 +65,15 @@ class Tensor:
 
         return (a, b)
 
+    # Binary operators
     @classmethod
     def _forward_to_binary_array_op(cls, a, b, op):
-        a, b = Tensor._validate_or_cast(a, b)
-        return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
-
+        if isinstance(b, int):
+            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b)))
+        else:
+            a, b = Tensor._validate_or_cast(a, b)
+            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
+    
     def __add__(self, other):
         return Tensor._forward_to_binary_array_op(self, other, "__add__")
 
@@ -89,7 +93,7 @@ class Tensor:
         return self._init_from_cpp_tensor(self.__mul__(other)._tensor)
 
     def __truediv__(self, other):
-        return Tensor._forward_to_binary_array_op(self, other, "__truediv__")
+        raise UnimplementedOperationError("True division is unsupported, try integer division (//)")
 
     def __idiv__(self, other):
         return self._init_from_cpp_tensor(self.__truediv__(other)._tensor)
@@ -100,11 +104,58 @@ class Tensor:
     def __ifloordiv__(self, other):
         return self._init_from_cpp_tensor(self.__floordiv__(other)._tensor)
 
+    def __mod__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__mod__")
+
+    def __imod__(self, other):
+        return self._init_from_cpp_tensor(self.__mod__(other)._tensor)
+    
+    def __and__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__and__")
+
+    def __iand__(self, other):
+        return self._init_from_cpp_tensor(self.__and__(other)._tensor)
+
+    def __xor__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__xor__")
+
+    def __ixor__(self, other):
+        return self._init_from_cpp_tensor(self.__xor__(other)._tensor)
+
+    def __or__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__or__")
+
+    def __ior__(self, other):
+        return self._init_from_cpp_tensor(self.__or__(other)._tensor)
+
+    def __pow__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__pow__")
+
+    def __ipow__(self, other):
+        return self._init_from_cpp_tensor(self.__pow__(other)._tensor)
+
     def __setitem__(self, index, value):
         self._tensor[index] = value
 
     def __getitem__(self, index):
         return Tensor.wrap(self._tensor[index])
+
+    # Unary Operators 
+    def _forward_to_unary_array_op(self, op):
+        return Tensor.wrap(self._tensor.__class__(self.shape, getattr(self._tensor.array(), op)()))
+
+    def __neg__(self):
+        return self._forward_to_unary_array_op("__neg__")
+
+    def __pos__(self):
+        return self._forward_to_unary_array_op("__pos__")
+
+    def __abs__(self):
+        return self._forward_to_unary_array_op("__abs__")
+
+    def __invert__(self):
+        return self._forward_to_unary_array_op("__invert__")
+
 
     def to_numpy(self):
         np_arr = self._tensor.array().to_numpy()

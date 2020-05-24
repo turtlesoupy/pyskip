@@ -12,3 +12,6 @@ class InvalidTensorError(SkimpyError):
 
 class IncompatibleTensorError(SkimpyError):
     pass
+
+class UnimplementedOperationError(SkimpyError):
+    pass
