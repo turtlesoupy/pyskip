@@ -1,19 +1,12 @@
 import re
 import _skimpy_cpp_ext
+from .exceptions import InvalidTensorError, IncompatibleTensorError
 
-from . exceptions import InvalidTensorError
-
-_type_mapping = {
-    "int32": "i"
-}
+_type_mapping = {"int32": "i"}
 _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
 
 
 class Tensor:
-    @classmethod
-    def wrap(cls, cpp_tensor):
-        return cls(cpp_tensor=cpp_tensor)
-
     def __init__(self, shape=None, val=0, dtype="int32", cpp_tensor=None):
         if cpp_tensor:
             self._init_from_cpp_tensor(cpp_tensor)
@@ -47,6 +40,107 @@ class Tensor:
         self._tensor = cpp_tensor
 
         m = re.search(r"Tensor(\d)(\w+)$", self._tensor.__class__.__name__)
-        self.dimensionality = m.group(1)
+        self.dimensionality = int(m.group(1))
         self.dtype = _type_mapping_reverse[m.group(2)]
+        self.shape = self._tensor.shape()
+        return self
 
+    @classmethod
+    def wrap(cls, cpp_tensor):
+        return cls(cpp_tensor=cpp_tensor)
+
+    @classmethod
+    def _validate_or_cast(cls, a, b):
+        if a.dtype != b.dtype:
+            raise IncompatibleTensorError(f"Incompatible types: {a.dtype} and {b.dtype}")
+
+        if a.shape != b.shape and b.shape != (1,):
+            raise IncompatibleTensorError(f"Incompatible shapes: {a.shape} and {b.shape}")
+
+        return (a, b)
+
+    @classmethod
+    def _forward_to_binary_array_op(cls, a, b, op):
+        a, b = Tensor._validate_or_cast(a, b)
+        return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
+
+    def __add__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__add__")
+
+    def __iadd__(self, other):
+        return self._init_from_cpp_tensor(self.__add__(other)._tensor)
+
+    def __sub__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__sub__")
+
+    def __isub__(self, other):
+        return self._init_from_cpp_tensor(self.__sub__(other)._tensor)
+
+    def __mul__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__mul__")
+
+    def __imul__(self, other):
+        return self._init_from_cpp_tensor(self.__mul__(other)._tensor)
+
+    def __truediv__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__truediv__")
+
+    def __idiv__(self, other):
+        return self._init_from_cpp_tensor(self.__truediv__(other)._tensor)
+
+    def __floordiv__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__floordiv__")
+
+    def __ifloordiv__(self, other):
+        return self._init_from_cpp_tensor(self.__floordiv__(other)._tensor)
+
+    def __setitem__(self, index, value):
+        self._tensor[index] = value
+
+    def __getitem__(self, index):
+        return Tensor.wrap(self._tensor[index])
+
+    @classmethod
+    def _array_str(cls, arr):
+        if len(arr) > 10:
+            ret = []
+            for i in range(8):
+                ret.append(str(arr[i]))
+            ret.append("...")
+            for i in range(len(arr) - 2, len(arr)):
+                ret.append(str(arr[i]))
+            return ",".join(ret)
+        else:
+            return ",".join(str(arr[i]) for i in range(len(arr)))
+
+    def __str__(self):
+        def print_2d(n_rows, n_cols):
+            ret = []
+            if n_rows < 10:
+                for i in range(n_rows):
+                    ret.append("\t" + self._array_str(self._tensor.array()[i * n_cols : ((i + 1) * n_cols)]))
+            else:
+                for i in range(8):
+                    ret.append("\t" + self._array_str(self._tensor.array()[i * n_cols : ((i + 1) * n_cols)]))
+                ret.append("\t...")
+                for i in range(n_rows - 2, n_rows):
+                    ret.append("\t" + self._array_str(self._tensor.array()[i * n_cols : ((i + 1) * n_cols)]))
+
+            return "\n".join(ret)
+
+        if self.dimensionality == 1:
+            return self._array_str(self._tensor.array())
+        if self.dimensionality == 2:
+            n_rows = self.shape[1]  # SWAPME
+            n_cols = self.shape[0]
+            return print_2d(n_rows, n_cols)
+        elif self.dimensionality == 3:
+            n_rows = self.shape[1]  # SWAPME
+            n_cols = self.shape[0]
+            st = print_2d(n_rows, n_cols)
+            return f"\tz=0\n{st}\n\tz=..."
+        else:
+            return str(self._tensor)
+
+    def __repr__(self):
+        return f"Tensor (dtype={self.dtype}, shape={self.shape}) with values\n{str(self)}"

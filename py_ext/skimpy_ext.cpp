@@ -77,6 +77,15 @@ auto convert_tensor_slice(
   return skimpy::TensorSlice<dim>(std::move(components));
 }
 
+template <size_t dim>
+auto get_tensor_shape(const skimpy::TensorShape<dim> &shape) {
+  std::array<int, dim> ret;
+  for (int i = 0; i < dim; i += 1) {
+    ret[i] = shape[i];
+  }
+  return std::tuple_cat(ret);
+}
+
 PYBIND11_MODULE(_skimpy_cpp_ext, m) {
   m.doc() = "Space-optimized arrays";
   m.attr("__version__") = "0.0.1";
@@ -289,7 +298,7 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
         }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)
-        .def("shape", &Tensor::shape)
+        .def("shape", [](Tensor& self) { return get_tensor_shape(self.shape()); })
         .def("clone", &Tensor::clone)
         .def("eval", &Tensor::eval)
         .def("dumps", &Tensor::str)
@@ -338,7 +347,7 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
         }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)
-        .def("shape", &Tensor::shape)
+        .def("shape", [](Tensor& self) { return get_tensor_shape(self.shape()); })
         .def("clone", &Tensor::clone)
         .def("eval", &Tensor::eval)
         .def("dumps", &Tensor::str)
@@ -387,7 +396,7 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
         }))
         .def("__len__", &Tensor::len)
         .def("__repr__", &Tensor::repr)
-        .def("shape", &Tensor::shape)
+        .def("shape", [](Tensor& self) { return get_tensor_shape(self.shape()); })
         .def("clone", &Tensor::clone)
         .def("eval", &Tensor::eval)
         .def("dumps", &Tensor::str)
