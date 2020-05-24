@@ -75,7 +75,7 @@ HEADERS = glob.glob("include/**/*.hpp")
 
 setup(
     name="skimpy",
-    version="0.1",
+    version="0.1.1",
     author="Taylor Gordon",
     description="A test library to build C++/Cuda Python extensions",
     long_description="",
@@ -83,6 +83,13 @@ setup(
     ext_modules=[CMakeExtension("skimpy")],
     cmdclass={"build_ext": CMakeBuild},
     package_dir={"": "py_src"},
-    packages=find_namespace_packages(where="py_src"),
+    packages=find_namespace_packages(
+        where="py_src",
+        exclude="tests"
+    ),
+    test_suite="nose.collector",
+    tests_require=["nose"],
     zip_safe=False,
+    setup_requires=["nose>=1.0"],
+    install_requires=[],
 )

@@ -5,3 +5,9 @@ dist
 happy.egg-info
 demos/.ipynb_checkpoints
 skimpy.egg-info
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+py_src/*.so
+py_src/*.dll
