@@ -1,3 +1,4 @@
+import re
 import _skimpy_cpp_ext
 
 from . exceptions import InvalidTensorError
@@ -5,10 +6,22 @@ from . exceptions import InvalidTensorError
 _type_mapping = {
     "int32": "i"
 }
+_type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
 
 
 class Tensor:
-    def __init__(self, shape, val=0, dtype="int32"):
+    @classmethod
+    def wrap(cls, cpp_tensor):
+        return cls(cpp_tensor=cpp_tensor)
+
+    def __init__(self, shape=None, val=0, dtype="int32", cpp_tensor=None):
+        if cpp_tensor:
+            self._init_from_cpp_tensor(cpp_tensor)
+            return
+
+        if shape is None:
+            raise InvalidTensorError("Must specify shape")
+
         if isinstance(shape, int):
             shape = (shape,)
 
@@ -26,4 +39,14 @@ class Tensor:
             raise InvalidTensorError("Only int32 tensors are supported")
 
         klass = f"Tensor{dimensionality}{_type_mapping[dtype]}"
-        self._tensor = getattr(_skimpy_cpp_ext, klass)(shape, val)
+        tensor = getattr(_skimpy_cpp_ext, klass)(shape, val)
+
+        self._init_from_cpp_tensor(tensor)
+
+    def _init_from_cpp_tensor(self, cpp_tensor):
+        self._tensor = cpp_tensor
+
+        m = re.search(r"Tensor(\d)(\w+)$", self._tensor.__class__.__name__)
+        self.dimensionality = m.group(1)
+        self.dtype = _type_mapping_reverse[m.group(2)]
+
