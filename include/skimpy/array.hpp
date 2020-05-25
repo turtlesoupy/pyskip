@@ -42,6 +42,7 @@ struct Slice {
   // Array constructors
   Slice(std::array<core::Pos, 3> array) : Slice(array[0], array[1], array[2]) {}
   Slice(std::array<core::Pos, 2> array) : Slice(array[0], array[1]) {}
+  Slice(std::array<core::Pos, 1> array) : Slice(array[1]) {}
 
   auto len() const {
     return (stop - start + stride - 1) / stride;
@@ -73,7 +74,7 @@ class Array {
     return len() == 0;
   }
   auto str() const {
-    return empty() ? "" : conv::to_string(*store());
+    return empty() ? std::string("") : conv::to_string(*store());
   }
   auto repr() const {
     if (empty()) {

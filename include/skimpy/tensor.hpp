@@ -137,7 +137,8 @@ struct TensorSlice {
       } else {
         auto reps = (c_1 - c_0 - 1) / c_s;
         if (reps > 0) {
-          auto step = scale - expr->data.span + (c_s - 1) * scale;
+          auto prev = expr ? expr->data.span : 0;
+          auto step = scale - prev + (c_s - 1) * scale;
           if (expr) {
             auto head = sc::stack(reps, sc::stack(expr, sc::scaled(1, step)));
             expr = sc::stack(head, expr);

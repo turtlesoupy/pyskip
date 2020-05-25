@@ -71,12 +71,23 @@ TEST_CASE("Test basic tensor assignments", "[tensors]") {
   REQUIRE(x.get({2, 2}) == 9);
 
   // Do some tensor assignments
+  x.set({{1, 2, 1}, {1, 3, 1}}, x.get({{2, 3, 1}, {0, 2, 1}}));
+  x.set({{1, 3, 1}, {0, 1, 1}}, x.get({{0, 2, 1}, {1, 2, 1}}));
+  REQUIRE(x.get({0, 0}) == 1);
+  REQUIRE(x.get({1, 0}) == 4);
+  REQUIRE(x.get({2, 0}) == 3);
+  REQUIRE(x.get({0, 1}) == 4);
+  REQUIRE(x.get({1, 1}) == 3);
+  REQUIRE(x.get({2, 1}) == 6);
+  REQUIRE(x.get({0, 2}) == 7);
+  REQUIRE(x.get({1, 2}) == 6);
+  REQUIRE(x.get({2, 2}) == 9);
   x.set({{0, 2, 1}, {0, 2, 1}}, x.get({{1, 3, 1}, {0, 2, 1}}));
   x.set({{1, 3, 1}, {0, 3, 2}}, x.get({{0, 3, 2}, {1, 3, 1}}));
-  REQUIRE(x.get({0, 0}) == 2);
-  REQUIRE(x.get({1, 0}) == 5);
+  REQUIRE(x.get({0, 0}) == 4);
+  REQUIRE(x.get({1, 0}) == 3);
   REQUIRE(x.get({2, 0}) == 6);
-  REQUIRE(x.get({0, 1}) == 5);
+  REQUIRE(x.get({0, 1}) == 3);
   REQUIRE(x.get({1, 1}) == 6);
   REQUIRE(x.get({2, 1}) == 6);
   REQUIRE(x.get({0, 2}) == 7);
