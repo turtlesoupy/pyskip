@@ -143,7 +143,7 @@ class Array {
   template <typename Out, Out (*fn)(Val)>
   auto merge() const {
     if (empty()) {
-      return *this;
+      return Array<Out>(lang::cast<Out>(op_));
     }
     return Array<Out>(lang::merge<Out, Val, fn>(op_));
   }
@@ -151,7 +151,7 @@ class Array {
   auto merge(const Array<Arg>& other) const {
     CHECK_ARGUMENT(len() == other.len());
     if (empty()) {
-      return *this;
+      return Array<Out>(lang::cast<Out>(op_));
     }
     return Array<Out>(lang::merge<Out, Val, Arg, fn>(op_, other.op_));
   }
@@ -164,7 +164,7 @@ class Array {
     CHECK_ARGUMENT(len() == a.len());
     CHECK_ARGUMENT(len() == b.len());
     if (empty()) {
-      return *this;
+      return Array<Out>(lang::cast<Out>(op_));
     }
     return Array<Out>(lang::merge<Out, Val, Arg1, Arg2, fn>(op_, a.op_, b.op_));
   }
@@ -256,8 +256,8 @@ auto to_string(const Array<Val>& array) {
 // Casting operations
 template <typename Out, typename Val>
 Array<Out> cast(const Array<Val>& array) {
-  constexpr Val (*fn)(Val) = [](Val a) { return static_cast<Out>(a); };
-  return array.template merge<fn>();
+  constexpr Out (*fn)(Val) = [](Val a) { return static_cast<Out>(a); };
+  return array.template merge<Out, fn>();
 }
 
 // Unary arithmetic operations
@@ -271,6 +271,11 @@ BINARY_ARRAY_OP_SIMPLE(operator-, [](Val a, Val b) { return a - b; })
 BINARY_ARRAY_OP_SIMPLE(operator*, [](Val a, Val b) { return a * b; })
 BINARY_ARRAY_OP_SIMPLE(operator/, [](Val a, Val b) { return a / b; })
 BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
+template <>
+Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
+  constexpr auto fn = [](float a, float b) { return std::fmodf(a, b); };
+  return lhs.template merge<fn>(rhs);
+}
 
 // Binary bitwise operations
 BINARY_ARRAY_OP_SIMPLE(operator&, [](Val a, Val b) { return a & b; })

@@ -58,6 +58,24 @@ class ArrayBuilder {
   auto len() const {
     return len_;
   }
+  auto str() const {
+    return build().str();
+  }
+  auto repr() const {
+    CHECK_STATE(len() > 0);
+    if (len() <= 10) {
+      return fmt::format(
+          "Builder<{}>([{}])",
+          typeid(Val).name(),
+          fmt::join(conv::to_vector<box::Box, Val>(stores_.at(0)), ", "));
+    } else {
+      auto range = core::make_range(stores_.at(0), 4);
+      return fmt::format(
+          "Builder<{}>([{}, ...])",
+          typeid(Val).name(),
+          fmt::join(conv::to_vector<box::Box, Val>(range), ", "));
+    }
+  }
 
   // Value assign methods
   ArrayBuilder<Val>& set(Val val) {
@@ -103,7 +121,7 @@ class ArrayBuilder {
   }
 
   // Builder methods
-  Array<Val> build() {
+  Array<Val> build() const {
     auto store = std::make_shared<box::BoxStore>(1, 1 + capacity());
     store->ends[0] = len_;
     for (int i = 0; i < stores_.size(); i += 1) {

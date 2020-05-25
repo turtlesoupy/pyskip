@@ -22,7 +22,7 @@ TEST_CASE("Test cyclic step functions", "[step]") {
 
   // Strided step function
   {
-    auto step_fn = build(strided<4>(10));
+    1, 0, 0, 0, 1, 0, 0, 0 auto step_fn = build(strided<4>(10));
     REQUIRE_THAT(
         gen(step_fn, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
         Catch::Equals<Pos>({0, 1, 1, 1, 1, 2, 2, 2, 2, 3}));

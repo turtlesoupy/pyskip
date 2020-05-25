@@ -122,7 +122,12 @@ auto make_range(const Store<Val>& store, Pos start, Pos stop) {
 
 template <typename Val>
 auto make_range(const Store<Val>& store, Pos stop) {
-  return Range<Val>(store, 0, stop);
+  return make_range(store, 0, stop);
+}
+
+template <typename Val>
+auto make_range(const Store<Val>& store) {
+  return make_range(store, store.span());
 }
 
 template <typename S, typename Val>

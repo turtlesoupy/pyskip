@@ -118,6 +118,11 @@ struct TypedExpr {
   };
 };
 
+template <typename Out, typename Val>
+inline auto cast(TypedExpr<Val> in) {
+  return TypedExpr<Out>{in.expr};
+}
+
 template <typename Val>
 inline auto store(std::shared_ptr<BoxStore> store) {
   auto ret = Expr::make_ptr();

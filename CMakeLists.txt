@@ -12,6 +12,8 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
+
+# Compiler settings.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -36,6 +38,9 @@ target_include_directories(skimpy INTERFACE "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(skimpy INTERFACE fmt::fmt)
 target_compile_features(skimpy INTERFACE cxx_std_17)
 
+# Add the src targets (e.g. the Python CPP extension).
+add_subdirectory(src)
+
 # Build with OpenMP support if available.
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
@@ -46,11 +51,6 @@ endif()
 # https://tinyurl.com/yaflrbx9
 if (MSVC)
   target_compile_options(skimpy INTERFACE /bigobj)
-endif()
-
-# Add python extension targets.
-if(SKIMPY_ENABLE_PYTHON)
-  add_subdirectory(py_ext)
 endif()
 
 #== BUILD TESTS ==#

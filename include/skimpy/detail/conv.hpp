@@ -61,45 +61,61 @@ auto to_store(const std::initializer_list<Val>& il) {
 }
 
 template <typename Val, typename Out = Val>
-void to_buffer(const core::Store<Val>& store, Out* buffer) {
-  auto span = store.span();
-  auto ends_ptr = &store.ends[0];
-  auto vals_ptr = &store.vals[0];
-  for (int i = 0; i < store.span(); i += 1) {
-    while (*ends_ptr <= i) {
-      ++ends_ptr;
-      ++vals_ptr;
+void to_buffer(const core::Range<Val>& range, Out* buffer) {
+  auto span = range.span();
+  auto store_index = range.start_index();
+  for (int i = 0; i < span; ++i) {
+    while (range.end(store_index) <= i) {
+      ++store_index;
     }
-    *buffer++ = *vals_ptr;
+    *buffer++ = range.store.vals[store_index];
   }
 }
 
 template <typename Val, typename Out = Val>
-auto to_vector(const core::Store<Val>& store) {
-  auto span = store.span();
-  auto ends_ptr = &store.ends[0];
-  auto vals_ptr = &store.vals[0];
+void to_buffer(const core::Store<Val>& store, Out* buffer) {
+  to_buffer<Val, Out>(core::make_range(store), buffer);
+}
+
+template <typename Val, typename Out = Val>
+auto to_vector(const core::Range<Val>& range) {
+  auto span = range.span();
 
   std::vector<Out> ret;
   ret.reserve(span);
-  for (int i = 0; i < store.span(); i += 1) {
-    while (*ends_ptr <= i) {
-      ++ends_ptr;
-      ++vals_ptr;
+  auto store_index = range.start_index();
+  for (auto i = 0; i < span; i += 1) {
+    while (range.end(store_index) <= i) {
+      store_index += 1;
     }
-    ret.push_back(*vals_ptr);
+    ret.push_back(range.store.vals[store_index]);
+  }
+
+  return ret;
+}
+
+template <typename Val, typename Out = Val>
+auto to_vector(const core::Store<Val>& store) {
+  return to_vector<Val, Out>(core::make_range(store));
+}
+
+template <typename Val>
+auto to_string(const core::Range<Val>& range) {
+  CHECK_ARGUMENT(range.size() > 0);
+  std::string ret = "";
+  for (auto i = range.start_index(); i <= range.stop_index(); i += 1) {
+    if (i == 0) {
+      ret += fmt::format("{}=>{}", range.store.ends[i], range.store.vals[i]);
+    } else {
+      ret += fmt::format(", {}=>{}", range.store.ends[i], range.store.vals[i]);
+    }
   }
   return ret;
 }
 
 template <typename Val>
 auto to_string(const core::Store<Val>& store) {
-  CHECK_ARGUMENT(store.size);
-  auto ret = fmt::format("{}=>{}", store.ends[0], store.vals[0]);
-  for (int i = 1; i < store.size; i += 1) {
-    ret += fmt::format(", {}=>{}", store.ends[i], store.vals[i]);
-  }
-  return ret;
+  to_string(core::make_range(store));
 }
 
 };  // namespace skimpy::detail::conv
