@@ -1,8 +1,16 @@
+import numpy as np
 import re
-import _skimpy_cpp_ext
-from .exceptions import InvalidTensorError, IncompatibleTensorError, UnimplementedOperationError
 
-_type_mapping = {"int32": "i"}
+import _skimpy_cpp_ext
+import skimpy.util as util
+from .exceptions import (
+    InvalidTensorError,
+    IncompatibleTensorError,
+    UnimplementedOperationError,
+    TypeConversionError,
+)
+
+_type_mapping = {"int32": "i", "float": "f"}
 _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
 
 
@@ -29,10 +37,6 @@ class Tensor:
       shape = (shape, )
 
     dimensionality = len(shape)
-
-    if dimensionality == 1:
-      shape = shape[0]
-
     if dimensionality < 1:
       raise InvalidTensorError("Dimensionality must be >= 1")
     elif dimensionality > 3:
@@ -57,11 +61,6 @@ class Tensor:
 
   @classmethod
   def _validate_or_cast(cls, a, b):
-    if a.dtype != b.dtype:
-      raise IncompatibleTensorError(
-          f"Incompatible types: {a.dtype} and {b.dtype}"
-      )
-
     if a.shape != b.shape and b.shape != (1, ):
       raise IncompatibleTensorError(
           f"Incompatible shapes: {a.shape} and {b.shape}"
@@ -72,18 +71,18 @@ class Tensor:
   # Binary operators
   @classmethod
   def _forward_to_binary_array_op(cls, a, b, op):
-    if isinstance(b, int):
-      return Tensor.wrap(
-          a._tensor.__class__(a.shape,
-                              getattr(a._tensor.array(), op)(b))
-      )
-    else:
+    if isinstance(b, Tensor):
       a, b = Tensor._validate_or_cast(a, b)
       return Tensor.wrap(
           a._tensor.__class__(
               a.shape,
               getattr(a._tensor.array(), op)(b._tensor.array())
           )
+      )
+    else:
+      return Tensor.wrap(
+          a._tensor.__class__(a.shape,
+                              getattr(a._tensor.array(), op)(b))
       )
 
   def __add__(self, other):
@@ -105,9 +104,7 @@ class Tensor:
     return self._init_from_cpp_tensor(self.__mul__(other)._tensor)
 
   def __truediv__(self, other):
-    raise UnimplementedOperationError(
-        "True division is unsupported, try integer division (//)"
-    )
+    return self.to(float) / other.to(float)
 
   def __idiv__(self, other):
     return self._init_from_cpp_tensor(self.__truediv__(other)._tensor)
@@ -148,11 +145,13 @@ class Tensor:
   def __ipow__(self, other):
     return self._init_from_cpp_tensor(self.__pow__(other)._tensor)
 
-  def __setitem__(self, index, value):
-    self._tensor[index] = value
+  def __setitem__(self, slices, value):
+    slices = util.unify_slices(slices)
+    self._tensor[slices] = value
 
-  def __getitem__(self, index):
-    return Tensor.wrap(self._tensor[index])
+  def __getitem__(self, slices):
+    slices = util.unify_slices(slices)
+    return Tensor.wrap(self._tensor[slices])
 
   # Unary Operators
   def _forward_to_unary_array_op(self, op):
@@ -173,60 +172,36 @@ class Tensor:
   def __invert__(self):
     return self._forward_to_unary_array_op("__invert__")
 
+  def to(self, dtype):
+    if isinstance(dtype, int):
+      return self._forward_to_unary_array_op("int")
+    elif isinstance(dtype, float):
+      return self._forward_to_unary_array_op("float")
+    elif isinstance(dtype, bool):
+      return self._forward_to_unary_array_op("bool")
+    else:
+      raise TypeConversionError(f"No conversion to dtype='{dtype}' exists.")
+
   def to_numpy(self):
     np_arr = self._tensor.array().to_numpy()
     return np_arr.reshape(self.shape)
 
-  @classmethod
-  def _array_str(cls, arr):
-    if len(arr) > 10:
-      ret = []
-      for i in range(8):
-        ret.append(str(arr[i]))
-      ret.append("...")
-      for i in range(len(arr) - 2, len(arr)):
-        ret.append(str(arr[i]))
-      return ",".join(ret)
-    else:
-      return ",".join(str(arr[i]) for i in range(len(arr)))
+  def to_string(self, threshold = 20, separator = " "):
+    truncated = self
+    for i, l in enumerate(self.shape):
+      if l > threshold:
+        head = util.take(truncated, slice(threshold), axis = i)
+        tail = util.take(truncated, slice(-threshold, None), axis = i)
+        truncated = util.stack(head, tail)
+    return np.array2string(
+        truncated.to_numpy(), threshold = threshold, separator = separator
+    )
 
   def __str__(self):
-    def print_2d(n_rows, n_cols):
-      ret = []
-      if n_rows < 10:
-        for i in range(n_rows):
-          ret.append(
-              "\t" + self.
-              _array_str(self._tensor.array()[i * n_cols:((i + 1) * n_cols)])
-          )
-      else:
-        for i in range(8):
-          ret.append(
-              "\t" + self.
-              _array_str(self._tensor.array()[i * n_cols:((i + 1) * n_cols)])
-          )
-        ret.append("\t...")
-        for i in range(n_rows - 2, n_rows):
-          ret.append(
-              "\t" + self.
-              _array_str(self._tensor.array()[i * n_cols:((i + 1) * n_cols)])
-          )
-
-      return "\n".join(ret)
-
-    if self.dimensionality == 1:
-      return self._array_str(self._tensor.array())
-    if self.dimensionality == 2:
-      n_rows = self.shape[1]  # SWAPME
-      n_cols = self.shape[0]
-      return print_2d(n_rows, n_cols)
-    elif self.dimensionality == 3:
-      n_rows = self.shape[1]  # SWAPME
-      n_cols = self.shape[0]
-      st = print_2d(n_rows, n_cols)
-      return f"\tz=0\n{st}\n\tz=..."
-    else:
-      return str(self._tensor)
+    return self.to_string()
 
   def __repr__(self):
-    return f"Tensor (dtype={self.dtype}, shape={self.shape}) with values\n{str(self)}"
+    type_str = f"Tensor(shape={self.shape}, dtype={self.dtype})"
+    vals_str = self.to_string(separator = ", ")
+    indented = f"\n{vals_str}".replace("\n", "\n    ")
+    return f"{type_str}:{indented}"

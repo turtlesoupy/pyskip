@@ -93,6 +93,20 @@ TEST_CASE("Test basic tensor assignments", "[tensors]") {
   REQUIRE(x.get({0, 2}) == 7);
   REQUIRE(x.get({1, 2}) == 7);
   REQUIRE(x.get({2, 2}) == 9);
+
+  // Test value broadcasting
+  x.set({{0, 2, 1}, {0, 2, 1}}, 1);
+  x.set({{0, 3, 2}, {1, 2, 1}}, 2);
+  x.set({{1, 3, 1}, {1, 3, 2}}, 3);
+  REQUIRE(x.get({0, 0}) == 1);
+  REQUIRE(x.get({1, 0}) == 1);
+  REQUIRE(x.get({2, 0}) == 6);
+  REQUIRE(x.get({0, 1}) == 2);
+  REQUIRE(x.get({1, 1}) == 3);
+  REQUIRE(x.get({2, 1}) == 3);
+  REQUIRE(x.get({0, 2}) == 7);
+  REQUIRE(x.get({1, 2}) == 7);
+  REQUIRE(x.get({2, 2}) == 9);
 }
 
 TEST_CASE("Test tensor slices", "[tensors]") {
