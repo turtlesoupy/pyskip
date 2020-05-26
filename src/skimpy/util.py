@@ -1,12 +1,14 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Union, Tuple
 from collections.abc import Iterable
 
 import skimpy.tensor as tensor
 
 
-def unify_slices(slices: List[slice]) -> slice:
+def unify_slices(slices: Union[int, slice, List[Union[slice]]]) -> slice:
   """Maps a mixed tuple of slices and int indices to a tuple of all slices."""
   if not isinstance(slices, Iterable):
+    return (slices, )
+  if all(isinstance(sl, int) for sl in slices):
     return slices
   ret = []
   for sl in slices:

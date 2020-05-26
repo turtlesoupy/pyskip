@@ -10,7 +10,7 @@ from .exceptions import (
     TypeConversionError,
 )
 
-_type_mapping = {"int32": "i", "float": "f"}
+_type_mapping = {int: "i", float: "f"}
 _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
 
 
@@ -25,7 +25,7 @@ class Tensor:
     skimpy_arr = _skimpy_cpp_ext.from_numpy(np_arr.flatten("C"))
     return cls(shape = np_shape, val = skimpy_arr)
 
-  def __init__(self, shape = None, val = 0, dtype = "int32", cpp_tensor = None):
+  def __init__(self, shape = None, val = 0, dtype = int, cpp_tensor = None):
     if cpp_tensor:
       self._init_from_cpp_tensor(cpp_tensor)
       return
@@ -88,11 +88,17 @@ class Tensor:
   def __add__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__add__")
 
+  def __radd__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__radd__")
+
   def __iadd__(self, other):
     return self._init_from_cpp_tensor(self.__add__(other)._tensor)
 
   def __sub__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__sub__")
+
+  def __rsub__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rsub__")
 
   def __isub__(self, other):
     return self._init_from_cpp_tensor(self.__sub__(other)._tensor)
@@ -100,11 +106,17 @@ class Tensor:
   def __mul__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__mul__")
 
+  def __rmul__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rmul__")
+
   def __imul__(self, other):
     return self._init_from_cpp_tensor(self.__mul__(other)._tensor)
 
   def __truediv__(self, other):
-    return self.to(float) / other.to(float)
+    return Tensor._forward_to_binary_array_op(self, other, "__truediv__")
+
+  def __rtruediv__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rtruediv__")
 
   def __idiv__(self, other):
     return self._init_from_cpp_tensor(self.__truediv__(other)._tensor)
@@ -112,11 +124,17 @@ class Tensor:
   def __floordiv__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__floordiv__")
 
+  def __rfloordiv__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rfloordiv__")
+
   def __ifloordiv__(self, other):
     return self._init_from_cpp_tensor(self.__floordiv__(other)._tensor)
 
   def __mod__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__mod__")
+
+  def __rmod__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rmod__")
 
   def __imod__(self, other):
     return self._init_from_cpp_tensor(self.__mod__(other)._tensor)
@@ -124,11 +142,17 @@ class Tensor:
   def __and__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__and__")
 
+  def __rand__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rand__")
+
   def __iand__(self, other):
     return self._init_from_cpp_tensor(self.__and__(other)._tensor)
 
   def __xor__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__xor__")
+
+  def __rxor__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rxor__")
 
   def __ixor__(self, other):
     return self._init_from_cpp_tensor(self.__xor__(other)._tensor)
@@ -136,22 +160,35 @@ class Tensor:
   def __or__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__or__")
 
+  def __ror__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__ror__")
+
   def __ior__(self, other):
     return self._init_from_cpp_tensor(self.__or__(other)._tensor)
 
   def __pow__(self, other):
     return Tensor._forward_to_binary_array_op(self, other, "__pow__")
 
+  def __rpow__(self, other):
+    return Tensor._forward_to_binary_array_op(self, other, "__rpow__")
+
   def __ipow__(self, other):
     return self._init_from_cpp_tensor(self.__pow__(other)._tensor)
 
   def __setitem__(self, slices, value):
     slices = util.unify_slices(slices)
-    self._tensor[slices] = value
+    if isinstance(value, Tensor):
+      self._tensor[slices] = value._tensor
+    else:
+      self._tensor[slices] = value
 
   def __getitem__(self, slices):
     slices = util.unify_slices(slices)
-    return Tensor.wrap(self._tensor[slices])
+    ret = self._tensor[slices]
+    if isinstance(ret, self.dtype):
+      return ret
+    else:
+      return Tensor.wrap(ret)
 
   # Unary Operators
   def _forward_to_unary_array_op(self, op):
@@ -197,11 +234,14 @@ class Tensor:
         truncated.to_numpy(), threshold = threshold, separator = separator
     )
 
+  def __len__(self):
+    return len(self.tensor_)
+
   def __str__(self):
     return self.to_string()
 
   def __repr__(self):
-    type_str = f"Tensor(shape={self.shape}, dtype={self.dtype})"
+    type_str = f"Tensor(shape={self.shape}, dtype={self.dtype.__name__})"
     vals_str = self.to_string(separator = ", ")
     indented = f"\n{vals_str}".replace("\n", "\n    ")
     return f"{type_str}:{indented}"

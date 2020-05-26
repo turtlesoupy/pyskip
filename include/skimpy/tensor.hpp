@@ -157,7 +157,9 @@ struct TensorSlice {
       return sc::build(0, shape.len(), sc::scaled(1, shape.len()));
     } else {
       expr = sc::stack(sc::shift(i_0), expr);
-      expr = sc::stack(expr, sc::scaled(1, shape.len() - expr->data.step));
+      if (auto tail = shape.len() - expr->data.step; tail > 0) {
+        expr = sc::stack(expr, sc::scaled(1, tail));
+      }
       return sc::build(0, shape.len(), expr);
     }
   }
