@@ -115,7 +115,7 @@ auto to_string(const core::Range<Val>& range) {
 
 template <typename Val>
 auto to_string(const core::Store<Val>& store) {
-  to_string(core::make_range(store));
+  return to_string(core::make_range(store));
 }
 
 };  // namespace skimpy::detail::conv

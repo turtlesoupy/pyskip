@@ -273,7 +273,7 @@ BINARY_ARRAY_OP_SIMPLE(operator/, [](Val a, Val b) { return a / b; })
 BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 template <>
 Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
-  constexpr auto fn = [](float a, float b) { return std::fmodf(a, b); };
+  constexpr auto fn = [](float a, float b) { return fmodf(a, b); };
   return lhs.template merge<fn>(rhs);
 }
 
