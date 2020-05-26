@@ -17,9 +17,10 @@ def platform_args(common_args = [], windows_args = [], posix_args = []):
 
 class CMakeExtension(Extension):
   """Provides a CPython extension build via CMake."""
-  def __init__(self, name, root_dir = ""):
+  def __init__(self, name, target, root_dir = ""):
     Extension.__init__(self, name, sources = [])
     self.root_dir = os.path.abspath(root_dir)
+    self.target = target
 
 
 class CMakeBuild(build_ext):
@@ -74,7 +75,7 @@ class CMakeBuild(build_ext):
     print("Executing cmake build...")
     subprocess.check_call(
         args = [
-            "cmake", "--build", ".", "--target", "skimpy_ext", "--config",
+            "cmake", "--build", ".", "--target", ext.target, "--config",
             config
         ],
         cwd = self.build_temp,
@@ -91,7 +92,9 @@ setup(
     description = "A test library to build C++/Cuda Python extensions",
     long_description = "",
     headers = HEADERS,
-    ext_modules = [CMakeExtension("skimpy")],
+    ext_modules = [
+        CMakeExtension("skimpy", "skimpy_ext"),
+    ],
     cmdclass = {"build_ext": CMakeBuild},
     package_dir = {"": "src"},
     packages = find_namespace_packages(where = "src", exclude = "tests"),
