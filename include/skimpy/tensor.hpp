@@ -131,13 +131,15 @@ struct TensorSlice {
       i_0 += c_0 * scale;
       i_1 += (c_1 - 1) * scale;
       if (i == 0) {
-        if (c_1 - c_0 > 1) {
-          expr = sc::scaled(c_1 - c_0 - 1, c_s);
+        auto reps = (c_1 - c_0 - 1) / c_s;
+        if (reps > 0) {
+          expr = sc::scaled(reps, c_s);
         }
       } else {
         auto reps = (c_1 - c_0 - 1) / c_s;
         if (reps > 0) {
-          auto step = scale - expr->data.span + (c_s - 1) * scale;
+          auto prev = expr ? expr->data.span : 0;
+          auto step = scale - prev + (c_s - 1) * scale;
           if (expr) {
             auto head = sc::stack(reps, sc::stack(expr, sc::scaled(1, step)));
             expr = sc::stack(head, expr);
@@ -151,9 +153,15 @@ struct TensorSlice {
 
     // Shift everything up by the start position, and extend the final position
     // up to the span of the source array (i.e. the span of the given shape).
-    expr = sc::stack(sc::shift(i_0), expr);
-    expr = sc::stack(expr, sc::scaled(1, 1 + shape.len() - i_1));
-    return sc::build(0, shape.len(), expr);
+    if (expr == nullptr) {
+      return sc::build(0, shape.len(), sc::scaled(1, shape.len()));
+    } else {
+      expr = sc::stack(sc::shift(i_0), expr);
+      if (auto tail = shape.len() - expr->data.step; tail > 0) {
+        expr = sc::stack(expr, sc::scaled(1, tail));
+      }
+      return sc::build(0, shape.len(), expr);
+    }
   }
 
   auto mask(const TensorShape<dim>& shape) const {
@@ -368,15 +376,5 @@ template <size_t dim, typename Val>
 auto to_string(const Tensor<dim, Val>& tensor) {
   return tensor.str();
 }
-
-// TODO: Casting operations
-// TODO: Unary arithmetic operations
-// TODO: Binary arithmetic operations
-// TODO: Binary bitwise operations
-// TODO: Unary math operations
-// TODO: Binary math operations
-// TODO: Ternary math operations
-// TODO: Logical operations
-// TODO: Comparison operations
 
 }  // namespace skimpy

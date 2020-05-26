@@ -186,6 +186,21 @@ void bind_array_class(py::module& m, const char* class_name) {
         .def(
             "__floordiv__",
             [](const Array& self, const Array& other) { return self / other; })
+        .def(
+            "__truediv__",
+            [](const Array& self, Val val) {
+              return skimpy::cast<float>(self) / static_cast<float>(val);
+            })
+        .def(
+            "__rtruediv__",
+            [](const Array& self, Val val) {
+              return static_cast<float>(val) / skimpy::cast<float>(self);
+            })
+        .def(
+            "__truediv__",
+            [](const Array& self, const Array& other) {
+              return skimpy::cast<float>(self) / skimpy::cast<float>(other);
+            })
         .def("__mod__", [](const Array& self, Val val) { return self % val; })
         .def("__rmod__", [](const Array& self, Val val) { return val % self; })
         .def(

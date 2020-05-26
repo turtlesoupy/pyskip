@@ -1,4 +1,5 @@
 .egg
+.eggs/
 .venv
 .vscode
 build
