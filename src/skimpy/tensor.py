@@ -24,18 +24,14 @@ _prefix_type_mapping_reverse = {v: k for k, v in _prefix_type_mapping.items()}
 class TensorBuilder:
     def __init__(self, shape, val, dtype):
         if len(shape) > 3:
-            raise UnimplementedOperationError(
-                "Builders only support up to three dimensions"
-            )
+            raise UnimplementedOperationError("Builders only support up to three dimensions")
 
         self.shape = shape
         self.val = val
         self.dtype = dtype
 
         max_size = functools.reduce(operator.mul, shape)
-        self._builder = getattr(
-            _skimpy_cpp_ext, f"{_prefix_type_mapping[dtype]}Builder"
-        )(max_size, val)
+        self._builder = getattr(_skimpy_cpp_ext, f"{_prefix_type_mapping[dtype]}Builder")(max_size, val)
 
         self._scale = [1]
         for shape in shape[:-1]:
@@ -46,9 +42,7 @@ class TensorBuilder:
         if not isinstance(items, Iterable):
             items = (items,)
         elif not all(isinstance(e, int) for e in items):
-            raise UnimplementedOperationError(
-                "Builder __setitem__ only works with integers for now"
-            )
+            raise UnimplementedOperationError("Builder __setitem__ only works with integers for now")
 
         idx = sum(i * s for i, s in zip(items, self._scale))
         self._builder[idx] = value
@@ -110,9 +104,7 @@ class Tensor:
     @classmethod
     def _validate_or_cast(cls, a, b):
         if a.shape != b.shape and b.shape != (1,):
-            raise IncompatibleTensorError(
-                f"Incompatible shapes: {a.shape} and {b.shape}"
-            )
+            raise IncompatibleTensorError(f"Incompatible shapes: {a.shape} and {b.shape}")
 
         return (a, b)
 
@@ -121,15 +113,9 @@ class Tensor:
     def _forward_to_binary_array_op(cls, a, b, op):
         if isinstance(b, Tensor):
             a, b = Tensor._validate_or_cast(a, b)
-            return Tensor.wrap(
-                a._tensor.__class__(
-                    a.shape, getattr(a._tensor.array(), op)(b._tensor.array())
-                )
-            )
+            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
         else:
-            return Tensor.wrap(
-                a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b))
-            )
+            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b)))
 
     def __add__(self, other):
         return Tensor._forward_to_binary_array_op(self, other, "__add__")
@@ -238,9 +224,7 @@ class Tensor:
 
     # Unary Operators
     def _forward_to_unary_array_op(self, op):
-        return Tensor.wrap(
-            self._tensor.__class__(self.shape, getattr(self._tensor.array(), op)())
-        )
+        return Tensor.wrap(self._tensor.__class__(self.shape, getattr(self._tensor.array(), op)()))
 
     def __neg__(self):
         return self._forward_to_unary_array_op("__neg__")
@@ -287,9 +271,7 @@ class Tensor:
                 head = util.take(truncated, slice(threshold), axis=i)
                 tail = util.take(truncated, slice(-threshold, None), axis=i)
                 truncated = util.stack(head, tail)
-        return np.array2string(
-            truncated.to_numpy(), threshold=threshold, separator=separator
-        )
+        return np.array2string(truncated.to_numpy(), threshold=threshold, separator=separator)
 
     def eval(self):
         return self._forward_to_unary_array_op("eval")

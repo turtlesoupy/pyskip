@@ -15,89 +15,89 @@ import colorsys
 from zipfile import ZipFile
 
 block_colors = {
-    'acacia_leaves':        {'h':114, 's':64,  'l':22 },
-    'acacia_log':           {'h':35,  's':93,  'l':30 },
-    'air':                  {'h':0,   's':0,   'l':0  },
-    'andesite':             {'h':0,   's':0,   'l':32 },
-    'azure_bluet':          {'h':0,   's':0,   'l':100},
-    'bedrock':              {'h':0,   's':0,   'l':10 },
-    'birch_leaves':         {'h':114, 's':64,  'l':22 },
-    'birch_log':            {'h':35,  's':93,  'l':30 },
-    'blue_orchid':          {'h':0,   's':0,   'l':100},
-    'bookshelf':            {'h':0,   's':0,   'l':100},
-    'brown_mushroom':       {'h':0,   's':0,   'l':100},
-    'brown_mushroom_block': {'h':0,   's':0,   'l':100},
-    'cactus':               {'h':126, 's':61,  'l':20 },
-    'cave_air':             {'h':0,   's':0,   'l':0  },
-    'chest':                {'h':0,   's':100, 'l':50 },
-    'clay':                 {'h':7,   's':62,  'l':23 },
-    'coal_ore':             {'h':0,   's':0,   'l':10 },
-    'cobblestone':          {'h':0,   's':0,   'l':25 },
-    'cobblestone_stairs':   {'h':0,   's':0,   'l':25 },
-    'crafting_table':       {'h':0,   's':0,   'l':100},
-    'dandelion':            {'h':60,  's':100, 'l':60 },
-    'dark_oak_leaves':      {'h':114, 's':64,  'l':22 },
-    'dark_oak_log':         {'h':35,  's':93,  'l':30 },
-    'dark_oak_planks':      {'h':35,  's':93,  'l':30 },
-    'dead_bush':            {'h':0,   's':0,   'l':100},
-    'diorite':              {'h':0,   's':0,   'l':32 },
-    'dirt':                 {'h':27,  's':51,  'l':15 },
-    'end_portal_frame':     {'h':0,   's':100, 'l':50 },
-    'farmland':             {'h':35,  's':93,  'l':15 },
-    'fire':                 {'h':55,  's':100, 'l':50 },
-    'flowing_lava':         {'h':16,  's':100, 'l':48 },
-    'flowing_water':        {'h':228, 's':50,  'l':23 },
-    'glass_pane':           {'h':0,   's':0,   'l':100},
-    'granite':              {'h':0,   's':0,   'l':32 },
-    'grass':                {'h':94,  's':42,  'l':25 },
-    'grass_block':          {'h':94,  's':42,  'l':32 },
-    'gravel':               {'h':21,  's':18,  'l':20 },
-    'ice':                  {'h':240, 's':10,  'l':95 },
-    'infested_stone':       {'h':320, 's':100, 'l':50 },
-    'iron_ore':             {'h':22,  's':65,  'l':61 },
-    'iron_bars':            {'h':22,  's':65,  'l':61 },
-    'ladder':               {'h':35,  's':93,  'l':30 },
-    'lava':                 {'h':16,  's':100, 'l':48 },
-    'lilac':                {'h':0,   's':0,   'l':100},
-    'lily_pad':             {'h':114, 's':64,  'l':18 },
-    'lit_pumpkin':          {'h':24,  's':100, 'l':45 },
-    'mossy_cobblestone':    {'h':115, 's':30,  'l':50 },
-    'mushroom_stem':        {'h':0,   's':0,   'l':100},
-    'oak_door':             {'h':35,  's':93,  'l':30 },
-    'oak_fence':            {'h':35,  's':93,  'l':30 },
-    'oak_fence_gate':       {'h':35,  's':93,  'l':30 },
-    'oak_leaves':           {'h':114, 's':64,  'l':22 },
-    'oak_log':              {'h':35,  's':93,  'l':30 },
-    'oak_planks':           {'h':35,  's':93,  'l':30 },
-    'oak_pressure_plate':   {'h':35,  's':93,  'l':30 },
-    'oak_stairs':           {'h':114, 's':64,  'l':22 },
-    'peony':                {'h':0,   's':0,   'l':100},
-    'pink_tulip':           {'h':0,   's':0,   'l':0  },
-    'poppy':                {'h':0,   's':100, 'l':50 },
-    'pumpkin':              {'h':24,  's':100, 'l':45 },
-    'rail':                 {'h':33,  's':81,  'l':50 },
-    'red_mushroom':         {'h':0,   's':50,  'l':20 },
-    'red_mushroom_block':   {'h':0,   's':50,  'l':20 },
-    'rose_bush':            {'h':0,   's':0,   'l':100},
-    'sugar_cane':           {'h':123, 's':70,  'l':50 },
-    'sand':                 {'h':53,  's':22,  'l':58 },
-    'sandstone':            {'h':48,  's':31,  'l':40 },
-    'seagrass':             {'h':94,  's':42,  'l':25 },
-    'sign':                 {'h':114, 's':64,  'l':22 },
-    'spruce_leaves':        {'h':114, 's':64,  'l':22 },
-    'spruce_log':           {'h':35,  's':93,  'l':30 },
-    'stone':                {'h':0,   's':0,   'l':32 },
-    'stone_slab':           {'h':0,   's':0,   'l':32 },
-    'tall_grass':           {'h':94,  's':42,  'l':25 },
-    'tall_seagrass':        {'h':94,  's':42,  'l':25 },
-    'torch':                {'h':60,  's':100, 'l':50 },
-    'snow':                 {'h':240, 's':10,  'l':85 },
-    'spawner':              {'h':180, 's':100, 'l':50 },
-    'vine':                 {'h':114, 's':64,  'l':18 },
-    'wall_torch':           {'h':60,  's':100, 'l':50 },
-    'water':                {'h':228, 's':50,  'l':23 },
-    'wheat':                {'h':123, 's':60,  'l':50 },
-    'white_wool':           {'h':0,   's':0,   'l':100},
+    "acacia_leaves": {"h": 114, "s": 64, "l": 22},
+    "acacia_log": {"h": 35, "s": 93, "l": 30},
+    "air": {"h": 0, "s": 0, "l": 0},
+    "andesite": {"h": 0, "s": 0, "l": 32},
+    "azure_bluet": {"h": 0, "s": 0, "l": 100},
+    "bedrock": {"h": 0, "s": 0, "l": 10},
+    "birch_leaves": {"h": 114, "s": 64, "l": 22},
+    "birch_log": {"h": 35, "s": 93, "l": 30},
+    "blue_orchid": {"h": 0, "s": 0, "l": 100},
+    "bookshelf": {"h": 0, "s": 0, "l": 100},
+    "brown_mushroom": {"h": 0, "s": 0, "l": 100},
+    "brown_mushroom_block": {"h": 0, "s": 0, "l": 100},
+    "cactus": {"h": 126, "s": 61, "l": 20},
+    "cave_air": {"h": 0, "s": 0, "l": 0},
+    "chest": {"h": 0, "s": 100, "l": 50},
+    "clay": {"h": 7, "s": 62, "l": 23},
+    "coal_ore": {"h": 0, "s": 0, "l": 10},
+    "cobblestone": {"h": 0, "s": 0, "l": 25},
+    "cobblestone_stairs": {"h": 0, "s": 0, "l": 25},
+    "crafting_table": {"h": 0, "s": 0, "l": 100},
+    "dandelion": {"h": 60, "s": 100, "l": 60},
+    "dark_oak_leaves": {"h": 114, "s": 64, "l": 22},
+    "dark_oak_log": {"h": 35, "s": 93, "l": 30},
+    "dark_oak_planks": {"h": 35, "s": 93, "l": 30},
+    "dead_bush": {"h": 0, "s": 0, "l": 100},
+    "diorite": {"h": 0, "s": 0, "l": 32},
+    "dirt": {"h": 27, "s": 51, "l": 15},
+    "end_portal_frame": {"h": 0, "s": 100, "l": 50},
+    "farmland": {"h": 35, "s": 93, "l": 15},
+    "fire": {"h": 55, "s": 100, "l": 50},
+    "flowing_lava": {"h": 16, "s": 100, "l": 48},
+    "flowing_water": {"h": 228, "s": 50, "l": 23},
+    "glass_pane": {"h": 0, "s": 0, "l": 100},
+    "granite": {"h": 0, "s": 0, "l": 32},
+    "grass": {"h": 94, "s": 42, "l": 25},
+    "grass_block": {"h": 94, "s": 42, "l": 32},
+    "gravel": {"h": 21, "s": 18, "l": 20},
+    "ice": {"h": 240, "s": 10, "l": 95},
+    "infested_stone": {"h": 320, "s": 100, "l": 50},
+    "iron_ore": {"h": 22, "s": 65, "l": 61},
+    "iron_bars": {"h": 22, "s": 65, "l": 61},
+    "ladder": {"h": 35, "s": 93, "l": 30},
+    "lava": {"h": 16, "s": 100, "l": 48},
+    "lilac": {"h": 0, "s": 0, "l": 100},
+    "lily_pad": {"h": 114, "s": 64, "l": 18},
+    "lit_pumpkin": {"h": 24, "s": 100, "l": 45},
+    "mossy_cobblestone": {"h": 115, "s": 30, "l": 50},
+    "mushroom_stem": {"h": 0, "s": 0, "l": 100},
+    "oak_door": {"h": 35, "s": 93, "l": 30},
+    "oak_fence": {"h": 35, "s": 93, "l": 30},
+    "oak_fence_gate": {"h": 35, "s": 93, "l": 30},
+    "oak_leaves": {"h": 114, "s": 64, "l": 22},
+    "oak_log": {"h": 35, "s": 93, "l": 30},
+    "oak_planks": {"h": 35, "s": 93, "l": 30},
+    "oak_pressure_plate": {"h": 35, "s": 93, "l": 30},
+    "oak_stairs": {"h": 114, "s": 64, "l": 22},
+    "peony": {"h": 0, "s": 0, "l": 100},
+    "pink_tulip": {"h": 0, "s": 0, "l": 0},
+    "poppy": {"h": 0, "s": 100, "l": 50},
+    "pumpkin": {"h": 24, "s": 100, "l": 45},
+    "rail": {"h": 33, "s": 81, "l": 50},
+    "red_mushroom": {"h": 0, "s": 50, "l": 20},
+    "red_mushroom_block": {"h": 0, "s": 50, "l": 20},
+    "rose_bush": {"h": 0, "s": 0, "l": 100},
+    "sugar_cane": {"h": 123, "s": 70, "l": 50},
+    "sand": {"h": 53, "s": 22, "l": 58},
+    "sandstone": {"h": 48, "s": 31, "l": 40},
+    "seagrass": {"h": 94, "s": 42, "l": 25},
+    "sign": {"h": 114, "s": 64, "l": 22},
+    "spruce_leaves": {"h": 114, "s": 64, "l": 22},
+    "spruce_log": {"h": 35, "s": 93, "l": 30},
+    "stone": {"h": 0, "s": 0, "l": 32},
+    "stone_slab": {"h": 0, "s": 0, "l": 32},
+    "tall_grass": {"h": 94, "s": 42, "l": 25},
+    "tall_seagrass": {"h": 94, "s": 42, "l": 25},
+    "torch": {"h": 60, "s": 100, "l": 50},
+    "snow": {"h": 240, "s": 10, "l": 85},
+    "spawner": {"h": 180, "s": 100, "l": 50},
+    "vine": {"h": 114, "s": 64, "l": 18},
+    "wall_torch": {"h": 60, "s": 100, "l": 50},
+    "water": {"h": 228, "s": 50, "l": 23},
+    "wheat": {"h": 123, "s": 60, "l": 50},
+    "white_wool": {"h": 0, "s": 0, "l": 100},
 }
 
 
@@ -106,13 +106,17 @@ class SkimpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: skimpy.Tensor
 
+
 @dataclass
 class NumpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: np.ndarray
 
+
 class SkimpyMinecraftLevel:
-    def __init__(self, chunk_list: List[SkimpyMinecraftChunk], bbox: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]):
+    def __init__(
+        self, chunk_list: List[SkimpyMinecraftChunk], bbox: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]
+    ):
         self.chunk_list = chunk_list
         self.bbox = bbox
 
@@ -132,15 +136,11 @@ class SkimpyMinecraftLevel:
             megatensor[start_x:end_x, start_y:end_y, start_z:end_z] = chunk.tensor
         return megatensor
 
-
     @classmethod
     def block_color(cls, id):
         hsl = block_colors[block_id_to_name(id)]
-        return colorsys.hls_to_rgb(
-            (hsl['h'], hsl['l'], hsl['s'])
-        )
+        return colorsys.hls_to_rgb((hsl["h"], hsl["l"], hsl["s"]))
 
-    
     @classmethod
     def from_world(cls, world_folder, as_numpy=False):
         world_folder = Path(world_folder)
@@ -153,7 +153,7 @@ class SkimpyMinecraftLevel:
                     zippy.extractall(tmpdir)
                 world = WorldFolder(tmpdir)
 
-            world.chunkclass = AnvilChunk # NBT library bug workaround 
+            world.chunkclass = AnvilChunk  # NBT library bug workaround
 
             bb = world.get_boundingbox()
             bbox_x = (bb.minx * 16, bb.minx * 16 + bb.lenx() * 16)
@@ -161,7 +161,7 @@ class SkimpyMinecraftLevel:
             bbox_z = (bb.minz * 16, bb.minz * 16 + bb.lenz() * 16)
 
             for chunk in tqdm(world.iter_chunks(), total=world.chunk_count()):
-                x,z = chunk.get_coords()
+                x, z = chunk.get_coords()
                 y = 0
                 bbox_y = (
                     min(bbox_y[0], 0),
@@ -169,25 +169,16 @@ class SkimpyMinecraftLevel:
                 )
 
                 if as_numpy:
-                    chunk_list.append(cls.chunk_to_numpy(
-                        (x, y, z),
-                        chunk
-                    ))
+                    chunk_list.append(cls.chunk_to_numpy((x, y, z), chunk))
                 else:
-                    chunk_list.append(cls.chunk_to_skimpy(
-                        (x, y, z),
-                        chunk
-                    ))
+                    chunk_list.append(cls.chunk_to_skimpy((x, y, z), chunk))
 
-            return cls(
-                chunk_list,
-                (bbox_x, bbox_y, bbox_z),
-            )
+            return cls(chunk_list, (bbox_x, bbox_y, bbox_z),)
 
     @classmethod
     def _block_at(cls, chunk, x, y, z) -> int:
         if isinstance(chunk, AnvilChunk):
-            sy,by = divmod(y, 16)
+            sy, by = divmod(y, 16)
             section = chunk.get_section(sy)
             if section == None:
                 raise RuntimeError("Bad news")
@@ -212,10 +203,8 @@ class SkimpyMinecraftLevel:
                     block_int_id = cls._block_at(chunk, x, y, z)
                     arr[x, y, z] = block_int_id
 
-        return NumpyMinecraftChunk(
-            coord, arr 
-        )
-        
+        return NumpyMinecraftChunk(coord, arr)
+
     @classmethod
     def chunk_to_skimpy(cls, coord, chunk):
         max_x = 16
@@ -231,6 +220,4 @@ class SkimpyMinecraftLevel:
                     builder[x, y, z] = block_int_id
 
         tensor = builder.build()
-        return SkimpyMinecraftChunk(
-            coord, tensor
-        )
+        return SkimpyMinecraftChunk(coord, tensor)
