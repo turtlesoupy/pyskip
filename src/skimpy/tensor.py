@@ -1,8 +1,9 @@
 import numpy as np
 import re
+from typing import Union, Tuple
 
 import _skimpy_cpp_ext
-import skimpy.util as util
+from .util import unify_slices
 from .exceptions import (
     InvalidTensorError,
     IncompatibleTensorError,
@@ -12,6 +13,9 @@ from .exceptions import (
 
 _type_mapping = {int: "i", float: "f"}
 _type_mapping_reverse = {v: k for k, v in _type_mapping.items()}
+
+# Scalar defines a static type of the possible scalar values composing a Tensor.
+Scalar = Union[int, float, bool]
 
 
 class Tensor:
@@ -33,19 +37,20 @@ class Tensor:
     if shape is None:
       raise InvalidTensorError("Must specify shape")
 
+    # Map scalar shape onto 1-dimensional tensor
     if isinstance(shape, int):
       shape = (shape, )
 
-    dimensionality = len(shape)
-    if dimensionality < 1:
+    ndim = len(shape)
+    if ndim < 1:
       raise InvalidTensorError("Dimensionality must be >= 1")
-    elif dimensionality > 3:
+    elif ndim > 3:
       raise InvalidTensorError("Only 1D, 2D and 3D tensors are supported")
 
     if dtype not in _type_mapping:
       raise InvalidTensorError("Only int32 tensors are supported")
 
-    klass = f"Tensor{dimensionality}{_type_mapping[dtype]}"
+    klass = f"Tensor{ndim}{_type_mapping[dtype]}"
     tensor = getattr(_skimpy_cpp_ext, klass)(shape, val)
 
     self._init_from_cpp_tensor(tensor)
@@ -54,7 +59,7 @@ class Tensor:
     self._tensor = cpp_tensor
 
     m = re.search(r"Tensor(\d)(\w+)$", self._tensor.__class__.__name__)
-    self.dimensionality = int(m.group(1))
+    self.ndim = int(m.group(1))
     self.dtype = _type_mapping_reverse[m.group(2)]
     self.shape = self._tensor.shape()
     return self
@@ -67,6 +72,28 @@ class Tensor:
       )
 
     return (a, b)
+
+  # Unary Operators
+  def _forward_to_unary_array_op(self, op):
+    return Tensor.wrap(
+        self._tensor.__class__(self.shape,
+                               getattr(self._tensor.array(), op)())
+    )
+
+  def __neg__(self):
+    return self._forward_to_unary_array_op("__neg__")
+
+  def __pos__(self):
+    return self._forward_to_unary_array_op("__pos__")
+
+  def __abs__(self):
+    return self._forward_to_unary_array_op("__abs__")
+
+  def __invert__(self):
+    return self._forward_to_unary_array_op("__invert__")
+
+  def abs(self):
+    return self._forward_to_unary_array_op("abs")
 
   # Binary operators
   @classmethod
@@ -176,38 +203,19 @@ class Tensor:
     return self._init_from_cpp_tensor(self.__pow__(other)._tensor)
 
   def __setitem__(self, slices, value):
-    slices = util.unify_slices(slices)
+    slices = unify_slices(slices)
     if isinstance(value, Tensor):
       self._tensor[slices] = value._tensor
     else:
       self._tensor[slices] = value
 
   def __getitem__(self, slices):
-    slices = util.unify_slices(slices)
+    slices = unify_slices(slices)
     ret = self._tensor[slices]
     if isinstance(ret, self.dtype):
       return ret
     else:
       return Tensor.wrap(ret)
-
-  # Unary Operators
-  def _forward_to_unary_array_op(self, op):
-    return Tensor.wrap(
-        self._tensor.__class__(self.shape,
-                               getattr(self._tensor.array(), op)())
-    )
-
-  def __neg__(self):
-    return self._forward_to_unary_array_op("__neg__")
-
-  def __pos__(self):
-    return self._forward_to_unary_array_op("__pos__")
-
-  def __abs__(self):
-    return self._forward_to_unary_array_op("__abs__")
-
-  def __invert__(self):
-    return self._forward_to_unary_array_op("__invert__")
 
   def __len__(self):
     return len(self._tensor)
@@ -221,12 +229,15 @@ class Tensor:
     indented = f"\n{vals_str}".replace("\n", "\n    ")
     return f"{type_str}:{indented}"
 
+  def clone(self):
+    return self._forward_to_unary_array_op("clone")
+
   def to(self, dtype):
-    if isinstance(dtype, int):
+    if dtype == int:
       return self._forward_to_unary_array_op("int")
-    elif isinstance(dtype, float):
+    elif dtype == float:
       return self._forward_to_unary_array_op("float")
-    elif isinstance(dtype, bool):
+    elif dtype == bool:
       return self._forward_to_unary_array_op("bool")
     else:
       raise TypeConversionError(f"No conversion to dtype='{dtype}' exists.")
@@ -236,15 +247,20 @@ class Tensor:
     return np_arr.reshape(tuple(reversed(self.shape)))
 
   def to_string(self, threshold = 20, separator = " "):
-    truncated = self
-    for i, l in enumerate(self.shape):
-      if l > threshold:
-        head = util.take(truncated, slice(threshold), axis = i)
-        tail = util.take(truncated, slice(-threshold, None), axis = i)
-        truncated = util.stack(head, tail)
-    return np.array2string(
-        truncated.to_numpy(), threshold = threshold, separator = separator
-    )
+    from .io import format_tensor
+    return format_tensor(self, threshold, separator)
 
   def eval(self):
     return self._forward_to_unary_array_op("eval")
+
+  def item(self):
+    assert len(self) == 1
+    return self._tensor.array()[0]
+
+  def reshape(self, shape: Union[int, Tuple[int]]):
+    from .manipulate import reshape
+    return reshape(self, shape)
+
+  def flatten(self, shape: Union[int, Tuple[int]]):
+    from .manipulate import flatten
+    return flatten(self)
