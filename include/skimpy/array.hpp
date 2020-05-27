@@ -23,7 +23,6 @@ namespace lang = detail::lang;
 namespace mask = detail::mask;
 namespace step = detail::step;
 
-
 struct Slice {
   core::Pos start;
   core::Pos stop;
@@ -276,6 +275,7 @@ BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 
 template <>
 Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
+  // HACK: We cannot use lambda here due to GCC bug: 83258
   return lhs.template merge<fmodf>(rhs);
 }
 

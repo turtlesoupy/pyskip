@@ -118,6 +118,8 @@ struct HashTable {
         node.size = 0;
       }
       return true;
+    } else if (node.size == sources) {
+      return true;
     }
     node.vals[node.size++] = src;
     return false;
@@ -157,27 +159,31 @@ void eval(Evaluator evaluator, EvalOutput<Val>& output) {
     }
 
     // Advance the value pointers of sources with this shared end position.
-    if (auto& node = hash.lookup(prev_end); node.key == prev_end) {
+    if (auto& node = hash.lookup(end); node.key == end) {
       for (int i = 0; i < node.size; i += 1) {
         evaluator.next_val(node.vals[i]);
       }
       node.key = 0;
     }
 
-    // Loop until we have a new distinct end position for this source.
-    auto new_end = evaluator.next_end(src);
-    while (new_end < evaluator.stop()) {
-      if (hash.insert(src, new_end)) {
+    // Loop until we have a new end position for this source.
+    end = evaluator.next_end(src);
+    while (prev_end == end) {
+      evaluator.next_val(src);
+      end = evaluator.next_end(src);
+    }
+
+    // Also loop while the position is already in the hash table.
+    while (end < evaluator.stop()) {
+      if (hash.insert(src, end)) {
         break;
       }
-      for (auto old_end = new_end; old_end == new_end;) {
-        new_end = evaluator.next_end(src);
-      }
+      end = evaluator.next_end(src);
     }
     evaluator.next_val(src);
 
     // Update the tournament tree with the new end position.
-    tree.push(src, new_end);
+    tree.push(src, end);
   }
 }
 

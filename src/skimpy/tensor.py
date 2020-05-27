@@ -23,7 +23,7 @@ class Tensor:
   def from_numpy(cls, np_arr):
     np_shape = np_arr.shape
     skimpy_arr = _skimpy_cpp_ext.from_numpy(np_arr.flatten("C"))
-    return cls(shape = np_shape, val = skimpy_arr)
+    return cls(shape = tuple(reversed(np_shape)), val = skimpy_arr)
 
   def __init__(self, shape = None, val = 0, dtype = int, cpp_tensor = None):
     if cpp_tensor:
@@ -209,6 +209,18 @@ class Tensor:
   def __invert__(self):
     return self._forward_to_unary_array_op("__invert__")
 
+  def __len__(self):
+    return len(self._tensor)
+
+  def __str__(self):
+    return self.to_string()
+
+  def __repr__(self):
+    type_str = f"Tensor(shape={self.shape}, dtype={self.dtype.__name__})"
+    vals_str = self.to_string(separator = ", ")
+    indented = f"\n{vals_str}".replace("\n", "\n    ")
+    return f"{type_str}:{indented}"
+
   def to(self, dtype):
     if isinstance(dtype, int):
       return self._forward_to_unary_array_op("int")
@@ -221,7 +233,7 @@ class Tensor:
 
   def to_numpy(self):
     np_arr = self._tensor.array().to_numpy()
-    return np_arr.reshape(self.shape)
+    return np_arr.reshape(tuple(reversed(self.shape)))
 
   def to_string(self, threshold = 20, separator = " "):
     truncated = self
@@ -234,14 +246,5 @@ class Tensor:
         truncated.to_numpy(), threshold = threshold, separator = separator
     )
 
-  def __len__(self):
-    return len(self.tensor_)
-
-  def __str__(self):
-    return self.to_string()
-
-  def __repr__(self):
-    type_str = f"Tensor(shape={self.shape}, dtype={self.dtype.__name__})"
-    vals_str = self.to_string(separator = ", ")
-    indented = f"\n{vals_str}".replace("\n", "\n    ")
-    return f"{type_str}:{indented}"
+  def eval(self):
+    return self._forward_to_unary_array_op("eval")

@@ -69,12 +69,12 @@ TEST_CASE("Test normalizing expressions", "[lang]") {
     normalize(graph, q_node);
 
     // Validate the normalized expression graph.
-    REQUIRE(q_node->data.kind == ExprArgs::MERGE_2);
-    REQUIRE(q_node->deps[0]->data.kind == ExprArgs::SLICE);
-    REQUIRE(q_node->deps[0]->deps[0]->data.kind == ExprArgs::STORE);
+    REQUIRE(q_node->data.kind == ExprData::MERGE_2);
+    REQUIRE(q_node->deps[0]->data.kind == ExprData::SLICE);
+    REQUIRE(q_node->deps[0]->deps[0]->data.kind == ExprData::STORE);
     REQUIRE(!q_node->deps[0]->deps[1]);
-    REQUIRE(q_node->deps[1]->data.kind == ExprArgs::SLICE);
-    REQUIRE(q_node->deps[1]->deps[0]->data.kind == ExprArgs::STORE);
+    REQUIRE(q_node->deps[1]->data.kind == ExprData::SLICE);
+    REQUIRE(q_node->deps[1]->deps[0]->data.kind == ExprData::STORE);
     REQUIRE(!q_node->deps[1]->deps[1]);
 
     // Validate the string-format of the normalized expression.
@@ -103,10 +103,10 @@ TEST_CASE("Test building evaluation plans", "[lang]") {
 
   // Validate sources.
   REQUIRE(plan.sources.size() == 2);
-  REQUIRE(plan.sources[0]->data.kind == ExprArgs::SLICE);
-  REQUIRE(plan.sources[0]->deps[0]->data.kind == ExprArgs::STORE);
-  REQUIRE(plan.sources[1]->data.kind == ExprArgs::SLICE);
-  REQUIRE(plan.sources[1]->deps[0]->data.kind == ExprArgs::STORE);
+  REQUIRE(plan.sources[0]->data.kind == ExprData::SLICE);
+  REQUIRE(plan.sources[0]->deps[0]->data.kind == ExprData::STORE);
+  REQUIRE(plan.sources[1]->data.kind == ExprData::SLICE);
+  REQUIRE(plan.sources[1]->deps[0]->data.kind == ExprData::STORE);
 
   // Validate eval nodes.
   REQUIRE(plan.nodes.size() == 3);

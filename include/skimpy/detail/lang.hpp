@@ -95,14 +95,14 @@ inline constexpr auto merge_fn() {
 }
 
 // Union of arguments composing an expression.
-struct ExprArgs {
+struct ExprData {
   int size;
   int span;
   enum { STORE, SLICE, MERGE_1, MERGE_2, MERGE_3 } kind;
   std::variant<std::monostate, StoreArgs, SliceArgs, MergeArgs> args;
 };
 
-using Expr = dags::SharedNode<kMaxExprDeps, ExprArgs>;
+using Expr = dags::SharedNode<kMaxExprDeps, ExprData>;
 
 // Typed wrapper of an expression for generating typed output.
 template <typename Val>
@@ -128,7 +128,7 @@ inline auto store(std::shared_ptr<BoxStore> store) {
   auto ret = Expr::make_ptr();
   ret->data.size = 1;
   ret->data.span = store->span();
-  ret->data.kind = ExprArgs::STORE;
+  ret->data.kind = ExprData::STORE;
   ret->data.args.emplace<StoreArgs>(std::move(store));
   return TypedExpr<Val>{ret};
 }
@@ -160,7 +160,7 @@ inline auto slice(TypedExpr<Val> in, step::cyclic::StepFn step_fn) {
   auto ret = Expr::make_ptr();
   ret->data.size = 1 + in->data.size;
   ret->data.span = step_fn(in->data.span);
-  ret->data.kind = ExprArgs::SLICE;
+  ret->data.kind = ExprData::SLICE;
   ret->data.args.emplace<SliceArgs>({std::move(step_fn)});
   ret->deps[0] = std::move(in.expr);
   return TypedExpr<Val>{ret};
@@ -181,7 +181,7 @@ inline auto merge(TypedExpr<In> in) {
   auto ret = Expr::make_ptr();
   ret->data.size = 1 + in->data.size;
   ret->data.span = in->data.span;
-  ret->data.kind = ExprArgs::MERGE_1;
+  ret->data.kind = ExprData::MERGE_1;
   ret->data.args.emplace<MergeArgs>(merge_fn<Out, In, fn>());
   ret->deps[0] = std::move(in.expr);
   return TypedExpr<Out>{ret};
@@ -199,7 +199,7 @@ inline auto merge(TypedExpr<In1> in_1, TypedExpr<In2> in_2) {
   auto ret = Expr::make_ptr();
   ret->data.size = 1 + in_1->data.size + in_2->data.size;
   ret->data.span = in_1->data.span;
-  ret->data.kind = ExprArgs::MERGE_2;
+  ret->data.kind = ExprData::MERGE_2;
   ret->data.args.emplace<MergeArgs>(merge_fn<Out, In1, In2, fn>());
   ret->deps[0] = std::move(in_1.expr);
   ret->deps[1] = std::move(in_2.expr);
@@ -225,7 +225,7 @@ inline auto merge(
   auto ret = Expr::make_ptr();
   ret->data.size = 1 + in_1->data.size + in_2->data.size + in_3->data.size;
   ret->data.span = in_1->data.span;
-  ret->data.kind = ExprArgs::MERGE_3;
+  ret->data.kind = ExprData::MERGE_3;
   ret->data.args.emplace<MergeArgs>(merge_fn<Out, In1, In2, In3, fn>());
   ret->deps[0] = std::move(in_1.expr);
   ret->deps[1] = std::move(in_2.expr);
@@ -272,20 +272,20 @@ inline auto debug_str(TypedExpr<Val> in) {
   expr_dfs(in.expr, [&](auto e) {
     if (id_map.count(e)) {
       return false;
-    } else if (e->data.kind == ExprArgs::STORE) {
+    } else if (e->data.kind == ExprData::STORE) {
       add_stmt(e, fmt::format("store(span={})", e->data.span));
       return false;
-    } else if (e->data.kind == ExprArgs::SLICE) {
+    } else if (e->data.kind == ExprData::SLICE) {
       if (auto it = id_map.find(e->deps[0]); it != id_map.end()) {
         add_stmt(e, fmt::format("slice(x{})", it->second));
         return false;
       }
-    } else if (e->data.kind == ExprArgs::MERGE_1) {
+    } else if (e->data.kind == ExprData::MERGE_1) {
       if (auto it = id_map.find(e->deps[0]); it != id_map.end()) {
         add_stmt(e, fmt::format("merge(x{})", it->second));
         return false;
       }
-    } else if (e->data.kind == ExprArgs::MERGE_2) {
+    } else if (e->data.kind == ExprData::MERGE_2) {
       auto it_1 = id_map.find(e->deps[0]);
       auto it_2 = id_map.find(e->deps[1]);
       if (it_1 != id_map.end() && it_2 != id_map.end()) {
@@ -294,7 +294,7 @@ inline auto debug_str(TypedExpr<Val> in) {
         add_stmt(e, fmt::format("merge(x{}, x{})", id_1, id_2));
         return false;
       }
-    } else if (e->data.kind == ExprArgs::MERGE_3) {
+    } else if (e->data.kind == ExprData::MERGE_3) {
       auto it_1 = id_map.find(e->deps[0]);
       auto it_2 = id_map.find(e->deps[1]);
       auto it_3 = id_map.find(e->deps[2]);
@@ -315,7 +315,7 @@ inline auto debug_str(TypedExpr<Val> in) {
   return fmt::format("{}", fmt::join(stmts, ";\n"));
 }
 
-using ExprGraph = dags::Graph<kMaxExprDeps, ExprArgs>;
+using ExprGraph = dags::Graph<kMaxExprDeps, ExprData>;
 
 template <typename Fn>
 inline void graph_dfs(ExprGraph::Handle handle, Fn&& fn) {
@@ -415,20 +415,20 @@ inline auto debug_str(ExprGraph::Handle in) {
   graph_dfs(in, [&](auto h) {
     if (id_map.count(h)) {
       return false;
-    } else if (h->data.kind == ExprArgs::STORE) {
+    } else if (h->data.kind == ExprData::STORE) {
       add_stmt(h, fmt::format("store(span={})", h->data.span));
       return false;
-    } else if (h->data.kind == ExprArgs::SLICE) {
+    } else if (h->data.kind == ExprData::SLICE) {
       if (auto it = id_map.find(h->deps[0]); it != id_map.end()) {
         add_stmt(h, fmt::format("slice(x{})", it->second));
         return false;
       }
-    } else if (h->data.kind == ExprArgs::MERGE_1) {
+    } else if (h->data.kind == ExprData::MERGE_1) {
       if (auto it = id_map.find(h->deps[0]); it != id_map.end()) {
         add_stmt(h, fmt::format("merge(x{})", it->second));
         return false;
       }
-    } else if (h->data.kind == ExprArgs::MERGE_2) {
+    } else if (h->data.kind == ExprData::MERGE_2) {
       auto it_1 = id_map.find(h->deps[0]);
       auto it_2 = id_map.find(h->deps[1]);
       if (it_1 != id_map.end() && it_2 != id_map.end()) {
@@ -437,7 +437,7 @@ inline auto debug_str(ExprGraph::Handle in) {
         add_stmt(h, fmt::format("merge(x{}, x{})", id_1, id_2));
         return false;
       }
-    } else if (h->data.kind == ExprArgs::MERGE_3) {
+    } else if (h->data.kind == ExprData::MERGE_3) {
       auto it_1 = id_map.find(h->deps[0]);
       auto it_2 = id_map.find(h->deps[1]);
       auto it_3 = id_map.find(h->deps[2]);
@@ -495,7 +495,7 @@ inline auto schedule(ExprGraph::Handle root) {
     std::vector<ExprGraph::Handle> filtered;
     for (int i = 0; i < steps.size() - 1; i += 1) {
       auto& step = steps[i];
-      if (step->data.kind == ExprArgs::STORE) {
+      if (step->data.kind == ExprData::STORE) {
         depth_map[step] = 1;
         width_map[step] = 1;
         continue;
@@ -529,11 +529,11 @@ inline auto schedule(ExprGraph::Handle root) {
 // Expands an expression into the store [=> slice] [=> merge ...] normal form.
 inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
   // If the root is a store, introduce a root slice and return.
-  if (root->data.kind == ExprArgs::STORE) {
-    auto c = graph.emplace(ExprArgs(root->data));
+  if (root->data.kind == ExprData::STORE) {
+    auto c = graph.emplace(ExprData(root->data));
     root->data.size = 2;
     root->data.span = c->data.span;
-    root->data.kind = ExprArgs::SLICE;
+    root->data.kind = ExprData::SLICE;
     root->data.args.template emplace<SliceArgs>();
     root->deps[0] = c;
     return;
@@ -548,12 +548,12 @@ inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
   // 2. If the node is a merge node, recurse without mutation. Before recursing
   //    on a store child, introduce a slice node.
   dfs(root, [&](auto h, auto& q) {
-    CHECK_STATE(h->data.kind != ExprArgs::STORE);
-    if (h->data.kind == ExprArgs::SLICE) {
+    CHECK_STATE(h->data.kind != ExprData::STORE);
+    if (h->data.kind == ExprData::SLICE) {
       auto c = h->deps[0];
-      if (c->data.kind == ExprArgs::STORE) {
+      if (c->data.kind == ExprData::STORE) {
         return;
-      } else if (c->data.kind == ExprArgs::SLICE) {
+      } else if (c->data.kind == ExprData::SLICE) {
         auto&& h_args = std::move(std::get<SliceArgs>(h->data.args));
         auto&& c_args = std::move(std::get<SliceArgs>(c->data.args));
         h->data.size -= 1;
@@ -565,7 +565,7 @@ inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
         auto h_size = c->data.size;
         for (int i = 0; i < kMaxExprDeps; i += 1) {
           if (auto dep = c->deps[i]) {
-            h->deps[i] = graph.emplace(ExprArgs(h->data));
+            h->deps[i] = graph.emplace(ExprData(h->data));
             h->deps[i]->data.size = 1 + dep->data.size;
             h->deps[i]->deps[0] = dep;
             h_size += 1;
@@ -581,11 +581,11 @@ inline auto normalize(ExprGraph& graph, ExprGraph::Handle root) {
     } else {
       for (int i = 0; i < kMaxExprDeps; i += 1) {
         if (auto dep = h->deps[i]) {
-          if (dep->data.kind == ExprArgs::STORE) {
+          if (dep->data.kind == ExprData::STORE) {
             h->deps[i] = graph.emplace();
             h->deps[i]->data.size = 2;
             h->deps[i]->data.span = dep->data.span;
-            h->deps[i]->data.kind = ExprArgs::SLICE;
+            h->deps[i]->data.kind = ExprData::SLICE;
             h->deps[i]->data.args.template emplace<SliceArgs>();
             h->deps[i]->deps[0] = dep;
           } else {
@@ -632,23 +632,23 @@ inline auto build_plan(ExprGraph::Handle root) {
       }
       q.emplace_back(h, id, depth);
     } else {
-      if (h->data.kind == ExprArgs::SLICE) {
+      if (h->data.kind == ExprData::SLICE) {
         CHECK_STATE(h->deps[0]);
-        CHECK_STATE(h->deps[0]->data.kind == ExprArgs::STORE);
+        CHECK_STATE(h->deps[0]->data.kind == ExprData::STORE);
         auto& node = plan.nodes.emplace_back();
         node.kind = EvalPlan::Node::SOURCE;
         node.index = plan.sources.size();
         plan.sources.push_back(h);
         plan.depth = std::max(plan.depth, depth);
-      } else if (h->data.kind == ExprArgs::MERGE_1) {
+      } else if (h->data.kind == ExprData::MERGE_1) {
         auto& node = plan.nodes.emplace_back();
         node.kind = EvalPlan::Node::MERGE_1;
         node.fn = std::get<MergeArgs>(h->data.args).merge_fn;
-      } else if (h->data.kind == ExprArgs::MERGE_2) {
+      } else if (h->data.kind == ExprData::MERGE_2) {
         auto& node = plan.nodes.emplace_back();
         node.kind = EvalPlan::Node::MERGE_2;
         node.fn = std::get<MergeArgs>(h->data.args).merge_fn;
-      } else if (h->data.kind == ExprArgs::MERGE_3) {
+      } else if (h->data.kind == ExprData::MERGE_3) {
         auto& node = plan.nodes.emplace_back();
         node.kind = EvalPlan::Node::MERGE_3;
         node.fn = std::get<MergeArgs>(h->data.args).merge_fn;
@@ -891,7 +891,7 @@ inline auto materialize(TypedExpr<Val> in) {
     step->clear();
     step->data.size = 1;
     step->data.span = store->span();
-    step->data.kind = ExprArgs::STORE;
+    step->data.kind = ExprData::STORE;
     step->data.args.template emplace<StoreArgs>(std::move(store));
   }
 

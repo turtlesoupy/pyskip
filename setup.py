@@ -92,7 +92,7 @@ setup(
     name = "skimpy",
     version = "0.1.2",
     author = "Taylor Gordon, Thomas Dimson",
-    description = "A test library to build C++/Cuda Python extensions",
+    description = "RLE-compressed tensor library",
     long_description = "",
     headers = HEADERS,
     ext_modules = [

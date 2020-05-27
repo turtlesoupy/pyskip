@@ -362,7 +362,7 @@ auto from_buffer(const TensorShape<dim>& shape, int size, const Val* data) {
 
 template <size_t dim, typename Val>
 inline auto to_vector(const Tensor<dim, Val>& tensor) {
-  return conv::to_vector(tensor.store());
+  return conv::to_vector(*tensor.store());
 }
 template <size_t dim, typename Val>
 inline auto to_buffer(const Tensor<dim, Val>& tensor, int* size, Val** buffer) {

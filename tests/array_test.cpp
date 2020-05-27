@@ -93,3 +93,16 @@ TEST_CASE("Test arrays merge routines", "[arrays]") {
   REQUIRE(x.str() == "1=>1, 3=>3, 5=>2");
   REQUIRE(y.str() == "1=>2, 3=>3, 4=>2, 5=>6");
 }
+
+TEST_CASE("Test float arrays", "[arrays]") {
+  auto x = skimpy::make_array(5, 1.0f);
+  auto y = skimpy::make_array(5, 2.0f);
+
+  REQUIRE_THAT(
+      skimpy::to_vector(x + y),
+      Catch::Equals<float>({3.0f, 3.0f, 3.0f, 3.0f, 3.0f}));
+
+  REQUIRE_THAT(
+      skimpy::to_vector((3.0f * x) % y),
+      Catch::Equals<float>({1.0f, 1.0f, 1.0f, 1.0f, 1.0f}));
+}
