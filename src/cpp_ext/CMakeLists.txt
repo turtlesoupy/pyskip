@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.8)
 
 # Add and configure the skimpy python extension target.
-add_library(skimpy_ext MODULE skimpy_ext.cpp)
+SET(
+  ALL_BINDS
+  binds/bool_binds.cpp 
+  binds/char_binds.cpp 
+  binds/float_binds.cpp 
+  binds/int_binds.cpp
+)
+
+add_library(skimpy_ext MODULE skimpy_ext.cpp ${ALL_BINDS})
 target_link_libraries(skimpy_ext PRIVATE pybind11::module skimpy)
 set_target_properties(
   skimpy_ext
