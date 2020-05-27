@@ -130,7 +130,6 @@ class SkimpyMinecraftLevel:
             end_y = start_y + chunk.tensor.shape[1]
             end_z = start_z + chunk.tensor.shape[2]
             megatensor[start_x:end_x, start_y:end_y, start_z:end_z] = chunk.tensor
-            break
         return megatensor
 
 
