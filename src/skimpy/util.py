@@ -7,7 +7,7 @@ from . import tensor
 def unify_slices(slices: Union[int, slice, List[Union[slice]]]) -> slice:
     """Maps a mixed tuple of slices and int indices to a tuple of all slices."""
     if not isinstance(slices, Iterable):
-        return (slices,)
+        return (slices, )
     if all(isinstance(sl, int) for sl in slices):
         return slices
     ret = []

@@ -14,7 +14,6 @@ from .exceptions import (
     TypeConversionError,
 )
 
-
 _postfix_type_mapping = {int: "i", float: "f"}
 _postfix_type_mapping_reverse = {v: k for k, v in _postfix_type_mapping.items()}
 _prefix_type_mapping = {int: "Int", float: "Float"}
@@ -40,7 +39,7 @@ class TensorBuilder:
     def __setitem__(self, items, value):
         # TODO: make this support slice ranges
         if not isinstance(items, Iterable):
-            items = (items,)
+            items = (items, )
         elif not all(isinstance(e, int) for e in items):
             raise UnimplementedOperationError("Builder __setitem__ only works with integers for now")
 
@@ -49,7 +48,11 @@ class TensorBuilder:
 
     def build(self):
         val = self._builder.build()
-        return Tensor(shape=self.shape, val=val, dtype=self.dtype,)
+        return Tensor(
+            shape=self.shape,
+            val=val,
+            dtype=self.dtype,
+        )
 
 
 class Tensor:
@@ -76,7 +79,7 @@ class Tensor:
             raise InvalidTensorError("Must specify shape")
 
         if isinstance(shape, int):
-            shape = (shape,)
+            shape = (shape, )
 
         dimensionality = len(shape)
         if dimensionality < 1:
@@ -103,7 +106,7 @@ class Tensor:
 
     @classmethod
     def _validate_or_cast(cls, a, b):
-        if a.shape != b.shape and b.shape != (1,):
+        if a.shape != b.shape and b.shape != (1, ):
             raise IncompatibleTensorError(f"Incompatible shapes: {a.shape} and {b.shape}")
 
         return (a, b)
