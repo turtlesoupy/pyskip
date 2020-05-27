@@ -29,6 +29,7 @@ mccabe==0.6.1
 mistune==0.8.4
 nbconvert==5.6.1
 nbformat==5.0.4
+nbt==1.5.0
 notebook==6.0.3
 numpy==1.18.2
 pandocfilters==1.4.2
@@ -54,6 +55,7 @@ terminado==0.8.3
 testpath==0.4.4
 tornado==6.0.4
 traitlets==4.3.3
+tqdm==4.46
 typed-ast==1.4.1
 wcwidth==0.1.8
 webencodings==0.5.1

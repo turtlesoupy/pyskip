@@ -1,22 +1,22 @@
 class SkimpyError(RuntimeError):
-  pass
+    pass
 
 
 class SkimpyInvariantViolation(SkimpyError):
-  pass
+    pass
 
 
 class InvalidTensorError(SkimpyError):
-  pass
+    pass
 
 
 class IncompatibleTensorError(SkimpyError):
-  pass
+    pass
 
 
 class UnimplementedOperationError(SkimpyError):
-  pass
+    pass
 
 
 class TypeConversionError(SkimpyError):
-  pass
+    pass
