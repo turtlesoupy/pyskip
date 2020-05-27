@@ -237,6 +237,37 @@ inline auto strided_lut() {
   return &lut[0];
 }
 
+inline auto eval_expr(ExprNode::Ptr in, core::Pos pos) {
+  if (pos <= 0) {
+    return 0;
+  }
+  if (pos > in->data.span) {
+    return eval_expr(in, in->data.span);
+  }
+  if (in->data.kind == ExprData::TABLE) {
+    return in->data.table.lut[(pos - 1) & in->data.table.mask];
+  } else if (in->data.kind == ExprData::FIXED) {
+    return in->data.step;
+  } else if (in->data.kind == ExprData::SCALED) {
+    return pos * in->data.scaled.scale;
+  } else if (in->data.kind == ExprData::STRIDED) {
+    return 1 + (pos - 1) / in->data.strided.stride;
+  } else {
+    CHECK_STATE(in->data.kind == ExprData::STACK);
+    auto loop_span = in->data.stack.loop_span;
+    auto loop_step = in->data.stack.loop_step;
+    auto l_span = in->deps[0]->data.span;
+    auto quo = pos / loop_span, rem = pos % loop_span;
+    if (rem <= l_span) {
+      return quo * loop_step + eval_expr(in->deps[0], rem);
+    } else {
+      CHECK_STATE(in->deps[1] && rem - l_span <= in->deps[1]->data.span);
+      auto base = quo * loop_step + in->deps[0]->data.step;
+      return base + eval_expr(in->deps[1], rem - l_span);
+    }
+  }
+}
+
 inline auto stack(int reps, ExprNode::Ptr l, ExprNode::Ptr r = nullptr) {
   CHECK_ARGUMENT(l);
   auto ret = ExprNode::make_ptr();
@@ -262,6 +293,7 @@ inline auto clamp(Pos span, ExprNode::Ptr in) {
   auto ret = ExprNode::make_ptr();
   *ret = *in;
   ret->data.span = std::min<Pos>(ret->data.span, span);
+  ret->data.step = eval_expr(ret, ret->data.span);
   return ret;
 }
 
@@ -273,18 +305,6 @@ inline auto table(Pos span, Pos* lut, Pos mask = 0xFFFFFFFF) {
   ret->data.table.mask = mask;
   ret->data.span = span;
   ret->data.step = lut[mask & (span - 1)];
-  ret->data.kind = ExprData::TABLE;
-  return ret;
-}
-
-template <Pos k>
-inline auto shift() {
-  static_assert(k >= 0);
-  auto ret = ExprNode::make_ptr();
-  ret->data.table.lut = nullptr;
-  ret->data.table.mask = 0;
-  ret->data.span = 0;
-  ret->data.step = k;
   ret->data.kind = ExprData::TABLE;
   return ret;
 }

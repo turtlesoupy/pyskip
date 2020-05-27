@@ -3,8 +3,10 @@
 
 #include <fmt/format.h>
 
+#include <array>
 #include <catch2/catch.hpp>
 #include <skimpy/detail/step.hpp>
+#include <vector>
 
 using namespace skimpy::detail::step;
 
@@ -22,7 +24,7 @@ TEST_CASE("Test cyclic step functions", "[step]") {
 
   // Strided step function
   {
-    1, 0, 0, 0, 1, 0, 0, 0 auto step_fn = build(strided<4>(10));
+    auto step_fn = build(strided<4>(10));
     REQUIRE_THAT(
         gen(step_fn, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
         Catch::Equals<Pos>({0, 1, 1, 1, 1, 2, 2, 2, 2, 3}));
@@ -110,6 +112,46 @@ TEST_CASE("Test multi-dimensional cyclic step function", "[step]") {
   }
 }
 
+TEST_CASE("Test large multi-dimensional cyclic step function", "[step]") {
+  constexpr auto x_d = 512, y_d = 512;
+  constexpr auto n = x_d * y_d;
+
+  std::array<int, 2> shape = {x_d, y_d};
+  std::array<std::array<int, 2>, 2> components = {1, x_d - 1, 1, y_d - 1};
+
+  // Create the cycle step functino.
+  auto fn = [&] {
+    namespace sc = cyclic;
+
+    auto scale = 1;
+    auto i_0 = 0, i_1 = 1;
+    sc::ExprNode::Ptr expr = nullptr;
+    for (int i = 0; i < 2; i += 1) {
+      auto [c_0, c_1] = components[i];
+      i_0 += c_0 * scale;
+      i_1 += (c_1 - 1) * scale;
+      if (i == 0) {
+        expr = sc::strided(c_1 - c_0, 1);
+      } else {
+        auto reps = c_1 - c_0;
+        auto tail = scale - expr->data.span;
+        auto span = i_1 - i_0;
+        if (tail > 0) {
+          expr = sc::clamp(span, sc::stack(reps, expr, sc::fixed<0>(tail)));
+        } else if (reps > 1) {
+          expr = sc::clamp(span, sc::stack(reps, expr));
+        }
+      }
+      scale *= shape[i];
+    }
+
+    return sc::build(i_0, i_1, expr);
+  }();
+
+  // Validate the size of the step function.
+  REQUIRE(span(0, n, fn) == (x_d - 2) * (y_d - 2));
+}
+
 TEST_CASE("Test step function spans", "[step]") {
   using namespace cyclic;
 
@@ -149,7 +191,7 @@ TEST_CASE("Test corner-case cyclic step function", "[step]") {
   }
 
   {
-    auto step_fn = build(stack(shift<2>(), scaled<1>(3)));
+    auto step_fn = build(stack(shift(2), scaled<1>(3)));
     REQUIRE_THAT(
         gen(step_fn, {0, 1, 2, 3, 4, 5, 6}),
         Catch::Equals<Pos>({0, 3, 4, 5, 5, 5, 5}));
