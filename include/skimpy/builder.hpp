@@ -15,6 +15,8 @@ namespace box = detail::box;
 namespace core = detail::core;
 namespace util = detail::util;
 
+using Pos = core::Pos;
+
 struct Band {
   core::Pos start;
   core::Pos stop;

@@ -90,7 +90,7 @@ HEADERS = glob.glob("include/**/*.hpp")
 
 setup(
     name = "skimpy",
-    version = "0.1.2",
+    version = "0.1.5",
     author = "Taylor Gordon, Thomas Dimson",
     description = "RLE-compressed tensor library",
     long_description = "",
