@@ -26,6 +26,8 @@ namespace mask = detail::mask;
 namespace step = detail::step;
 namespace util = detail::util;
 
+using Pos = core::Pos;
+
 template <size_t dim>
 using TensorPos = std::array<core::Pos, dim>;
 
