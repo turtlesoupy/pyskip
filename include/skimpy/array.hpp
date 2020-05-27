@@ -276,7 +276,7 @@ BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 
 template <>
 Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
-  return lhs.template merge<&fmodf>(rhs);
+  return lhs.template merge<fmodf>(rhs);
 }
 
 // Binary bitwise operations

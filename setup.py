@@ -65,6 +65,7 @@ class CMakeBuild(build_ext):
             ],
             posix_args = [
                 f"-DCMAKE_BUILD_TYPE={config}",
+                f"-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON",
             ],
         ),
         cwd = self.build_temp,
@@ -76,7 +77,9 @@ class CMakeBuild(build_ext):
     subprocess.check_call(
         args = [
             "cmake", "--build", ".", "--target", ext.target, "--config",
-            config
+            config,
+            "--",  "-j", str(os.cpu_count()),
+
         ],
         cwd = self.build_temp,
     )
