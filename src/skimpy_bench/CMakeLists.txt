@@ -2,8 +2,16 @@ cmake_minimum_required(VERSION 3.8)
 
 find_package(OpenMP REQUIRED)
 
+if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+  SET(AVX_COMPILE_OPTION -mavx2)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
+  SET(AVX_COMPILE_OPTION /QxAVX2)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  SET(AVX_COMPILE_OPTION /arch:AVX2)
+endif()
+
 add_library(skimpy_bench_cpp_ext MODULE cpp_ext.cpp)
-target_compile_options(skimpy_bench_cpp_ext PRIVATE ${OpenMP_CXX_FLAGS})
+target_compile_options(skimpy_bench_cpp_ext PRIVATE ${OpenMP_CXX_FLAGS} ${AVX_COMPILE_OPTION})
 target_link_libraries(skimpy_bench_cpp_ext PRIVATE pybind11::module ${OpenMP_CXX_FLAGS})
 set_target_properties(
   skimpy_bench_cpp_ext

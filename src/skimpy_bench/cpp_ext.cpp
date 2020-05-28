@@ -4,6 +4,7 @@
 #include <atomic>
 #include <iostream>
 #include <omp.h>
+#include <immintrin.h>
 
 namespace py = pybind11;
 
@@ -102,6 +103,63 @@ auto noSIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThr
   );
 }
 
+#if !defined(WIN32)
+__attribute__((optimize("no-tree-vectorize")))
+#endif
+auto SIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThreads) {
+  std::vector<std::unique_ptr<int32_t[]>> spaces;
+  assert(numInputs < 1024);
+  int32_t* spacePtrs[1024];
+  for (int i = 0; i < numInputs; i++) {
+    spaces.push_back(newRandIntArray(num));
+    spacePtrs[i] = spaces[i].get();
+  }
+
+  const int simd_width = 8;
+  const int reduction_scope = num - num % (numThreads * simd_width);
+
+  std::atomic<int> bigSum;
+  auto startTime = std::chrono::high_resolution_clock::now();
+  #pragma omp parallel num_threads(numThreads)
+  {
+    assert(omp_get_num_threads() == numThreads);
+    __m256i simd_reduction{ 0 };
+    #pragma omp for
+    for (Pos i = 0; i < reduction_scope; i+=simd_width) {
+      for (int j = 0; j < numInputs; j++) {
+        simd_reduction = _mm256_add_epi32(simd_reduction, _mm256_load_si256(reinterpret_cast<__m256i const*>(&spacePtrs[j][i])));
+      }
+    }
+
+    int accum = 0;
+    accum += _mm256_extract_epi32(simd_reduction, 0);
+    accum += _mm256_extract_epi32(simd_reduction, 1);
+    accum += _mm256_extract_epi32(simd_reduction, 2);
+    accum += _mm256_extract_epi32(simd_reduction, 3);
+    accum += _mm256_extract_epi32(simd_reduction, 4);
+    accum += _mm256_extract_epi32(simd_reduction, 5);
+    accum += _mm256_extract_epi32(simd_reduction, 6);
+    accum += _mm256_extract_epi32(simd_reduction, 7);
+    bigSum += accum;
+  }
+
+  // Remainder
+  int accum = 0;
+  for (Pos i = reduction_scope; i < num; i++) {
+    for (int j = 0; j < numInputs; j++) { 
+      accum += spacePtrs[j][i];
+    }
+  }
+  bigSum += accum;
+
+  auto duration = std::chrono::high_resolution_clock::now() - startTime;
+
+  return std::make_tuple(
+    std::chrono::duration_cast<std::chrono::microseconds>(duration).count(),
+    bigSum.load()
+  );
+}
+
 PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
   m.doc() = "Benchmarks for skimpy";
   m.attr("__version__") = "0.1";
@@ -109,6 +167,10 @@ PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
   py::module memory = m.def_submodule("memory", "Memory benchmarks");
   memory.def("no_simd_int_sum", [](Pos num, int numInputs, int numThreads) {
     auto result = noSIMDIntSumMultiInput(num, numInputs, numThreads); 
+    return std::get<0>(result);
+  });
+  memory.def("simd_int_sum", [](Pos num, int numInputs, int numThreads) {
+    auto result = SIMDIntSumMultiInput(num, numInputs, numThreads); 
     return std::get<0>(result);
   });
   memory.def("no_simd_int_cum_sum_write", [](Pos num, int numInputs, int numThreads) {
