@@ -339,12 +339,11 @@ inline void bind_tensor_class(py::module& m, const char* class_name) {
           });
 }
 
-template<typename Val>
+template <typename Val>
 inline void type_binds(
-    py::module &m,
-    const std::string &friendlyName,
-    const std::string &templatePostfix 
-) {
+    py::module& m,
+    const std::string& friendlyName,
+    const std::string& templatePostfix) {
   bind_builder_class<Val>(m, (friendlyName + "Builder").c_str());
   bind_array_class<Val>(m, (friendlyName + "Array").c_str());
   bind_tensor_class<1, Val>(m, ("Tensor1" + templatePostfix).c_str());
@@ -352,7 +351,9 @@ inline void type_binds(
   bind_tensor_class<3, Val>(m, ("Tensor3" + templatePostfix).c_str());
   bind_tensor_class<4, Val>(m, ("Tensor4" + templatePostfix).c_str());
 
-  m.def("from_numpy", [](py::array_t<Val>& array) {
-    return skimpy::from_buffer(array.size(), array.data());
-  });
+  m.def(
+      "from_numpy",
+      [](py::array_t<Val, py::array::c_style | py::array::forcecast>& array) {
+        return skimpy::from_buffer(array.size(), array.data());
+      });
 }

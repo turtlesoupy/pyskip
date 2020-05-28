@@ -106,3 +106,20 @@ TEST_CASE("Test float arrays", "[arrays]") {
       skimpy::to_vector((3.0f * x) % y),
       Catch::Equals<float>({1.0f, 1.0f, 1.0f, 1.0f, 1.0f}));
 }
+
+TEST_CASE("Test empty arrays", "[arrays]") {
+  {
+    auto x = skimpy::make_array(1, 0);
+    REQUIRE(x.get({1, 1}).len() == 0);
+  }
+
+  {
+    auto x = skimpy::from_buffer<int>(0, nullptr);
+    REQUIRE(x.empty());
+  }
+
+  {
+    auto x = skimpy::from_vector<int>({});
+    REQUIRE(x.empty());
+  }
+}

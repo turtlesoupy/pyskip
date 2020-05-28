@@ -26,13 +26,13 @@ namespace mask = detail::mask;
 namespace step = detail::step;
 namespace util = detail::util;
 
-using Pos = core::Pos;
-
 template <size_t dim>
 using TensorPos = std::array<core::Pos, dim>;
 
 template <size_t dim>
 struct TensorShape : public TensorPos<dim> {
+  static_assert(dim > 0, "Tensor slices must have positive dimension.");
+
   inline auto len() const {
     auto ret = 1;
     for (int i = 0; i < dim; i += 1) {
@@ -210,6 +210,7 @@ class Tensor {
   static_assert(dim > 0, "Tensors must have positive dimension.");
 
  public:
+  Tensor() : shape_(TensorShape<dim>()), op_{nullptr} {}
   Tensor(const TensorShape<dim>& shape, std::shared_ptr<box::BoxStore> store)
       : Tensor(shape, lang::store<Val>(std::move(store))) {}
 
@@ -307,6 +308,9 @@ class Tensor {
     return Tensor<dim, Val>(shape, boxes);
   }
   static auto make(const TensorShape<dim>& shape, Val val) {
+    if (shape.len() == 0) {
+      return Tensor<dim, Val>();
+    }
     return make(shape, core::make_store(shape.len(), val));
   }
   static auto make(const TensorShape<dim>& shape, const Array<Val>& array) {
@@ -322,13 +326,10 @@ class Tensor {
     // of evaluation. We thus eagerly evaluate once expressions become too big.
     // TODO: Run experiments to measure the ideal threshold here.
     constexpr auto kFlushThreshold = 32;
-    if (op_->data.size > kFlushThreshold) {
+    if (op_ && op_->data.size > kFlushThreshold) {
       op_ = lang::evaluate(op_);
     }
   }
-
-  // Constructs an empty tensor
-  Tensor() : shape_(TensorShape<dim>()), op_{nullptr} {}
 
   TensorShape<dim> shape_;
   lang::TypedExpr<Val> op_;
@@ -353,21 +354,35 @@ inline auto make_tensor(
 // Conversion routines
 template <size_t dim, typename Val>
 auto from_vector(const TensorShape<dim>& shape, const std::vector<Val>& vals) {
-  CHECK_ARGUMENT(len(shape) == vals.size());
+  CHECK_ARGUMENT(shape.len() == vals.size());
+  if (shape.len() == 0) {
+    return Tensor<dim, Val>();
+  }
   return Tensor<dim, Val>(shape, conv::to_store<Val, box::Box>(vals));
 }
 template <size_t dim, typename Val>
 auto from_buffer(const TensorShape<dim>& shape, int size, const Val* data) {
-  CHECK_ARGUMENT(len(shape) == size);
+  CHECK_ARGUMENT(shape.len() == size);
+  if (shape.len() == 0) {
+    return Tensor<dim, Val>();
+  }
   return Tensor<dim, Val>(shape, conv::to_store<Val, box::Box>(size, data));
 }
 
 template <size_t dim, typename Val>
 inline auto to_vector(const Tensor<dim, Val>& tensor) {
+  if (tensor.empty()) {
+    std::vector<Val>();
+  }
   return conv::to_vector(*tensor.store());
 }
 template <size_t dim, typename Val>
 inline auto to_buffer(const Tensor<dim, Val>& tensor, int* size, Val** buffer) {
+  if (tensor.empty()) {
+    *size = 0;
+    *buffer = nullptr;
+    return;
+  }
   auto store = tensor.store();
   *size = store->span();
   *buffer = new Val[*size];
