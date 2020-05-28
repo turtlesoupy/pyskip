@@ -287,11 +287,10 @@ BINARY_ARRAY_OP_SIMPLE(operator-, [](Val a, Val b) { return a - b; })
 BINARY_ARRAY_OP_SIMPLE(operator*, [](Val a, Val b) { return a * b; })
 BINARY_ARRAY_OP_SIMPLE(operator/, [](Val a, Val b) { return a / b; })
 BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
-
 template <>
-inline Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
+inline Array<float> operator%(const Array<float>& l, const Array<float>& r) {
   constexpr auto fn = [](float a, float b) { return fmodf(a, b); };
-  return lhs.template merge<fn>(rhs);
+  return l.template merge<fn>(r);
 }
 
 // Binary bitwise operations
