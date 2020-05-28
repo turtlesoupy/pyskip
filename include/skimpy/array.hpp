@@ -277,9 +277,8 @@ BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 
 template <>
 inline Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
-  // See https://stackoverflow.com/questions/4494919/multiple-definition-of-error-for-a-full-specialisation-of-a-template-functi/6293876 about inline
-  // HACK: We cannot use lambda here due to GCC bug: 83258
-  return lhs.template merge<fmodf>(rhs);
+  constexpr auto fn = [](float a, float b) { return fmodf(a, b); };
+  return lhs.template merge<fn>(rhs);
 }
 
 // Binary bitwise operations
