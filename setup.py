@@ -3,6 +3,7 @@ import os
 import platform
 import sys
 import subprocess
+from pathlib import Path
 
 from setuptools import setup, Extension, find_namespace_packages
 from setuptools.command.build_ext import build_ext
@@ -29,9 +30,12 @@ class CMakeBuild(build_ext):
         # Fail if the required cmake version is not available.
         subprocess.check_output(["cmake", "--version"])
 
+        base_build_temp = self.build_temp
         # Build each extension.
         for ext in self.extensions:
+            self.build_temp = str(Path(base_build_temp) / ext.name)
             self.build_extension(ext)
+        self.build_temp = base_build_temp
 
     def build_extension(self, ext):
         # Load default environment variables and set CXXFLAGS to match Python install.
@@ -45,7 +49,7 @@ class CMakeBuild(build_ext):
         config = "Debug" if self.debug else "Release"
 
         # Run CMake generation.
-        print("Generating cmake build...")
+        print(f"Generating cmake build from {self.build_temp}...")
         os.makedirs(self.build_temp, exist_ok=True)
         subprocess.check_call(
             args=platform_args(
@@ -98,6 +102,7 @@ setup(
     headers=HEADERS,
     ext_modules=[
         CMakeExtension("skimpy", "skimpy_ext"),
+        CMakeExtension("skimpy_bench", "skimpy_bench_cpp_ext"),
     ],
     cmdclass={"build_ext": CMakeBuild},
     package_dir={"": "src"},
