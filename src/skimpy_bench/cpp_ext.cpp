@@ -7,7 +7,11 @@
 
 namespace py = pybind11;
 
+#if defined(WIN32)
 using Pos = int32_t;
+#else 
+using Pos = size_t;
+#endif
 
 std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   std::unique_ptr<int32_t[]> space(new int32_t[size]);
