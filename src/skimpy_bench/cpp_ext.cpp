@@ -1,14 +1,15 @@
 #include <pybind11/pybind11.h>
 #include <chrono>
 #include <random>
-#include <future>
-#include <thread>
+#include <atomic>
 #include <iostream>
 #include <omp.h>
 
 namespace py = pybind11;
 
-std::unique_ptr<int32_t[]> newRandIntArray(const size_t size) {
+using Pos = int32_t;
+
+std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   std::unique_ptr<int32_t[]> space(new int32_t[size]);
   int32_t* spacePtr = space.get();
 
@@ -18,7 +19,7 @@ std::unique_ptr<int32_t[]> newRandIntArray(const size_t size) {
     std::uniform_int_distribution<int32_t> di(0, INT16_MAX);
 
     #pragma omp for
-    for (size_t i = 0; i < size; i++) {
+    for (Pos i = 0; i < size; i++) {
       spacePtr[i] = di(dre);
     }
   }
@@ -26,8 +27,10 @@ std::unique_ptr<int32_t[]> newRandIntArray(const size_t size) {
   return space;
 }
 
+#if !defined(WIN32)
 __attribute__((optimize("no-tree-vectorize")))
-auto noSIMDIntCumSumWrite(const long num, const long numInputs, const int numThreads) {
+#endif
+auto noSIMDIntCumSumWrite(const Pos num, const int numInputs, const int numThreads) {
   std::vector<std::unique_ptr<int32_t[]>> spaces;
   int32_t* spacePtrs[numInputs];
   for (int i = 0; i < numInputs; i++) {
@@ -44,7 +47,7 @@ auto noSIMDIntCumSumWrite(const long num, const long numInputs, const int numThr
     assert(omp_get_num_threads() == numThreads);
     int cumSum = 0;
     #pragma omp for
-    for (size_t i = 0; i < num; i++) {
+    for (Pos i = 0; i < num; i++) {
       for (int j = 0; j < numInputs; j++) {
         cumSum += spacePtrs[j][i];
       }
@@ -59,8 +62,10 @@ auto noSIMDIntCumSumWrite(const long num, const long numInputs, const int numThr
   );
 }
 
+#if !defined(WIN32)
 __attribute__((optimize("no-tree-vectorize")))
-auto noSIMDIntSumMultiInput(const long num, const long numInputs, const int numThreads) {
+#endif
+auto noSIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThreads) {
   std::vector<std::unique_ptr<int32_t[]>> spaces;
   int32_t* spacePtrs[numInputs];
   for (int i = 0; i < numInputs; i++) {
@@ -75,7 +80,7 @@ auto noSIMDIntSumMultiInput(const long num, const long numInputs, const int numT
     assert(omp_get_num_threads() == numThreads);
     int reduction = 0;
     #pragma omp for
-    for (size_t i = 0; i < num; i++) {
+    for (Pos i = 0; i < num; i++) {
       for (int j = 0; j < numInputs; j++) {
         reduction += spacePtrs[j][i];
       }
@@ -96,11 +101,11 @@ PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
   m.attr("__version__") = "0.1";
 
   py::module memory = m.def_submodule("memory", "Memory benchmarks");
-  memory.def("no_simd_int_sum", [](long num, int numInputs, int numThreads) {
+  memory.def("no_simd_int_sum", [](Pos num, int numInputs, int numThreads) {
     auto result = noSIMDIntSumMultiInput(num, numInputs, numThreads); 
     return std::get<0>(result);
   });
-  memory.def("no_simd_int_cum_sum_write", [](long num, int numInputs, int numThreads) {
+  memory.def("no_simd_int_cum_sum_write", [](Pos num, int numInputs, int numThreads) {
     auto result = noSIMDIntCumSumWrite(num, numInputs, numThreads); 
     return std::get<0>(result);
   });
