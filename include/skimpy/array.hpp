@@ -23,8 +23,6 @@ namespace lang = detail::lang;
 namespace mask = detail::mask;
 namespace step = detail::step;
 
-using Pos = core::Pos;
-
 struct Slice {
   core::Pos start;
   core::Pos stop;
@@ -66,6 +64,7 @@ struct Slice {
 template <typename Val>
 class Array {
  public:
+  Array() : op_{nullptr} {}
   Array(std::shared_ptr<box::BoxStore> store) : op_(lang::store<Val>(store)) {}
 
   // Metadata methods
@@ -191,6 +190,9 @@ class Array {
     return Array<Val>(std::make_shared<box::BoxStore>(box::box_store(store)));
   }
   static auto make(core::Pos len, Val val) {
+    if (len == 0) {
+      return Array<Val>();
+    }
     return make(core::make_store(len, val));
   }
 
@@ -202,13 +204,10 @@ class Array {
     // of evaluation. We thus eagerly evaluate once expressions become too big.
     // TODO: Run experiments to measure the ideal threshold here.
     constexpr auto kFlushThreshold = 32;
-    if (op_->data.size > kFlushThreshold) {
+    if (op_ && op_->data.size > kFlushThreshold) {
       op_ = lang::evaluate(op_);
     }
   }
-
-  // Constructs an empty array
-  Array() : op_{nullptr} {}
 
   lang::TypedExpr<Val> op_;
 
@@ -232,19 +231,33 @@ auto make_array(const core::Store<Val>& store) {
 // Conversion routines
 template <typename Val>
 auto from_vector(const std::vector<Val>& vals) {
+  if (vals.empty()) {
+    return Array<Val>();
+  }
   return Array<Val>(conv::to_store<Val, box::Box>(vals));
 }
 template <typename Val>
 auto from_buffer(int size, const Val* data) {
+  if (size == 0) {
+    return Array<Val>();
+  }
   return Array<Val>(conv::to_store<Val, box::Box>(size, data));
 }
 
 template <typename Val>
 auto to_vector(const Array<Val>& array) {
+  if (array.empty()) {
+    return std::vector<Val>();
+  }
   return conv::to_vector(*array.store());
 }
 template <typename Val>
 void to_buffer(const Array<Val>& array, int* size, Val** buffer) {
+  if (array.empty()) {
+    *size = 0;
+    *buffer = nullptr;
+    return;
+  }
   auto store = array.store();
   *size = store->span();
   *buffer = new Val[*size];
@@ -276,8 +289,8 @@ BINARY_ARRAY_OP_SIMPLE(operator/, [](Val a, Val b) { return a / b; })
 BINARY_ARRAY_OP_SIMPLE(operator%, [](Val a, Val b) { return a % b; })
 
 template <>
-inline Array<float> operator%(const Array<float>& lhs, const Array<float>& rhs) {
-  // See https://stackoverflow.com/questions/4494919/multiple-definition-of-error-for-a-full-specialisation-of-a-template-functi/6293876 about inline
+inline Array<float> operator%(
+    const Array<float>& lhs, const Array<float>& rhs) {
   // HACK: We cannot use lambda here due to GCC bug: 83258
   return lhs.template merge<fmodf>(rhs);
 }

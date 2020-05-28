@@ -73,6 +73,10 @@ class Tensor:
         skimpy_arr = _skimpy_cpp_ext.from_numpy(np_arr.flatten("C"))
         return cls(shape=tuple(reversed(np_shape)), val=skimpy_arr)
 
+    @classmethod
+    def from_list(cls, values, dtype=None):
+        return cls.from_numpy(np.array(values, dtype=dtype))
+
     def __init__(self, shape=None, val=0, dtype=int, cpp_tensor=None):
         if cpp_tensor:
             self._init_from_cpp_tensor(cpp_tensor)
@@ -247,6 +251,9 @@ class Tensor:
     def __len__(self):
         return len(self._tensor)
 
+    def empty(self):
+        return len(self) == 0
+
     def clone(self):
         return self._forward_to_unary_array_op("clone")
 
@@ -263,6 +270,9 @@ class Tensor:
     def to_numpy(self):
         np_arr = self._tensor.array().to_numpy()
         return np_arr.reshape(tuple(reversed(self.shape)))
+
+    def to_list(self):
+        return self.to_numpy().tolist()
 
     def to_string(self, threshold=20, separator=" "):
         from .io import format_tensor
