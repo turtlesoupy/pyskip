@@ -36,7 +36,8 @@ __attribute__((optimize("no-tree-vectorize")))
 #endif
 auto noSIMDIntCumSumWrite(const Pos num, const int numInputs, const int numThreads) {
   std::vector<std::unique_ptr<int32_t[]>> spaces;
-  int32_t* spacePtrs[numInputs];
+  assert(numInputs < 1024);
+  int32_t* spacePtrs[1024];
   for (int i = 0; i < numInputs; i++) {
     spaces.push_back(newRandIntArray(num));
     spacePtrs[i] = spaces[i].get();
@@ -71,7 +72,8 @@ __attribute__((optimize("no-tree-vectorize")))
 #endif
 auto noSIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThreads) {
   std::vector<std::unique_ptr<int32_t[]>> spaces;
-  int32_t* spacePtrs[numInputs];
+  assert(numInputs < 1024);
+  int32_t* spacePtrs[1024];
   for (int i = 0; i < numInputs; i++) {
     spaces.push_back(newRandIntArray(num));
     spacePtrs[i] = spaces[i].get();
