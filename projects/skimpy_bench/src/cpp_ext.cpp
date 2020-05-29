@@ -8,7 +8,9 @@
 #include <random>
 #include <thread>
 
+#ifdef ___GNUC__
 #include "taco.h"
+#endif
 
 namespace py = pybind11;
 
@@ -22,6 +24,7 @@ using Pos = size_t;
 
 static constexpr int kMaxInputs = 1024;
 
+#ifdef ___GNUC__
 taco::Tensor<int32_t> randTacoDense(const int32_t size, const int32_t seed) {
   taco::Format dense({taco::Dense});
   taco::Tensor<int32_t> out({size}, dense);
@@ -59,6 +62,7 @@ taco::Tensor<int32_t> randTacoSparse(
 
   return out;
 }
+#endif
 
 std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   std::unique_ptr<int32_t[]> space(new int32_t[size]);
@@ -200,6 +204,7 @@ NO_TREE_VECTORIZE auto SIMDIntSumMultiInput(
       bigSum.load());
 }
 
+#ifdef ___GNUC__
 auto tacoSparseSum(
     const int32_t size,
     const int32_t numNonZero,
@@ -285,12 +290,14 @@ auto tacoDenseSum(
       std::chrono::duration_cast<std::chrono::microseconds>(duration).count(),
       element);
 }
+#endif
 
 PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
   using namespace pybind11::literals;
   m.doc() = "Benchmarks for skimpy";
   m.attr("__version__") = "0.2";
 
+#ifdef ___GNUC__
   py::module taco = m.def_submodule("taco", "Taco Comparison Benchmarks");
   taco.def(
       "dense_sum",
@@ -326,6 +333,7 @@ PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
       "align_inputs"_a,
       "num_input_arrays"_a,
       "include_compile_time"_a = true);
+#endif
 
   py::module memory = m.def_submodule("memory", "Memory benchmarks");
   memory.def(

@@ -12,6 +12,7 @@ project(
 # User options controlling what we build.
 option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
 option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
+option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
 
 # Compiler settings.
 set(CMAKE_CXX_STANDARD 17)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.16)
 
 find_package(OpenMP REQUIRED)
 
@@ -12,8 +12,14 @@ endif()
 
 add_library(skimpy_bench_cpp_ext MODULE cpp_ext.cpp)
 target_compile_options(skimpy_bench_cpp_ext PRIVATE ${OpenMP_CXX_FLAGS} ${AVX_COMPILE_OPTION})
-target_link_libraries(skimpy_bench_cpp_ext PRIVATE pybind11::module taco ${OpenMP_CXX_FLAGS})
-target_include_directories(skimpy_bench_cpp_ext PRIVATE ${CMAKE_SOURCE_DIR}/third_party/taco/include)
+target_link_libraries(skimpy_bench_cpp_ext PRIVATE pybind11::module)
+
+# Enable Taco if we're on GCC.
+if(SKIMPY_BENCH_ENABLE_TACO)
+  target_link_libraries(skimpy_bench_cpp_ext PRIVATE taco)
+  target_include_directories(skimpy_bench_cpp_ext PRIVATE ${CMAKE_SOURCE_DIR}/third_party/taco/include)
+endif()
+
 set_target_properties(
   skimpy_bench_cpp_ext
   PROPERTIES
