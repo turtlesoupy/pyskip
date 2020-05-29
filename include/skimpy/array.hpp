@@ -317,6 +317,7 @@ BINARY_ARRAY_OP_SIMPLE(max, [](Val a, Val b) { return std::max(a, b); })
 BINARY_ARRAY_OP_SIMPLE(pow, [](Val a, Val b) {
   return static_cast<Val>(std::pow(a, b));
 })
+BINARY_ARRAY_OP_SIMPLE(coalesce, [](Val a, Val b) { return a ? a : b;})
 
 // Ternary math operations
 TERNARY_ARRAY_OP(splat, bool, Val, Val, Val, [](bool m, Val a, Val b) {

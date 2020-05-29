@@ -68,6 +68,13 @@ class Tensor:
         return cls(cpp_tensor=cpp_tensor)
 
     @classmethod
+    def force_tensor(cls, item, dtype):
+        if isinstance(item, Tensor):
+            return item
+        else:
+            return cls(shape=(1,), val=item, dtype=dtype)
+
+    @classmethod
     def from_numpy(cls, np_arr):
         np_shape = np_arr.shape
         skimpy_arr = _skimpy_cpp_ext.from_numpy(np_arr.flatten("C"))
@@ -261,6 +268,9 @@ class Tensor:
 
     def __ipow__(self, other):
         return self._init_from_cpp_tensor(self.__pow__(other)._tensor)
+
+    def coalesce(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "coalesce")
 
     def __setitem__(self, slices, value):
         slices = unify_slices(slices)
