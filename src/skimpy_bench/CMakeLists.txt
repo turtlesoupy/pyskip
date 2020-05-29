@@ -12,7 +12,8 @@ endif()
 
 add_library(skimpy_bench_cpp_ext MODULE cpp_ext.cpp)
 target_compile_options(skimpy_bench_cpp_ext PRIVATE ${OpenMP_CXX_FLAGS} ${AVX_COMPILE_OPTION})
-target_link_libraries(skimpy_bench_cpp_ext PRIVATE pybind11::module ${OpenMP_CXX_FLAGS})
+target_link_libraries(skimpy_bench_cpp_ext PRIVATE pybind11::module taco ${OpenMP_CXX_FLAGS})
+target_include_directories(skimpy_bench_cpp_ext PRIVATE ${CMAKE_SOURCE_DIR}/third_party/taco/include)
 set_target_properties(
   skimpy_bench_cpp_ext
   PROPERTIES

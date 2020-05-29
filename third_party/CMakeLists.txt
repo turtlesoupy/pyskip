@@ -8,8 +8,12 @@ else()
 endif()
 set(ASMJIT_STATIC ON)
 
+# TACO exposes this as a global
+set(OPENMP ON)
+
 # Include third-party targets.
 add_subdirectory(asmjit)
 add_subdirectory(catch2)
 add_subdirectory(fmt)
 add_subdirectory(pybind11)
+add_subdirectory(taco)
