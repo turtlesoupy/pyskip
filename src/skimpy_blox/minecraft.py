@@ -515,7 +515,7 @@ class SkimpyMinecraftLevel:
             scores[column_order] = cls.from_world(world_folder, column_order=column_order,
                                                   num_chunks=num_chunks).rle_compression_ratio()
 
-        best_order = max(scores.items(), key=lambda x: x[1])
+        best_order = max(scores.items(), key=lambda x: x[1])[0]
         return (best_order, scores)
 
     @classmethod
