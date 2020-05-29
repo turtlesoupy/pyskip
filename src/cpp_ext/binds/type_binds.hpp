@@ -268,9 +268,11 @@ inline void bind_array_class(py::module& m, const char* class_name) {
       .def("__lt__", [](const Array& self, Val val) { return self < val; })
       .def("__ge__", [](const Array& self, Val val) { return self >= val; })
       .def("__gt__", [](const Array& self, Val val) { return self > val; })
-      .def("coalesce", [](const Array& self, Val val) {
-        return skimpy::coalesce(self, val);
-      })
+      .def(
+          "coalesce",
+          [](const Array& self, Val val) {
+            return skimpy::coalesce(self, val);
+          })
       .def("coalesce", [](const Array& self, const Array& other) {
         return skimpy::coalesce(self, other);
       });
