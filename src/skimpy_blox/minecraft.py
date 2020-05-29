@@ -1,18 +1,29 @@
-from nbt.chunk import AnvilChunk, McRegionChunk, block_id_to_name
+import nbt.chunk
+from itertools import permutations
 from nbt.world import WorldFolder
 from pathlib import Path
-from struct import pack
 from tqdm.auto import tqdm
-import math
 import numpy as np
-import os, sys
 import tempfile
 
 import skimpy
+import skimpy.reduce
 from typing import Tuple, List
 from dataclasses import dataclass
 import colorsys
 from zipfile import ZipFile
+
+
+# Upstream library prints here which causes overflow
+def _monkey_patch_block_id_to_name(bid):
+    try:
+        name = nbt.chunk.block_ids[bid]
+    except KeyError:
+        name = 'unknown_%d' % (bid,)
+    return name
+
+
+nbt.chunk.block_id_to_name = _monkey_patch_block_id_to_name
 
 block_colors = {
     "acacia_leaves": {
@@ -447,10 +458,14 @@ class NumpyMinecraftChunk:
 
 class SkimpyMinecraftLevel:
     def __init__(
-        self, chunk_list: List[SkimpyMinecraftChunk], bbox: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]
+        self,
+        chunk_list: List[SkimpyMinecraftChunk],
+        bbox: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]],
+        column_order: Tuple[int, int, int],
     ):
         self.chunk_list = chunk_list
         self.bbox = bbox
+        self.column_order = column_order
 
     def sparse_compression_ratio(self):
         dense_size = 0
@@ -458,9 +473,7 @@ class SkimpyMinecraftLevel:
 
         for chunk in self.chunk_list:
             dense_size += len(chunk.tensor)
-            sparse_size += (
-                len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int))
-            )
+            sparse_size += (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
 
         return dense_size / sparse_size
 
@@ -471,7 +484,7 @@ class SkimpyMinecraftLevel:
         for chunk in self.chunk_list:
             dense_size += len(chunk.tensor)
             rle_size += 2 * chunk.tensor.rle_length()
-        
+
         return dense_size / rle_size
 
     def megatensor(self):
@@ -492,11 +505,26 @@ class SkimpyMinecraftLevel:
 
     @classmethod
     def block_color(cls, id):
-        hsl = block_colors[block_id_to_name(id)]
-        return colorsys.hls_to_rgb((hsl["h"], hsl["l"], hsl["s"]))
+        hsl = block_colors[nbt.chunk.block_id_to_name(id)]
+        return colorsys.hls_to_rgb(hsl["h"], hsl["l"], hsl["s"])
 
     @classmethod
-    def from_world(cls, world_folder, as_numpy=False):
+    def approx_best_column_order(cls, world_folder, num_chunks):
+        scores = {}
+        for column_order in permutations((0, 1, 2)):
+            scores[column_order] = cls.from_world(world_folder, column_order=column_order,
+                                                  num_chunks=num_chunks).rle_compression_ratio()
+
+        best_order = max(scores.items(), key=lambda x: x[1])
+        return (best_order, scores)
+
+    @classmethod
+    def from_world_infer_order(cls, world_folder, num_chunks=200):
+        best_order, _ = cls.approx_best_column_order(world_folder, num_chunks)
+        return cls.from_world(world_folder, column_order=best_order)
+    
+    @classmethod
+    def from_world(cls, world_folder, as_numpy=False, column_order=(0, 1, 2), num_chunks=None):
         world_folder = Path(world_folder)
         chunk_list = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -507,74 +535,90 @@ class SkimpyMinecraftLevel:
                     zippy.extractall(tmpdir)
                 world = WorldFolder(tmpdir)
 
-            world.chunkclass = AnvilChunk  # NBT library bug workaround
+            world.chunkclass = nbt.chunk.AnvilChunk  # NBT library bug workaroun
 
             bb = world.get_boundingbox()
             bbox_x = (bb.minx * 16, bb.minx * 16 + bb.lenx() * 16)
             bbox_y = (0, 0)
             bbox_z = (bb.minz * 16, bb.minz * 16 + bb.lenz() * 16)
 
-            for chunk in tqdm(world.iter_chunks(), total=world.chunk_count()):
+            for i, chunk in enumerate(tqdm(world.iter_chunks(), total=world.chunk_count())):
+                if num_chunks is not None and i >= num_chunks:
+                    break
                 x, z = chunk.get_coords()
                 y = 0
                 bbox_y = (
                     min(bbox_y[0], 0),
-                    max(bbox_y[1], chunk.get_max_height()),
+                    max(bbox_y[1],
+                        chunk.get_max_height() + 1),
                 )
 
                 if as_numpy:
-                    chunk_list.append(cls.chunk_to_numpy((x, y, z), chunk))
+                    chunk_list.append(cls.chunk_to_numpy((x, y, z), chunk, column_order=column_order))
                 else:
-                    chunk_list.append(cls.chunk_to_skimpy((x, y, z), chunk))
+                    chunk_list.append(cls.chunk_to_skimpy((x, y, z), chunk, column_order=column_order))
 
             return cls(
                 chunk_list,
                 (bbox_x, bbox_y, bbox_z),
+                column_order,
             )
 
     @classmethod
     def _block_at(cls, chunk, x, y, z) -> int:
-        if isinstance(chunk, AnvilChunk):
+        if isinstance(chunk, nbt.chunk.AnvilChunk):
             sy, by = divmod(y, 16)
             section = chunk.get_section(sy)
-            if section == None:
-                raise RuntimeError("Bad news")
+            if section is None:
+                return None
 
             # block = section.get_block(x, by, z)
             i = by * 256 + z * 16 + x
             return section.indexes[i]
-        elif isintance(chunk, McRegionChunk):
+        elif isinstance(chunk, nbt.chunk.McRegionChunk):
             return chunk.blocks.get_block(x, y, z)
 
     @classmethod
-    def chunk_to_numpy(cls, coord, chunk):
+    def _column_remap(cls, item, column_order):
+        remap_x = item[column_order[0]]
+        remap_y = item[column_order[1]]
+        remap_z = item[column_order[2]]
+        return (remap_x, remap_y, remap_z)
+
+    @classmethod
+    def chunk_to_numpy(cls, coord, chunk, column_order=(0, 1, 2)):
         max_x = 16
         max_z = 16
-        max_y = chunk.get_max_height()
+        max_y = chunk.get_max_height() + 1
 
-        arr = np.ndarray(shape=(max_x, max_y, max_z))
+        arr = np.ndarray(shape=cls._column_remap((max_x, max_y, max_z), column_order))
 
         for x in range(max_x):
             for y in range(max_y):
                 for z in range(max_z):
-                    block_int_id = cls._block_at(chunk, x, y, z)
-                    arr[x, y, z] = block_int_id
+                    block_int_id = cls._block_at(chunk, x, y, z) or 0
+                    arr[cls._column_remap((x, y, z), column_order)] = block_int_id
 
         return NumpyMinecraftChunk(coord, arr)
 
     @classmethod
-    def chunk_to_skimpy(cls, coord, chunk):
+    def chunk_to_skimpy(cls, coord, chunk, column_order=(0, 1, 2)):
+        numpy_chunk = cls.chunk_to_numpy(coord, chunk, column_order)
+        tensor = skimpy.Tensor.from_numpy(numpy_chunk.tensor)
+        return SkimpyMinecraftChunk(numpy_chunk.coord, tensor)
+        """
         max_x = 16
         max_z = 16
-        max_y = chunk.get_max_height()
+        max_y = chunk.get_max_height() + 1
 
-        builder = skimpy.Tensor.builder((max_x, max_y, max_z))
+        builder = skimpy.Tensor.builder(cls._column_remap((max_x, max_y, max_z), column_order))
 
         for x in range(max_x):
             for y in range(max_y):
                 for z in range(max_z):
-                    block_int_id = cls._block_at(chunk, x, y, z)
-                    builder[x, y, z] = block_int_id
+                    block_int_id = cls._block_at(chunk, x, y, z) or 0
+                    builder[cls._column_remap((x, y, z), column_order)] = block_int_id
 
         tensor = builder.build()
         return SkimpyMinecraftChunk(coord, tensor)
+        """
