@@ -58,6 +58,7 @@ class CMakeBuild(build_ext):
                     ext.root_dir,
                     f"-DPYTHON_EXECUTABLE={sys.executable}",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}",
+                    f"-DSKIMPY_BUILD_BENCHMARKS=OFF",
                 ],
                 windows_args=[
                     "-Ax64",
@@ -102,7 +103,6 @@ setup(
     headers=HEADERS,
     ext_modules=[
         CMakeExtension("skimpy", "skimpy_ext"),
-        CMakeExtension("skimpy_bench", "skimpy_bench_cpp_ext"),
     ],
     cmdclass={"build_ext": CMakeBuild},
     package_dir={"": "src"},
