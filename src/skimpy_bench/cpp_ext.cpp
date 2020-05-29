@@ -12,11 +12,15 @@
 
 namespace py = pybind11;
 
-#if defined(WIN32)
+#ifdef _MSC_VER
+#define NO_TREE_VECTORIZE
 using Pos = int32_t;
 #else
 using Pos = size_t;
+#define NO_TREE_VECTORIZE __attribute__((optimize("no-tree-vectorize")))
 #endif
+
+static constexpr int kMaxInputs = 1024;
 
 taco::Tensor<int32_t> randTacoDense(const int32_t size, const int32_t seed) {
   taco::Format dense({taco::Dense});
@@ -74,13 +78,11 @@ std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   return space;
 }
 
-#if !defined(WIN32)
-__attribute__((optimize("no-tree-vectorize")))
-#endif
-auto noSIMDIntCumSumWrite(const Pos num, const int numInputs, const int numThreads) {
+NO_TREE_VECTORIZE auto noSIMDIntCumSumWrite(
+    const Pos num, const int numInputs, const int numThreads) {
+  assert(numInputs <= kMaxInputs);
+  int32_t* spacePtrs[kMaxInputs];
   std::vector<std::unique_ptr<int32_t[]>> spaces;
-  assert(numInputs < 1024);
-  int32_t* spacePtrs[1024];
   for (int i = 0; i < numInputs; i++) {
     spaces.push_back(newRandIntArray(num));
     spacePtrs[i] = spaces[i].get();
@@ -109,13 +111,11 @@ auto noSIMDIntCumSumWrite(const Pos num, const int numInputs, const int numThrea
       outputPtr[0]);
 }
 
-#if !defined(WIN32)
-__attribute__((optimize("no-tree-vectorize")))
-#endif
-auto noSIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThreads) {
+NO_TREE_VECTORIZE auto noSIMDIntSumMultiInput(
+    const Pos num, const int numInputs, const int numThreads) {
+  assert(numInputs <= kMaxInputs);
+  int32_t* spacePtrs[kMaxInputs];
   std::vector<std::unique_ptr<int32_t[]>> spaces;
-  assert(numInputs < 1024);
-  int32_t* spacePtrs[1024];
   for (int i = 0; i < numInputs; i++) {
     spaces.push_back(newRandIntArray(num));
     spacePtrs[i] = spaces[i].get();
@@ -143,13 +143,11 @@ auto noSIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThr
       bigSum.load());
 }
 
-#if !defined(WIN32)
-__attribute__((optimize("no-tree-vectorize")))
-#endif
-auto SIMDIntSumMultiInput(const Pos num, const int numInputs, const int numThreads) {
+NO_TREE_VECTORIZE auto SIMDIntSumMultiInput(
+    const Pos num, const int numInputs, const int numThreads) {
+  assert(numInputs <= kMaxInputs);
+  int32_t* spacePtrs[kMaxInputs];
   std::vector<std::unique_ptr<int32_t[]>> spaces;
-  assert(numInputs < 1024);
-  int32_t* spacePtrs[1024];
   for (int i = 0; i < numInputs; i++) {
     spaces.push_back(newRandIntArray(num));
     spacePtrs[i] = spaces[i].get();

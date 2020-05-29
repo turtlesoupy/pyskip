@@ -7,11 +7,13 @@
 #include <vector>
 
 #include "skimpy/detail/box.hpp"
+#include "skimpy/detail/util.hpp"
 #include "skimpy/skimpy.hpp"
 
 namespace box = skimpy::detail::box;
+namespace util = skimpy::detail::util;
 
-TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
+TEST_CASE("Benchmark simple assignments", "[arrays]") {
   // Assign to a random entry in a univariate array.
   BENCHMARK("univariate_assign_1") {
     auto x = skimpy::make_array(1000 * 1000, 0);
@@ -32,7 +34,9 @@ TEST_CASE("Benchmark skimpy arrays", "[arrays]") {
     x.set(skimpy::Slice(872, 972), 1);
     x.eval();
   };
+}
 
+TEST_CASE("Benchmark merge operations", "[arrays]") {
   // Populate a dense store for testing large batch operations.
   auto store = std::make_shared<box::BoxStore>(1000 * 1000);
   for (int i = 0; i < 1000 * 1000; i += 1) {
@@ -122,5 +126,54 @@ TEST_CASE("Benchmark skimpy array builders", "[builders]") {
       b.set(i, i);
     }
     b.build();
+  };
+}
+
+TEST_CASE("Benchmark reductions", "[arrays][reduce]") {
+  // Populate a dense store for testing large batch operations.
+  auto store = std::make_shared<box::BoxStore>(1000 * 1000);
+  for (int i = 0; i < 1000 * 1000; i += 1) {
+    store->ends[i] = i + 1;
+    store->vals[i] = i;
+  }
+
+  util::Fix sum([](auto& sum, auto& t) {
+    if (t.len() == 0) {
+      return skimpy::make_array(1, 0);
+    } else if (t.len() == 1) {
+      return t;
+    } else if (t.len() % 2 != 0) {
+      auto last = t.get({t.len() - 1, t.len(), 1});
+      return sum(t.get({0, t.len() - 1, 1})) + last;
+    } else {
+      auto lo = t.get({0, t.len(), 2});
+      auto hi = t.get({1, t.len(), 2});
+      return sum(lo + hi);
+    }
+  });
+
+  BENCHMARK("sum") {
+    skimpy::Array<int> a(store);
+    volatile auto ret = sum(a).eval();
+  };
+
+  util::Fix prod([](auto& prod, auto& t) {
+    if (t.len() == 0) {
+      return skimpy::make_array(1, 1);
+    } else if (t.len() == 1) {
+      return t;
+    } else if (t.len() % 2 != 0) {
+      auto last = t.get({t.len() - 1, t.len(), 1});
+      return prod(t.get({0, t.len() - 1, 1})) * last;
+    } else {
+      auto lo = t.get({0, t.len(), 2});
+      auto hi = t.get({1, t.len(), 2});
+      return prod(lo * hi);
+    }
+  });
+
+  BENCHMARK("prod") {
+    skimpy::Array<int> a(store);
+    volatile auto ret = prod(a).eval();
   };
 }

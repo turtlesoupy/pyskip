@@ -450,6 +450,55 @@ TEST_CASE("Benchmark boxed 8-source evaluation", "[boxed]") {
   };
 }
 
+TEST_CASE("Benchmark boxed 16-source evaluation", "[boxed]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_box_store(n, 1)),
+      eval::SimpleSource(make_box_store(n, 2)),
+      eval::SimpleSource(make_box_store(n, 3)),
+      eval::SimpleSource(make_box_store(n, 4)),
+      eval::SimpleSource(make_box_store(n, 5)),
+      eval::SimpleSource(make_box_store(n, 6)),
+      eval::SimpleSource(make_box_store(n, 7)),
+      eval::SimpleSource(make_box_store(n, 8)),
+      eval::SimpleSource(make_box_store(n, 9)),
+      eval::SimpleSource(make_box_store(n, 10)),
+      eval::SimpleSource(make_box_store(n, 11)),
+      eval::SimpleSource(make_box_store(n, 12)),
+      eval::SimpleSource(make_box_store(n, 13)),
+      eval::SimpleSource(make_box_store(n, 14)),
+      eval::SimpleSource(make_box_store(n, 15)),
+      eval::SimpleSource(make_box_store(n, 16)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) {
+          auto ret = v[0].get<int>();
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i].get<int>();
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].end(i);
+            x->vals[i] = sources[0].val(i).get<int>();
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].val(i).get<int>();
+            }
+          }
+        });
+  };
+}
+
 TEST_CASE("Benchmark boxed ternary evaluation", "[boxed]") {
   static constexpr auto n = 1024 * 1024;  // size of input
 
@@ -879,7 +928,189 @@ TEST_CASE("Benchmark cyclic 8-source evaluation", "[cyclic]") {
           for (int i = start; i < end; i += 1) {
             x->ends[i] = sources[0].store()->ends[i];
             x->vals[i] = sources[0].store()->vals[i];
-            for (int j = 1; j < 8; j += 1) {
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark cyclic 16-source evaluation", "[cyclic]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step::cyclic;
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), fixed<0>(d - x_s)));
+  }();
+
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), i0, i1, step_fn),
+      S(make_store(n, 2), i0, i1, step_fn),
+      S(make_store(n, 3), i0, i1, step_fn),
+      S(make_store(n, 4), i0, i1, step_fn),
+      S(make_store(n, 5), i0, i1, step_fn),
+      S(make_store(n, 6), i0, i1, step_fn),
+      S(make_store(n, 7), i0, i1, step_fn),
+      S(make_store(n, 8), i0, i1, step_fn),
+      S(make_store(n, 9), i0, i1, step_fn),
+      S(make_store(n, 10), i0, i1, step_fn),
+      S(make_store(n, 11), i0, i1, step_fn),
+      S(make_store(n, 12), i0, i1, step_fn),
+      S(make_store(n, 13), i0, i1, step_fn),
+      S(make_store(n, 14), i0, i1, step_fn),
+      S(make_store(n, 15), i0, i1, step_fn),
+      S(make_store(n, 16), i0, i1, step_fn));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark boxed & cyclic 16-source evaluation", "[cyclic][boxed]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto x0 = 2, x1 = d - 2;
+  auto y0 = 2, y1 = d - 2;
+
+  auto x_s = x1 - x0;
+  auto y_s = y1 - y0;
+
+  auto i0 = x0 + y0 * d;
+  auto i1 = i0 + x_s + d * (y_s - 1);
+
+  auto step_fn = [&] {
+    using namespace step::cyclic;
+    return build(i0, i1, stack(y_s, scaled<1>(x_s), fixed<0>(d - x_s)));
+  }();
+
+  using S = eval::SimpleSource<int, step::cyclic::StepFn>;
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_box_store(n, 1), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 2), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 3), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 4), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 5), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 6), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 7), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 8), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 9), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 10), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 11), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 12), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 13), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 14), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 15), i0, i1, step_fn),
+      eval::SimpleSource(make_box_store(n, 16), i0, i1, step_fn));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, Box>(
+        [](const Box* v) {
+          auto ret = v[0].get<int>();
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i].get<int>();
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i].get<int>();
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i].get<int>();
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark lambda 16-source evaluation", "[lambda]") {
+  static constexpr auto d = 1024;
+  static constexpr auto n = d * d;
+
+  auto step_fn = [](core::Pos p) { return p; };
+  using S = eval::SimpleSource<int, core::Pos (*)(core::Pos)>;
+  auto sources = eval::make_pool(
+      S(make_store(n, 1), 0, n, step_fn),
+      S(make_store(n, 2), 0, n, step_fn),
+      S(make_store(n, 3), 0, n, step_fn),
+      S(make_store(n, 4), 0, n, step_fn),
+      S(make_store(n, 5), 0, n, step_fn),
+      S(make_store(n, 6), 0, n, step_fn),
+      S(make_store(n, 7), 0, n, step_fn),
+      S(make_store(n, 8), 0, n, step_fn),
+      S(make_store(n, 9), 0, n, step_fn),
+      S(make_store(n, 10), 0, n, step_fn),
+      S(make_store(n, 11), 0, n, step_fn),
+      S(make_store(n, 12), 0, n, step_fn),
+      S(make_store(n, 13), 0, n, step_fn),
+      S(make_store(n, 14), 0, n, step_fn),
+      S(make_store(n, 15), 0, n, step_fn),
+      S(make_store(n, 16), 0, n, step_fn));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < sources_size; j += 1) {
               x->vals[i] *= sources[j].store()->vals[i];
             }
           }
