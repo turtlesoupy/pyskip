@@ -124,6 +124,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
           .def("clone", &Array::clone)
           .def("eval", &Array::eval)
           .def("dumps", &Array::str)
+          .def("rle_length", &Array::rleLength)
           .def(
               "tensor",
               [](Array& self) { skimpy::make_tensor<1>({self.len()}, self); })
@@ -261,6 +262,13 @@ inline void bind_array_class(py::module& m, const char* class_name) {
   }
 
   // Add logical comparison operations.
+  cls.def("__eq__", [](const Array& self, Val val) { return self == val; })
+     .def("__ne__", [](const Array& self, Val val) { return self != val; })
+     .def("__le__", [](const Array& self, Val val) { return self <= val; })
+     .def("__lt__", [](const Array& self, Val val) { return self < val; })
+     .def("__ge__", [](const Array& self, Val val) { return self >= val; })
+     .def("__gt__", [](const Array& self, Val val) { return self > val; });
+
   // TODO: Add remaining operations.
   cls.def(
          "min",

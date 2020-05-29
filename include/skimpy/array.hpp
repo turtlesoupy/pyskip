@@ -105,6 +105,10 @@ class Array {
     return Array<Val>(lang::evaluate(op_));
   }
 
+  auto rleLength() const {
+    return store()->size;
+  }
+
   // Value access methods
   auto get(core::Pos pos) const {
     return get(Slice(pos, pos + 1)).store()->vals[0];

@@ -12,7 +12,7 @@ def reshape(t: Tensor, shape: Union[int, Tuple[int]]) -> Tensor:
     if isinstance(shape, int):
         shape = (shape, )
     assert (len(t) == shape_len(shape))
-    return Tensor(shape, val=t._tensor.array())
+    return Tensor(shape, val=t._tensor.array(), dtype=t.dtype)
 
 
 def flatten(t: Tensor) -> Tensor:

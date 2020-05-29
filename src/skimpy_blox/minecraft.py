@@ -452,6 +452,28 @@ class SkimpyMinecraftLevel:
         self.chunk_list = chunk_list
         self.bbox = bbox
 
+    def sparse_compression_ratio(self):
+        dense_size = 0
+        sparse_size = 0
+
+        for chunk in self.chunk_list:
+            dense_size += len(chunk.tensor)
+            sparse_size += (
+                len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int))
+            )
+
+        return dense_size / sparse_size
+
+    def rle_compression_ratio(self):
+        dense_size = 0
+        rle_size = 0
+
+        for chunk in self.chunk_list:
+            dense_size += len(chunk.tensor)
+            rle_size += 2 * chunk.tensor.rle_length()
+        
+        return dense_size / rle_size
+
     def megatensor(self):
         dim_x = self.bbox[0][1] - self.bbox[0][0]
         dim_y = self.bbox[1][1] - self.bbox[1][0]

@@ -13,9 +13,9 @@ from .exceptions import (
     TypeConversionError,
 )
 
-_postfix_type_mapping = {int: "i", float: "f"}
+_postfix_type_mapping = {int: "i", float: "f", bool: "b"}
 _postfix_type_mapping_reverse = {v: k for k, v in _postfix_type_mapping.items()}
-_prefix_type_mapping = {int: "Int", float: "Float"}
+_prefix_type_mapping = {int: "Int", float: "Float", bool: "Bool"}
 _prefix_type_mapping_reverse = {v: k for k, v in _prefix_type_mapping.items()}
 
 
@@ -95,8 +95,8 @@ class Tensor:
         elif ndim > 3:
             raise InvalidTensorError("Only 1D, 2D and 3D tensors are supported")
 
-        klass = f"Tensor{ndim}{_postfix_type_mapping[dtype]}"
-        tensor = getattr(_skimpy_cpp_ext, klass)(shape, val)
+        self.dtype = dtype
+        tensor = self.__class__._cpp_class(shape, dtype)(shape, val)
 
         self._init_from_cpp_tensor(tensor)
 
@@ -108,6 +108,11 @@ class Tensor:
         self.dtype = _postfix_type_mapping_reverse[m.group(2)]
         self.shape = self._tensor.shape()
         return self
+
+    @classmethod
+    def _cpp_class(self, shape, typ):
+        name = f"Tensor{len(shape)}{_postfix_type_mapping[typ]}"
+        return getattr(_skimpy_cpp_ext, name)
 
     @classmethod
     def _validate_or_cast(cls, a, b):
@@ -136,12 +141,36 @@ class Tensor:
 
     # Binary operators
     @classmethod
-    def _forward_to_binary_array_op(cls, a, b, op):
+    def _forward_to_binary_array_op(cls, a, b, op, klass=None):
+        klass = klass or a._tensor.__class__
         if isinstance(b, Tensor):
             a, b = Tensor._validate_or_cast(a, b)
-            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
+            return Tensor.wrap(klass(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
         else:
-            return Tensor.wrap(a._tensor.__class__(a.shape, getattr(a._tensor.array(), op)(b)))
+            return Tensor.wrap(klass(a.shape, getattr(a._tensor.array(), op)(b)))
+
+
+    @property
+    def _bool_tensor_class(self):
+        return self._cpp_class(self.shape, bool)
+
+    def __eq__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__eq__", klass=self._bool_tensor_class)
+
+    def __ne__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__ne__", klass=self._bool_tensor_class)
+
+    def __lt__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__lt__", klass=self._bool_tensor_class)
+
+    def __le__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__le__", klass=self._bool_tensor_class)
+
+    def __gt__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__gt__", klass=self._bool_tensor_class)
+
+    def __ge__(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "__ge__", klass=self._bool_tensor_class)
 
     def __add__(self, other):
         return Tensor._forward_to_binary_array_op(self, other, "__add__")
@@ -251,21 +280,19 @@ class Tensor:
     def __len__(self):
         return len(self._tensor)
 
+    def rle_length(self):
+        return self._tensor.array().rle_length()
+
     def empty(self):
         return len(self) == 0
 
     def clone(self):
         return self._forward_to_unary_array_op("clone")
 
-    def to(self, dtype):
-        if dtype == int:
-            return self._forward_to_unary_array_op("int")
-        elif dtype == float:
-            return self._forward_to_unary_array_op("float")
-        elif dtype == bool:
-            return self._forward_to_unary_array_op("bool")
-        else:
-            raise TypeConversionError(f"No conversion to dtype='{dtype}' exists.")
+    def to(self, typ):
+        return Tensor.wrap(
+            self._cpp_class(self.shape, typ)(self.shape, getattr(self._tensor.array(), typ.__name__)())
+        )
 
     def to_numpy(self):
         np_arr = self._tensor.array().to_numpy()
