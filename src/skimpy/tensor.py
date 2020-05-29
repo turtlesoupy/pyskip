@@ -251,6 +251,9 @@ class Tensor:
     def __len__(self):
         return len(self._tensor)
 
+    def rle_length(self):
+        return self._tensor.array().rle_length()
+
     def empty(self):
         return len(self) == 0
 
