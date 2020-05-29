@@ -6,7 +6,7 @@ build
 dist
 happy.egg-info
 demos/.ipynb_checkpoints
-skimpy.egg-info
+skimpy_bench.egg-info
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
