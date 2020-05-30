@@ -582,7 +582,7 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
       "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
-  if (pool.capacity() < par_threshold) {
+  if (pool.capacity() < par_threshold || par_parts <= 1) {
     return eval_generic(SimpleEvaluator(std::move(pool), std::move(eval_fn)));
   }
 
