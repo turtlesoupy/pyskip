@@ -3,11 +3,14 @@ import time
 import numpy as np
 import random
 import functools
+import torch
+import torch.nn.functional
 import _skimpy_cpp_ext
 from _skimpy_bench_cpp_ext import taco, memory
 from skimpy.config import num_threads_scope
+import skimpy
+import skimpy.convolve
 from collections import defaultdict
-from contextlib import contextmanager
 
 NANO_TO_MS = 1.0 / 1000000
 MICR_TO_MS = 1.0 / 1000
@@ -43,17 +46,14 @@ class Timer:
         for i in range(count):
             times.append(code())
         return sorted(times)[len(times) // 2]
-    
+
 
 class Benchmark:
     @classmethod
     def run_against_axis(cls, varying_arg_name, varying_arg, repeats, verbose=False, **other_args):
         ret = {}
         for val in varying_arg:
-            args = {
-                varying_arg_name: val,
-                **other_args
-            }
+            args = {varying_arg_name: val, **other_args}
             times = cls(**args).run(repeats=repeats, verbose=verbose)
             for k, v in times.items():
                 if k in ret:
@@ -65,18 +65,26 @@ class Benchmark:
     def run(self, repeats=3, verbose=False):
         ret = defaultdict(list)
         for i in range(repeats):
-            if verbose:
-                print(f"{self.__class__.__name__} running skimpy")
-            ret["skimpy"].append(self.run_skimpy(**self.suite_kwargs.get("skimpy", {})))
-            if verbose:
-                print(f"{self.__class__.__name__} running taco")
-            ret["taco"].append(self.run_taco(**self.suite_kwargs.get("taco", {})))
-            if verbose:
-                print(f"{self.__class__.__name__} running memory")
-            ret["memory"].append(self.run_memory(**self.suite_kwargs.get("memory", {})))
-            if verbose:
-                print(f"{self.__class__.__name__} running numpy")
-            ret["numpy"].append(self.run_numpy(**self.suite_kwargs.get("numpy", {})))
+            if hasattr(self, 'run_skimpy'):
+                if verbose:
+                    print(f"{self.__class__.__name__} running skimpy")
+                ret["skimpy"].append(self.run_skimpy(**self.suite_kwargs.get("skimpy", {})))
+            if hasattr(self, 'run_taco'):
+                if verbose:
+                    print(f"{self.__class__.__name__} running taco")
+                ret["taco"].append(self.run_taco(**self.suite_kwargs.get("taco", {})))
+            if hasattr(self, 'run_memory'):
+                if verbose:
+                    print(f"{self.__class__.__name__} running memory")
+                ret["memory"].append(self.run_memory(**self.suite_kwargs.get("memory", {})))
+            if hasattr(self, 'run_numpy'):
+                if verbose:
+                    print(f"{self.__class__.__name__} running numpy")
+                ret["numpy"].append(self.run_numpy(**self.suite_kwargs.get("numpy", {})))
+            if hasattr(self, 'run_torch'):
+                if verbose:
+                    print(f"{self.__class__.__name__} running torch")
+                ret["torch"].append(self.run_torch(**self.suite_kwargs.get("torch", {})))
         return {k: np.mean(np.array(v)) for k, v in ret.items()}
 
 
@@ -86,13 +94,24 @@ class DenseArrayBenchmark(Benchmark):
         self.num_inputs = num_inputs
         self.suite_kwargs = suite_kwargs or {}
 
+    def _numpy_inputs(self):
+        return [np.random.randint(2**3, size=self.array_length, dtype=np.int32) for _ in range(self.num_inputs)]
+
     def run_numpy(self):
-        inputs = [np.random.randint(2**3, size=self.array_length) for _ in range(self.num_inputs)]
+        inputs = self._numpy_inputs()
 
         t = Timer()
         with t:
             _ = functools.reduce(lambda x, y: x + y, inputs)
 
+        return t.duration_ms
+
+    def run_torch(self):
+        inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+
+        t = Timer()
+        with t:
+            _ = functools.reduce(lambda x, y: x + y, inputs)
         return t.duration_ms
 
     def run_taco(self):
@@ -101,9 +120,7 @@ class DenseArrayBenchmark(Benchmark):
         ) * MICR_TO_MS
 
     def run_skimpy(self, num_threads=1):
-        inputs = [
-            _skimpy_cpp_ext.from_numpy(np.random.randint(2**3, size=self.array_length)) for _ in range(self.num_inputs)
-        ]
+        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
 
         with num_threads_scope(num_threads):
             t = Timer()
@@ -118,10 +135,6 @@ class DenseArrayBenchmark(Benchmark):
             num_input_arrays=self.num_inputs,
             num_threads=4,
         ) * MICR_TO_MS
-
-
-class DenseConvolutionBenchmark:
-    pass
 
 
 class RunLengthArrayBenchmark(Benchmark):
@@ -150,7 +163,7 @@ class RunLengthArrayBenchmark(Benchmark):
             for j in range(self.num_non_zero):
                 insert_position = random.randint(0, self.array_length)
                 run_length = random.randint(1, self.max_run_length)
-                val = random.randint(0, 2 ** 16)
+                val = random.randint(0, 2**16)
                 builder[insert_position:(insert_position + run_length)] = val
             inputs.append(builder.build())
 
@@ -179,7 +192,73 @@ class RunLengthArrayBenchmark(Benchmark):
         ) * MICR_TO_MS
 
 
-class SparseConvolutionBenchmark:
+class Dense3DConvolutionBenchmark(Benchmark):
+    def __init__(self, shape, kernel_width, suite_kwargs=None):
+        assert len(shape) == 3
+        assert kernel_width % 2 == 1
+
+        self.shape = shape
+        self.kernel_shape = tuple([kernel_width] * 3)
+        self.array_length = functools.reduce(lambda x, y: x * y, shape)
+        self.suite_kwargs = suite_kwargs or {}
+
+    def _numpy_input(self, dtype=np.int32):
+        return np.random.randint(2**3, size=self.shape, dtype=np.int32).astype(dtype)
+
+    def _numpy_kernel(self, dtype=np.int32):
+        return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+
+    def run_torch(self, device="cpu"):
+        dtype = np.int32 if device == "cpu" else np.float32
+        operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
+        kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+
+        t = Timer()
+        with t:
+            ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+            # Force torch to materialize if it is on the GPU
+            tst = ret[0, 0, 0, 0, 0].item()
+        return t.duration_ms
+
+    def run_skimpy(self):
+        operand = skimpy.Tensor.from_numpy(self._numpy_input())
+        kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
+
+        t = Timer()
+        with t:
+            _ = skimpy.convolve.conv_3d(operand, kernel).eval()
+        return t.duration_ms
+
+    def run_memory(self):
+        return memory.no_simd_int_cum_sum_write(
+            num_elements=self.array_length,
+            num_input_arrays=1,
+            num_threads=4,
+        ) * MICR_TO_MS
+
+
+
+class Sparse3DConvolutionBenchmark:
+    def __init__(self, shape, num_non_zero, max_run_length, align_inputs, num_inputs, suite_kwargs=None):
+        self.shape = shape
+        self.array_length = functools.reduce(lambda x, y: x * y, shape)
+        self.num_non_zero = num_non_zero,
+        self.max_run_length = max_run_length
+        self.align_inputs = align_inputs
+        self.num_inputs = num_inputs
+
+    def run_memory(self):
+        return memory.no_simd_int_cum_sum_write(
+            num_elements=self.num_non_zero * 2,  # Sparse is assumed to be a list of (pos, val)
+            num_input_arrays=self.num_inputs,
+            num_threads=4,
+        ) * MICR_TO_MS
+
+
+class SkimpyImplementationBenchmark:
+    # Tournament tree Vs. min
+    # Hashtable Vs. no hash-table
+    # Maybe a lazyness one (greedy evaluation)
     pass
 
 
