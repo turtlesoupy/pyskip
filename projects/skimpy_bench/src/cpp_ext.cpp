@@ -1,6 +1,8 @@
 #include <immintrin.h>
 #include <omp.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include <atomic>
 #include <chrono>
@@ -36,6 +38,37 @@ std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   }
 
   return space;
+}
+
+std::vector<int32_t> randRunLengthArray(
+    const Pos size,
+    const int32_t numNonZero,
+    const int32_t runLength,
+    const bool deterministicRunLength,
+    const int32_t randomSeed) {
+  std::default_random_engine dre(randomSeed);
+  std::uniform_int_distribution<int32_t> runLengthRandom(1, runLength);
+  std::uniform_int_distribution<int32_t> insertionRandom(0, size - 1);
+  std::uniform_int_distribution<int32_t> valueRandom(0, INT16_MAX);
+
+  std::vector<int32_t> ret;
+  ret.resize(size);
+
+  for (int i = 0; i < numNonZero; i++) {
+    auto insertPosition = insertionRandom(dre);
+    auto value = valueRandom(dre);
+    ret[insertPosition] = value;
+    int32_t myRunLength = runLength;
+    if (!deterministicRunLength) {
+      myRunLength = runLength <= 1 ? 1 : runLengthRandom(dre);
+    }
+
+    for (int j = 1; j < myRunLength && (insertPosition + j) < size; j++) {
+      ret[insertPosition + j] = value;
+    }
+  }
+
+  return ret;
 }
 
 NO_TREE_VECTORIZE auto noSIMDIntCumSumWrite(
@@ -161,13 +194,30 @@ NO_TREE_VECTORIZE auto SIMDIntSumMultiInput(
 }
 
 #ifdef SKIMPY_BENCH_ENABLE_TACO
-void addTacoBindings(py::module &m);
+void addTacoBindings(py::module& m);
 #endif
 
 PYBIND11_MODULE(_skimpy_bench_cpp_ext, m) {
   using namespace pybind11::literals;
   m.doc() = "Benchmarks for skimpy";
   m.attr("__version__") = "0.2";
+
+  m.def(
+      "run_length_array",
+      [](Pos num,
+         int numNonZero,
+         int runLength,
+         bool determinsticRunLength,
+         int randomSeed) {
+        auto vec = randRunLengthArray(
+            num, numNonZero, runLength, determinsticRunLength, randomSeed);
+        return py::array(vec.size(), vec.data());
+      },
+      "num_elements"_a,
+      "num_non_zero"_a,
+      "run_length"_a,
+      "deterministic_run_length"_a,
+      "random_seed"_a = 42);
 
 #ifdef SKIMPY_BENCH_ENABLE_TACO
   py::module taco = m.def_submodule("taco", "Taco Comparison Benchmarks");

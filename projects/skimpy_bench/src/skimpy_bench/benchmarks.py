@@ -6,7 +6,8 @@ import functools
 import torch
 import torch.nn.functional
 import _skimpy_cpp_ext
-from _skimpy_bench_cpp_ext import taco, memory
+from _skimpy_bench_cpp_ext import taco, memory, run_length_array
+from tqdm.auto import tqdm
 from skimpy.config import num_threads_scope
 import skimpy
 import skimpy.convolve
@@ -138,34 +139,50 @@ class DenseArrayBenchmark(Benchmark):
 
 
 class RunLengthArrayBenchmark(Benchmark):
-    def __init__(self, array_length, num_non_zero, max_run_length, align_inputs, num_inputs, suite_kwargs=None):
+    def __init__(
+        self,
+        array_length,
+        num_non_zero,
+        run_length,
+        align_inputs,
+        num_inputs,
+        deterministic_run_length,
+        suite_kwargs=None
+    ):
         self.array_length = array_length
         self.num_non_zero = num_non_zero
-        self.max_run_length = max_run_length
+        self.run_length = run_length
         self.align_inputs = align_inputs
         self.num_inputs = num_inputs
+        self.deterministic_run_length = deterministic_run_length
         self.suite_kwargs = suite_kwargs or {}
 
+    def _numpy_inputs(self):
+        inputs = []
+        seed = 42
+        for _ in range(self.num_inputs):
+            arr = run_length_array(
+                num_elements=self.array_length,
+                num_non_zero=self.num_non_zero,
+                run_length=self.run_length,
+                deterministic_run_length=self.deterministic_run_length,
+                random_seed=seed
+            )
+            inputs.append(arr)
+            if not self.align_inputs:
+                seed += 1
+
+        return inputs
+
     def run_numpy(self):
-        inputs = [np.random.randint(2**3, size=self.array_length) for _ in range(self.num_inputs)]
+        inputs = self._numpy_inputs()
         t = Timer()
         with t:
             _ = functools.reduce(lambda x, y: x + y, inputs)
         return t.duration_ms
 
     def run_skimpy(self, num_threads=1):
-        inputs = []
-        for i in range(self.num_inputs):
-            builder = _skimpy_cpp_ext.IntBuilder(self.array_length, 0)
-            if self.align_inputs:
-                random.seed(42)
-
-            for j in range(self.num_non_zero):
-                insert_position = random.randint(0, self.array_length)
-                run_length = random.randint(1, self.max_run_length)
-                val = random.randint(0, 2**16)
-                builder[insert_position:(insert_position + run_length)] = val
-            inputs.append(builder.build())
+        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
 
         with num_threads_scope(num_threads):
             t = Timer()
@@ -178,9 +195,10 @@ class RunLengthArrayBenchmark(Benchmark):
         return taco.sparse_sum(
             num_elements=self.array_length,
             num_non_zero=self.num_non_zero,
-            max_run_length=self.max_run_length,
+            run_length=self.run_length,
             align_inputs=self.align_inputs,
             num_input_arrays=self.num_inputs,
+            deterministic_run_length=self.deterministic_run_length,
             include_compile_time=False,
         ) * MICR_TO_MS
 
@@ -220,14 +238,15 @@ class Dense3DConvolutionBenchmark(Benchmark):
             tst = ret[0, 0, 0, 0, 0].item()
         return t.duration_ms
 
-    def run_skimpy(self):
+    def run_skimpy(self, num_threads=1):
         operand = skimpy.Tensor.from_numpy(self._numpy_input())
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
 
-        t = Timer()
-        with t:
-            _ = skimpy.convolve.conv_3d(operand, kernel).eval()
-        return t.duration_ms
+        with num_threads_scope(num_threads):
+            t = Timer()
+            with t:
+                _ = skimpy.convolve.conv_3d(operand, kernel).eval()
+            return t.duration_ms
 
     def run_memory(self):
         return memory.no_simd_int_cum_sum_write(
@@ -237,15 +256,55 @@ class Dense3DConvolutionBenchmark(Benchmark):
         ) * MICR_TO_MS
 
 
+class RunLength3DConvolutionBenchmark(Benchmark):
+    def __init__(self, shape, kernel_width, num_non_zero, run_length, align_inputs, num_inputs, deterministic_run_length, suite_kwargs=None):
+        assert len(shape) == 3
+        assert kernel_width % 2 == 1
 
-class Sparse3DConvolutionBenchmark:
-    def __init__(self, shape, num_non_zero, max_run_length, align_inputs, num_inputs, suite_kwargs=None):
         self.shape = shape
+        self.kernel_shape = tuple([kernel_width] * 3)
+
         self.array_length = functools.reduce(lambda x, y: x * y, shape)
-        self.num_non_zero = num_non_zero,
-        self.max_run_length = max_run_length
+        self.num_non_zero = num_non_zero
+        self.run_length = run_length
         self.align_inputs = align_inputs
         self.num_inputs = num_inputs
+        self.deterministic_run_length = deterministic_run_length
+        self.suite_kwargs = suite_kwargs or {}
+
+    def _numpy_input(self, dtype=np.int32):
+        return run_length_array(
+            num_elements=self.array_length,
+            num_non_zero=self.num_non_zero,
+            run_length=self.run_length,
+            deterministic_run_length=self.deterministic_run_length,
+            random_seed=42,
+        ).reshape(self.shape).astype(dtype)
+
+    def _numpy_kernel(self, dtype=np.int32):
+        return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+
+    def run_skimpy(self, num_threads=1):
+        operand = skimpy.Tensor.from_numpy(self._numpy_input())
+        kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
+
+        with num_threads_scope(num_threads):
+            t = Timer()
+            with t:
+                _ = skimpy.convolve.conv_3d(operand, kernel).eval()
+            return t.duration_ms
+
+    def run_torch(self, device="cpu"):
+        dtype = np.int32 if device == "cpu" else np.float32
+        operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
+        kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+
+        t = Timer()
+        with t:
+            ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+            # Force torch to materialize if it is on the GPU
+            tst = ret[0, 0, 0, 0, 0].item()
+        return t.duration_ms
 
     def run_memory(self):
         return memory.no_simd_int_cum_sum_write(
@@ -259,10 +318,6 @@ class SkimpyImplementationBenchmark:
     # Tournament tree Vs. min
     # Hashtable Vs. no hash-table
     # Maybe a lazyness one (greedy evaluation)
-    pass
-
-
-class RunLengthConvolutionBenchmark:
     pass
 
 

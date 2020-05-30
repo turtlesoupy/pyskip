@@ -25,11 +25,13 @@ taco::Tensor<int32_t> randTacoDense(const int32_t size, const int32_t seed) {
 taco::Tensor<int32_t> randTacoSparse(
     const int32_t size,
     const int32_t numNonZero,
-    const int32_t maxRunLength,
-    const int32_t randomSeed) {
+    const int32_t runLength,
+    const int32_t randomSeed,
+    const bool deterministicRunLength
+    ) {
   std::default_random_engine dre(randomSeed);
-  std::uniform_int_distribution<int32_t> runLengthRandom(1, maxRunLength);
-  std::uniform_int_distribution<int32_t> insertionRandom(0, INT16_MAX);
+  std::uniform_int_distribution<int32_t> runLengthRandom(1, runLength);
+  std::uniform_int_distribution<int32_t> insertionRandom(0, size - 1);
   std::uniform_int_distribution<int32_t> valueRandom(0, INT16_MAX);
 
   taco::Format sparse({taco::Sparse});
@@ -38,8 +40,11 @@ taco::Tensor<int32_t> randTacoSparse(
     auto insertPosition = insertionRandom(dre);
     auto value = valueRandom(dre);
     out.insert({insertPosition}, value);
-    auto runLength = maxRunLength <= 1 ? 1 : runLengthRandom(dre);
-    for (int j = 1; j < runLength; j++) {
+    int32_t myRunLength = runLength;
+    if (!deterministicRunLength) {
+      myRunLength = runLength <= 1 ? 1 : runLengthRandom(dre);
+    }
+    for (int j = 1; j < runLength && (insertPosition + j) < size; j++) {
       out.insert({insertPosition + j}, value);
     }
   }
@@ -51,9 +56,10 @@ taco::Tensor<int32_t> randTacoSparse(
 auto tacoSparseSum(
     const int32_t size,
     const int32_t numNonZero,
-    const int32_t maxRunLength,
+    const int32_t runLength,
     const bool alignInputs,
     const int numInputs,
+    const bool deterministicRunLength,
     const bool includeCompile) {
   int seed = 42;
 
@@ -62,7 +68,7 @@ auto tacoSparseSum(
 
   std::vector<taco::Tensor<int32_t>> inputs;
   for (int i = 0; i < numInputs; i++) {
-    inputs.push_back(randTacoSparse(size, numNonZero, maxRunLength, seed));
+    inputs.push_back(randTacoSparse(size, numNonZero, runLength, deterministicRunLength, seed));
     if (!alignInputs) {
       seed++;
     }
@@ -148,24 +154,28 @@ void addTacoBindings(py::module &m) {
       "sparse_sum",
       [](int32_t size,
          int numNonZero,
-         int maxRunLength,
+         int runLength,
          bool alignInputs,
          int numInputs,
+         bool deterministicRunLength,
          bool includeCompile) {
         auto result = tacoSparseSum(
             size,
             numNonZero,
-            maxRunLength,
+            runLength,
             alignInputs,
             numInputs,
+            deterministicRunLength,
             includeCompile);
         return std::get<0>(result);
       },
       "Sparse add arrays in taco",
       "num_elements"_a,
       "num_non_zero"_a,
-      "max_run_length"_a,
+      "run_length"_a,
       "align_inputs"_a,
       "num_input_arrays"_a,
-      "include_compile_time"_a = true);
+      "deterministic_run_length"_a,
+      "include_compile_time"_a = true
+      );
 }
