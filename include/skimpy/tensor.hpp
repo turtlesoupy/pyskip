@@ -9,6 +9,7 @@
 
 #include "array.hpp"
 #include "detail/box.hpp"
+#include "detail/config.hpp"
 #include "detail/conv.hpp"
 #include "detail/core.hpp"
 #include "detail/lang.hpp"
@@ -325,8 +326,9 @@ class Tensor {
     // managing too-large expressions however will eventually dominate the cost
     // of evaluation. We thus eagerly evaluate once expressions become too big.
     // TODO: Run experiments to measure the ideal threshold here.
-    constexpr auto kFlushThreshold = 32;
-    if (op_ && op_->data.size > kFlushThreshold) {
+    auto flush_tree_size_threshold =
+        GlobalConfig::get().getConfigVal<long>("flush_tree_size_threshold", 32);
+    if (op_ && op_->data.size > flush_tree_size_threshold) {
       op_ = lang::evaluate(op_);
     }
   }
