@@ -576,17 +576,17 @@ auto eval_generic(Evaluator evaluator) {
 
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
-  auto kParallelizeThreshold =
+  auto par_threshold =
       GlobalConfig::get().getConfigVal<long>("parallelize_threshold", 8 * 1024);
-  auto kParallelizeParts = GlobalConfig::get().getConfigVal<long>(
+  auto par_parts = GlobalConfig::get().getConfigVal<long>(
       "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
-  if (pool.capacity() < kParallelizeThreshold) {
+  if (pool.capacity() < par_threshold) {
     return eval_generic(SimpleEvaluator(std::move(pool), std::move(eval_fn)));
   }
 
-  auto partition = partition_pool(pool, kParallelizeParts);
+  auto partition = partition_pool(pool, par_parts);
 
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;
