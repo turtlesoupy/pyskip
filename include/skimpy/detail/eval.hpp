@@ -2,10 +2,12 @@
 
 #include <array>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <new>
 #include <variant>
 
+#include "config.hpp"
 #include "core.hpp"
 #include "step.hpp"
 #include "threads.hpp"
@@ -574,8 +576,10 @@ auto eval_generic(Evaluator evaluator) {
 
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
-  static constexpr auto kParallelizeThreshold = 8 * 1024;
-  static auto kParallelizeParts = std::thread::hardware_concurrency();
+  auto kParallelizeThreshold =
+      GlobalConfig::get().getConfigVal<long>("parallelize_threshold", 8 * 1024);
+  auto kParallelizeParts = GlobalConfig::get().getConfigVal<long>(
+      "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
   if (pool.capacity() < kParallelizeThreshold) {

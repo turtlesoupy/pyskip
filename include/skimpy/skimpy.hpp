@@ -3,6 +3,7 @@
 #include "array.hpp"
 #include "builder.hpp"
 #include "tensor.hpp"
+#include "detail/config.hpp"
 
 namespace skimpy {
 

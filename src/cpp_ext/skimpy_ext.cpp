@@ -1,4 +1,6 @@
+#include <optional>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include <skimpy/skimpy.hpp>
 
@@ -17,4 +19,36 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
   float_binds(m);
   char_binds(m);
   bool_binds(m);
+
+  auto configModule =
+      m.def_submodule("config", "Methods related to skimpy configuration");
+
+  configModule.def("set_value", [](std::string key, std::optional<long> val) {
+    if (val) {
+      skimpy::GlobalConfig::get().clearConfigVal(key);
+    } else {
+      skimpy::GlobalConfig::get().setConfigVal<long>(key, *val);
+    }
+  });
+  configModule.def("set_value", [](std::string key, std::optional<bool> val) {
+    if (val) {
+      skimpy::GlobalConfig::get().clearConfigVal(key);
+    } else {
+      skimpy::GlobalConfig::get().setConfigVal<bool>(key, *val);
+    }
+  });
+  configModule.def("set_value", [](std::string key, std::optional<double> val) {
+    if (val) {
+      skimpy::GlobalConfig::get().clearConfigVal(key);
+    } else {
+      skimpy::GlobalConfig::get().setConfigVal<double>(key, *val);
+    }
+  });
+  configModule.def("get_all_values", []() {
+    return skimpy::GlobalConfig::get().getConfigMap();
+  });
+
+  configModule.def("set_all_values", [](std::unordered_map<std::string, skimpy::ConfigTypes> &map) {
+    skimpy::GlobalConfig::get().setConfigMap(map);
+  });
 }
