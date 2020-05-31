@@ -14,20 +14,20 @@ def config_scope():
 @contextmanager
 def num_threads_scope(num):
     with config_scope():
-        _skimpy_config.set_value("parallelize_parts", num)
+        _skimpy_config.set_int_value("parallelize_parts", num)
         yield
 
 
 @contextmanager
 def flush_threshold_scope(num):
     with config_scope():
-        _skimpy_config.set_value("flush_tree_size_threshold", num)
+        _skimpy_config.set_int_value("flush_tree_size_threshold", num)
         yield
 
 
 @contextmanager
 def lazy_evaluation_scope():
-    with flush_threshold_scope(2 ** 31):
+    with flush_threshold_scope(2 ** 30):
         yield
 
 

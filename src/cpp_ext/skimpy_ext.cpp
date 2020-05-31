@@ -23,21 +23,21 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
   auto configModule =
       m.def_submodule("config", "Methods related to skimpy configuration");
 
-  configModule.def("set_value", [](std::string key, std::optional<long> val) {
+  configModule.def("set_int_value", [](std::string key, std::optional<long> val) {
     if (val) {
-      skimpy::GlobalConfig::get().setConfigVal<long>(key, *val);
+      skimpy::GlobalConfig::get().setConfigVal<int64_t>(key, *val);
     } else {
       skimpy::GlobalConfig::get().clearConfigVal(key);
     }
   });
-  configModule.def("set_value", [](std::string key, std::optional<bool> val) {
+  configModule.def("set_bool_value", [](std::string key, std::optional<bool> val) {
     if (val) {
       skimpy::GlobalConfig::get().setConfigVal<bool>(key, *val);
     } else {
       skimpy::GlobalConfig::get().clearConfigVal(key);
     }
   });
-  configModule.def("set_value", [](std::string key, std::optional<double> val) {
+  configModule.def("set_float_value", [](std::string key, std::optional<double> val) {
     if (val) {
       skimpy::GlobalConfig::get().setConfigVal<double>(key, *val);
     } else {

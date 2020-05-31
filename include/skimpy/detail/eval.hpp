@@ -577,8 +577,8 @@ auto eval_generic(Evaluator evaluator) {
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
   auto par_threshold =
-      GlobalConfig::get().getConfigVal<long>("parallelize_threshold", 8 * 1024);
-  auto par_parts = GlobalConfig::get().getConfigVal<long>(
+      GlobalConfig::get().getConfigVal<int64_t>("parallelize_threshold", 8 * 1024);
+  auto par_parts = GlobalConfig::get().getConfigVal<int64_t>(
       "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.

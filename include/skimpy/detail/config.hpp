@@ -6,7 +6,7 @@
 
 namespace skimpy {
 
-using ConfigTypes = std::variant<std::string, long, double, bool>;
+using ConfigTypes = std::variant<std::string, int64_t, double, bool>;
 
 class GlobalConfig {
  public:

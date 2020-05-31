@@ -327,7 +327,7 @@ class Tensor {
     // of evaluation. We thus eagerly evaluate once expressions become too big.
     // TODO: Run experiments to measure the ideal threshold here.
     auto flush_tree_size_threshold =
-        GlobalConfig::get().getConfigVal<long>("flush_tree_size_threshold", 32);
+        GlobalConfig::get().getConfigVal<int64_t>("flush_tree_size_threshold", 32);
     if (op_ && op_->data.size > flush_tree_size_threshold) {
       op_ = lang::evaluate(op_);
     }
