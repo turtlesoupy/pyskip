@@ -111,5 +111,5 @@ setup(
     tests_require=["nose"],
     zip_safe=False,
     setup_requires=["nose>=1.0"],
-    install_requires=[],
+    install_requires=["numpy"],
 )

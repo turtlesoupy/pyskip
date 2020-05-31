@@ -72,7 +72,7 @@ class Tensor:
         if isinstance(item, Tensor):
             return item
         else:
-            return cls(shape=(1,), val=item, dtype=dtype)
+            return cls(shape=(1, ), val=item, dtype=dtype)
 
     @classmethod
     def from_numpy(cls, np_arr):
@@ -155,7 +155,6 @@ class Tensor:
             return Tensor.wrap(klass(a.shape, getattr(a._tensor.array(), op)(b._tensor.array())))
         else:
             return Tensor.wrap(klass(a.shape, getattr(a._tensor.array(), op)(b)))
-
 
     @property
     def _bool_tensor_class(self):
@@ -290,6 +289,15 @@ class Tensor:
     def __len__(self):
         return len(self._tensor)
 
+    def __str__(self):
+        return self.to_string()
+
+    def __repr__(self):
+        type_str = f"Tensor(shape={self.shape}, dtype={self.dtype.__name__})"
+        vals_str = self.to_string(separator=", ")
+        indented = f"\n{vals_str}".replace("\n", "\n    ")
+        return f"{type_str}:{indented}"
+
     def rle_length(self):
         return self._tensor.array().rle_length()
 
@@ -299,10 +307,12 @@ class Tensor:
     def clone(self):
         return self._forward_to_unary_array_op("clone")
 
-    def to(self, typ):
-        return Tensor.wrap(
-            self._cpp_class(self.shape, typ)(self.shape, getattr(self._tensor.array(), typ.__name__)())
-        )
+    def to(self, dtype):
+        cast_array = getattr(self.to_array(), dtype.__name__)()
+        return Tensor.wrap(self._cpp_class(self.shape, dtype)(self.shape, cast_array))
+
+    def to_array(self):
+        return self._tensor.array()
 
     def to_numpy(self):
         np_arr = self._tensor.array().to_numpy()
@@ -310,6 +320,9 @@ class Tensor:
 
     def to_list(self):
         return self.to_numpy().tolist()
+
+    def to_runs(self):
+        return self.to_array().runs()
 
     def to_string(self, threshold=20, separator=" "):
         from .io import format_tensor

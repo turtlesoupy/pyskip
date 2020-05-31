@@ -6,17 +6,19 @@
 
 namespace py = pybind11;
 
-inline auto convert_band(skimpy::Pos length, py::slice slice) {
+using skimpy::Pos;
+
+inline auto convert_band(Pos length, py::slice slice) {
   CHECK_ARGUMENT(slice.attr("step").is_none());
-  skimpy::Pos start = 0;
-  skimpy::Pos stop = length;
+  Pos start = 0;
+  Pos stop = length;
 
   // Set non-default slice values.
   if (!slice.attr("start").is_none()) {
-    start = slice.attr("start").cast<skimpy::Pos>();
+    start = slice.attr("start").cast<Pos>();
   }
   if (!slice.attr("stop").is_none()) {
-    stop = slice.attr("stop").cast<skimpy::Pos>();
+    stop = slice.attr("stop").cast<Pos>();
   }
 
   // Handle negative values.
@@ -33,20 +35,20 @@ inline auto convert_band(skimpy::Pos length, py::slice slice) {
   return skimpy::Band(start, stop);
 }
 
-inline auto convert_slice(skimpy::Pos length, py::slice slice) {
-  skimpy::Pos start = 0;
-  skimpy::Pos stop = length;
-  skimpy::Pos stride = 1;
+inline auto convert_slice(Pos length, py::slice slice) {
+  Pos start = 0;
+  Pos stop = length;
+  Pos stride = 1;
 
   // Set non-default slice values.
   if (!slice.attr("start").is_none()) {
-    start = slice.attr("start").cast<skimpy::Pos>();
+    start = slice.attr("start").cast<Pos>();
   }
   if (!slice.attr("stop").is_none()) {
-    stop = slice.attr("stop").cast<skimpy::Pos>();
+    stop = slice.attr("stop").cast<Pos>();
   }
   if (!slice.attr("step").is_none()) {
-    stride = slice.attr("step").cast<skimpy::Pos>();
+    stride = slice.attr("step").cast<Pos>();
   }
 
   // Handle negative values.
@@ -67,7 +69,7 @@ inline auto convert_slice(skimpy::Pos length, py::slice slice) {
 template <size_t dim>
 inline auto convert_tensor_slice(
     skimpy::TensorShape<dim> shape, std::array<py::slice, dim> slices) {
-  std::array<std::array<skimpy::Pos, 3>, dim> components;
+  std::array<std::array<Pos, 3>, dim> components;
   for (int i = 0; i < dim; i += 1) {
     auto slice = convert_slice(shape[i], slices[i]);
     components[i][0] = slice.start;
@@ -90,13 +92,13 @@ template <typename Val>
 inline void bind_builder_class(py::module& m, const char* class_name) {
   using Builder = skimpy::ArrayBuilder<Val>;
   py::class_<Builder>(m, class_name)
-      .def(py::init<skimpy::Pos, Val>())
+      .def(py::init<Pos, Val>())
       .def(py::init<skimpy::Array<Val>>())
       .def("__len__", &Builder::len)
       .def("__repr__", &Builder::repr)
       .def(
           "__setitem__",
-          [](Builder& self, skimpy::Pos pos, Val val) { self.set(pos, val); })
+          [](Builder& self, Pos pos, Val val) { self.set(pos, val); })
       .def(
           "__setitem__",
           [](Builder& self, py::slice slice, Val val) {
@@ -116,7 +118,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
   using Array = skimpy::Array<Val>;
   auto& cls =
       py::class_<Array>(m, class_name)
-          .def(py::init([](skimpy::Pos span, Val fill) {
+          .def(py::init([](Pos span, Val fill) {
             return skimpy::make_array<Val>(span, fill);
           }))
           .def("__len__", &Array::len)
@@ -137,8 +139,15 @@ inline void bind_array_class(py::module& m, const char* class_name) {
                 return py::array_t<Val>(size, buffer);
               })
           .def(
-              "__getitem__",
-              [](Array& self, skimpy::Pos pos) { return self.get(pos); })
+              "runs",
+              [](Array& self) {
+                auto store = self.store();
+                return std::make_tuple(
+                    py::array_t<Pos>(store->size, store->ends.release()),
+                    py::array_t<Val>(store->size, store->vals.release()));
+              })
+          .def(
+              "__getitem__", [](Array& self, Pos pos) { return self.get(pos); })
           .def(
               "__getitem__",
               [](Array& self, py::slice slice) {
@@ -146,7 +155,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
               })
           .def(
               "__setitem__",
-              [](Array& self, skimpy::Pos pos, Val val) { self.set(pos, val); })
+              [](Array& self, Pos pos, Val val) { self.set(pos, val); })
           .def(
               "__setitem__",
               [](Array& self, py::slice slice, Val val) {
@@ -310,13 +319,13 @@ template <size_t dim, typename Val>
 inline void bind_tensor_class(py::module& m, const char* class_name) {
   using Tensor = skimpy::Tensor<dim, Val>;
   py::class_<Tensor>(m, class_name)
-      .def(py::init([](const std::array<skimpy::Pos, dim>& s, Val v) {
+      .def(py::init([](const std::array<Pos, dim>& s, Val v) {
         return skimpy::make_tensor<dim, Val>(skimpy::make_shape<dim>(s), v);
       }))
-      .def(py::init([](const std::array<skimpy::Pos, dim> s,
-                       const skimpy::Array<Val>& v) {
-        return skimpy::make_tensor<dim, Val>(skimpy::make_shape<dim>(s), v);
-      }))
+      .def(py::init(
+          [](const std::array<Pos, dim> s, const skimpy::Array<Val>& v) {
+            return skimpy::make_tensor<dim, Val>(skimpy::make_shape<dim>(s), v);
+          }))
       .def("__len__", &Tensor::len)
       .def("__repr__", &Tensor::repr)
       .def("clone", &Tensor::clone)
@@ -328,9 +337,7 @@ inline void bind_tensor_class(py::module& m, const char* class_name) {
           [](const Tensor& self) { return get_tensor_shape(self.shape()); })
       .def(
           "__getitem__",
-          [](Tensor& self, std::array<skimpy::Pos, dim> pos) {
-            return self.get(pos);
-          })
+          [](Tensor& self, std::array<Pos, dim> pos) { return self.get(pos); })
       .def(
           "__getitem__",
           [](Tensor& self, std::array<py::slice, dim> slices) {
@@ -338,7 +345,7 @@ inline void bind_tensor_class(py::module& m, const char* class_name) {
           })
       .def(
           "__setitem__",
-          [](Tensor& self, std::array<skimpy::Pos, dim> pos, Val val) {
+          [](Tensor& self, std::array<Pos, dim> pos, Val val) {
             self.set(pos, val);
           })
       .def(

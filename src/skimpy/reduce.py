@@ -25,7 +25,7 @@ def reduce(
             last = take(t, slice(-1, n), axis)
             if len(t.shape) == 1:
                 last = last.item()
-            
+
             return op(reduce(op, take(t, slice(-1), axis)), last)
         else:
             lo = take(t, slice(0, n, 2), axis)
