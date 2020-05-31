@@ -315,9 +315,6 @@ class RunLength3DConvolutionBenchmark(Benchmark):
 
 
 class DenseSkimpyImplementationBenchmark(Benchmark):
-    # Tournament tree Vs. min
-    # Hashtable Vs. no hash-table
-    # Maybe a lazyness one (greedy evaluation)
     def __init__(self, array_length, num_inputs, suite_kwargs=None):
         self.array_length = array_length
         self.num_inputs = num_inputs
@@ -325,6 +322,70 @@ class DenseSkimpyImplementationBenchmark(Benchmark):
 
     def _numpy_inputs(self):
         return [np.random.randint(2**3, size=self.array_length, dtype=np.int32) for _ in range(self.num_inputs)]
+    
+    def _run_skimpy(self):
+        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+
+        t = Timer()
+        with t:
+            _ = functools.reduce(lambda x, y: x + y, inputs).eval()
+
+        return t.duration_ms
+
+    def run_skimpy_lazy(self):
+        with lazy_evaluation_scope():
+            return self._run_skimpy()
+
+    def run_skimpy_greedy(self):
+        with greedy_evaluation_scope():
+            return self._run_skimpy()
+
+    def run_skimpy_slow(self):
+        with config_scope():
+            set_value("accelerated_eval", False)
+            return self._run_skimpy()
+
+    def run_skimpy_accelerated(self):
+        with config_scope():
+            set_value("accelerated_eval", True)
+            return self._run_skimpy()
+
+
+class RunLengthSkimpyImplementationBenchmark(Benchmark):
+    def __init__(
+        self,
+        array_length,
+        num_non_zero,
+        run_length,
+        align_inputs,
+        num_inputs,
+        deterministic_run_length,
+        suite_kwargs=None
+    ):
+        self.array_length = array_length
+        self.num_non_zero = num_non_zero
+        self.run_length = run_length
+        self.align_inputs = align_inputs
+        self.num_inputs = num_inputs
+        self.deterministic_run_length = deterministic_run_length
+        self.suite_kwargs = suite_kwargs or {}
+
+    def _numpy_inputs(self):
+        inputs = []
+        seed = 42
+        for _ in range(self.num_inputs):
+            arr = run_length_array(
+                num_elements=self.array_length,
+                num_non_zero=self.num_non_zero,
+                run_length=self.run_length,
+                deterministic_run_length=self.deterministic_run_length,
+                random_seed=seed
+            )
+            inputs.append(arr)
+            if not self.align_inputs:
+                seed += 1
+
+        return inputs
     
     def _run_skimpy(self):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
