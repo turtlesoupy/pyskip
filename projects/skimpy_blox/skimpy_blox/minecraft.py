@@ -493,7 +493,7 @@ class SkimpyMinecraftLevel:
         dim_z = self.bbox[2][1] - self.bbox[2][0]
 
         megatensor = skimpy.Tensor(shape=(dim_x, dim_y, dim_z), dtype=int)
-        for chunk in tqdm(self.chunk_list):
+        for chunk in self.chunk_list:
             start_x = chunk.coord[0] - self.bbox[0][0]
             start_y = chunk.coord[1] - self.bbox[1][0]
             start_z = chunk.coord[2] - self.bbox[2][0]
@@ -606,19 +606,3 @@ class SkimpyMinecraftLevel:
         numpy_chunk = cls.chunk_to_numpy(coord, chunk, column_order)
         tensor = skimpy.Tensor.from_numpy(numpy_chunk.tensor)
         return SkimpyMinecraftChunk(numpy_chunk.coord, tensor)
-        """
-        max_x = 16
-        max_z = 16
-        max_y = chunk.get_max_height() + 1
-
-        builder = skimpy.Tensor.builder(cls._column_remap((max_x, max_y, max_z), column_order))
-
-        for x in range(max_x):
-            for y in range(max_y):
-                for z in range(max_z):
-                    block_int_id = cls._block_at(chunk, x, y, z) or 0
-                    builder[cls._column_remap((x, y, z), column_order)] = block_int_id
-
-        tensor = builder.build()
-        return SkimpyMinecraftChunk(coord, tensor)
-        """

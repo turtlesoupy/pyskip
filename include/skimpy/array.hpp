@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "detail/box.hpp"
+#include "detail/config.hpp"
 #include "detail/conv.hpp"
 #include "detail/core.hpp"
 #include "detail/lang.hpp"
@@ -207,8 +208,9 @@ class Array {
     // managing too large expressions however will eventually dominate the cost
     // of evaluation. We thus eagerly evaluate once expressions become too big.
     // TODO: Run experiments to measure the ideal threshold here.
-    constexpr auto kFlushThreshold = 32;
-    if (op_ && op_->data.size > kFlushThreshold) {
+    auto flush_tree_size_threshold =
+        GlobalConfig::get().getConfigVal<int64_t>("flush_tree_size_threshold", 32);
+    if (op_ && op_->data.size > flush_tree_size_threshold) {
       op_ = lang::evaluate(op_);
     }
   }
@@ -317,7 +319,7 @@ BINARY_ARRAY_OP_SIMPLE(max, [](Val a, Val b) { return std::max(a, b); })
 BINARY_ARRAY_OP_SIMPLE(pow, [](Val a, Val b) {
   return static_cast<Val>(std::pow(a, b));
 })
-BINARY_ARRAY_OP_SIMPLE(coalesce, [](Val a, Val b) { return a ? a : b;})
+BINARY_ARRAY_OP_SIMPLE(coalesce, [](Val a, Val b) { return a ? a : b; })
 
 // Ternary math operations
 TERNARY_ARRAY_OP(splat, bool, Val, Val, Val, [](bool m, Val a, Val b) {

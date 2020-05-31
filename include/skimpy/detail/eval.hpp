@@ -2,10 +2,12 @@
 
 #include <array>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <new>
 #include <variant>
 
+#include "config.hpp"
 #include "core.hpp"
 #include "step.hpp"
 #include "threads.hpp"
@@ -574,15 +576,17 @@ auto eval_generic(Evaluator evaluator) {
 
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
-  static constexpr auto kParallelizeThreshold = 8 * 1024;
-  static auto kParallelizeParts = std::thread::hardware_concurrency();
+  auto par_threshold =
+      GlobalConfig::get().getConfigVal<int64_t>("parallelize_threshold", 8 * 1024);
+  auto par_parts = GlobalConfig::get().getConfigVal<int64_t>(
+      "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
-  if (pool.capacity() < kParallelizeThreshold) {
+  if (pool.capacity() < par_threshold || par_parts <= 1) {
     return eval_generic(SimpleEvaluator(std::move(pool), std::move(eval_fn)));
   }
 
-  auto partition = partition_pool(pool, kParallelizeParts);
+  auto partition = partition_pool(pool, par_parts);
 
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;

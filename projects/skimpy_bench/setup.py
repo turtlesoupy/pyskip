@@ -99,6 +99,7 @@ setup(
         CMakeExtension("skimpy_bench", "skimpy_bench_cpp_ext"),
     ],
     cmdclass={"build_ext": CMakeBuild},
+    packages=find_namespace_packages(where="src", exclude="tests"),
     package_dir={"": "src"},
     zip_safe=False,
 )
