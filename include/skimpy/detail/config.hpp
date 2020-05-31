@@ -62,4 +62,9 @@ inline auto get_or(const std::string& key, Val fallback) {
   return GlobalConfig::get().get_config_val(key, fallback);
 }
 
+template <typename Val>
+inline void set(const std::string& key, Val val) {
+  GlobalConfig::get().set_config_val(key, val);
+}
+
 }  // namespace skimpy::detail::config

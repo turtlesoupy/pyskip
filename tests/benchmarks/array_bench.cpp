@@ -11,6 +11,7 @@
 #include "skimpy/skimpy.hpp"
 
 namespace box = skimpy::detail::box;
+namespace conf = skimpy::detail::config;
 namespace util = skimpy::detail::util;
 
 TEST_CASE("Benchmark simple assignments", "[arrays]") {
@@ -175,5 +176,47 @@ TEST_CASE("Benchmark reductions", "[arrays][reduce]") {
   BENCHMARK("prod") {
     skimpy::Array<int> a(store);
     volatile auto ret = prod(a).eval();
+  };
+}
+
+TEST_CASE("Benchmark evaluation options", "[arrays][config]") {
+  static constexpr auto kArrayNonZeroCount = 1000000;
+
+  auto make_arrays = [](auto k) {
+    std::vector<skimpy::Array<int>> arrays;
+    for (int i = 1; i <= k; i += 1) {
+      auto a = skimpy::make_array(k * kArrayNonZeroCount, 0);
+      a.set({0, k * kArrayNonZeroCount, k}, k);
+      arrays.push_back(std::move(a));
+    }
+    return arrays;
+  };
+
+  // Pre-compute a bunch of misaligned arrays.
+  auto arrays = make_arrays(32);
+
+  // Disable auto-materialization.
+  conf::set("flush_tree_size_threshold", std::numeric_limits<int64_t>::max());
+
+  BENCHMARK("mul(k=32); accelerated_eval=false") {
+    conf::set("accelerated_eval", false);
+    volatile auto ret = [&arrays] {
+      auto ret = arrays[0];
+      for (int i = 1; i < 32; i += 1) {
+        ret = ret * arrays[i];
+      }
+      return ret.eval();
+    }();
+  };
+
+  BENCHMARK("mul(k=32); accelerated_eval=true") {
+    conf::set("accelerated_eval", true);
+    volatile auto ret = [&arrays] {
+      auto ret = arrays[0];
+      for (int i = 1; i < 32; i += 1) {
+        ret = ret * arrays[i];
+      }
+      return ret.eval();
+    }();
   };
 }

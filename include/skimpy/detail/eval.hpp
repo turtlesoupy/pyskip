@@ -610,13 +610,7 @@ template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   CHECK_ARGUMENT(evaluator.pool().span() > 0);
 
-<<<<<<< HEAD
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::kSize;
-  == == == = const bool useAcceleratedEval =
-               GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
-
-  static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
->>>>>>> f175cd4924fe9107192cbfa3f51a45fb857fff30
   using Val = decltype(evaluator.eval());
 
   // Allocate the output store.

@@ -181,6 +181,11 @@ TEST_CASE("Benchmark evaluation options", "[tensors][config]") {
   };
 
   BENCHMARK("mul(k=32); accelerated_eval=false") {
-    auto tensors = make_tensors(32);
+    static constexpr auto k = 32;
+    auto tensors = make_tensors(k);
+    volatile auto ret = tensors[0];
+    for (int i = 1; i < k; i += 1) {
+      ret = ret * tensors[i];
+    }
   }
 }
