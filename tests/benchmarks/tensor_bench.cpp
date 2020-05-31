@@ -165,27 +165,3 @@ TEST_CASE("Benchmark tensor 2D convolutions", "[tensors][conv]") {
     volatile auto ret = conv_2d(tensor, kernel, 2).eval();
   };
 }
-
-TEST_CASE("Benchmark evaluation options", "[tensors][config]") {
-  using skimpy::detail::config::GlobalConfig;
-  static constexpr auto kTensorNonZeroCount = 1000000;
-
-  auto make_tensors = [](size_t k) {
-    std::vector<skimpy::Tensor<1, int>> tensors;
-    for (int i = 1; i <= k, i += 1) {
-      auto t = skimpy::make_tensor<1>(k * kTensorNonZeroCount, 0);
-      t.set({{0, k * kTensorNonZeroCount, k}}) = k;
-      tensors.push_back(std::move(t));
-    }
-    return tensors;
-  };
-
-  BENCHMARK("mul(k=32); accelerated_eval=false") {
-    static constexpr auto k = 32;
-    auto tensors = make_tensors(k);
-    volatile auto ret = tensors[0];
-    for (int i = 1; i < k; i += 1) {
-      ret = ret * tensors[i];
-    }
-  }
-}

@@ -138,7 +138,7 @@ TEST_CASE("Benchmark reductions", "[arrays][reduce]") {
     store->vals[i] = i;
   }
 
-  util::Fix sum([](auto& sum, auto& t) {
+  util::Fix sum([](auto& sum, auto t) {
     if (t.len() == 0) {
       return skimpy::make_array(1, 0);
     } else if (t.len() == 1) {
@@ -158,7 +158,7 @@ TEST_CASE("Benchmark reductions", "[arrays][reduce]") {
     volatile auto ret = sum(a).eval();
   };
 
-  util::Fix prod([](auto& prod, auto& t) {
+  util::Fix prod([](auto& prod, auto t) {
     if (t.len() == 0) {
       return skimpy::make_array(1, 1);
     } else if (t.len() == 1) {
