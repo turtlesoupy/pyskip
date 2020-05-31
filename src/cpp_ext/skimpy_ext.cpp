@@ -1,3 +1,7 @@
+#if defined(__GNUC__) && defined(_WIN32)
+#define _hypot hypot
+#endif
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -6,10 +10,10 @@
 
 namespace py = pybind11;
 
-void int_binds(py::module &m);
-void float_binds(py::module &m);
-void char_binds(py::module &m);
-void bool_binds(py::module &m);
+void int_binds(py::module& m);
+void float_binds(py::module& m);
+void char_binds(py::module& m);
+void bool_binds(py::module& m);
 
 using skimpy::detail::config::GlobalConfig;
 
@@ -54,6 +58,6 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
 
   config_module.def(
       "set_all_values",
-      [](std::unordered_map<std::string, skimpy::detail::config::ConfigTypes>
-             &map) { GlobalConfig::get().set_config_map(map); });
+      [](std::unordered_map<std::string, skimpy::detail::config::ConfigTypes>&
+             map) { GlobalConfig::get().set_config_map(map); });
 }

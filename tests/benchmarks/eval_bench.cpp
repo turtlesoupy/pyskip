@@ -189,7 +189,7 @@ TEST_CASE("Benchmark 8-source plan evaluation", "[simple]") {
       eval::SimpleSource(make_store(n, 6)),
       eval::SimpleSource(make_store(n, 7)),
       eval::SimpleSource(make_store(n, 8)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -238,7 +238,7 @@ TEST_CASE("Benchmark 16-source plan evaluation", "[simple]") {
       eval::SimpleSource(make_store(n, 14)),
       eval::SimpleSource(make_store(n, 15)),
       eval::SimpleSource(make_store(n, 16)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -303,7 +303,7 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[simple]") {
       eval::SimpleSource(make_store(n, 30)),
       eval::SimpleSource(make_store(n, 31)),
       eval::SimpleSource(make_store(n, 32)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -400,7 +400,7 @@ TEST_CASE("Benchmark shifted 8-source plan evaluation", "[shifted]") {
       eval::SimpleSource(make_shifted_store(n, 8, 5)),
       eval::SimpleSource(make_shifted_store(n, 8, 6)),
       eval::SimpleSource(make_shifted_store(n, 8, 7)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -449,7 +449,7 @@ TEST_CASE("Benchmark shifted 16-source plan evaluation", "[shifted]") {
       eval::SimpleSource(make_shifted_store(n, 16, 13)),
       eval::SimpleSource(make_shifted_store(n, 16, 14)),
       eval::SimpleSource(make_shifted_store(n, 16, 15)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -534,7 +534,7 @@ TEST_CASE("Benchmark boxed 4-source evaluation", "[boxed]") {
       eval::SimpleSource(make_box_store(n, 2)),
       eval::SimpleSource(make_box_store(n, 3)),
       eval::SimpleSource(make_box_store(n, 4)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, Box>(
@@ -575,7 +575,7 @@ TEST_CASE("Benchmark boxed 8-source evaluation", "[boxed]") {
       eval::SimpleSource(make_box_store(n, 6)),
       eval::SimpleSource(make_box_store(n, 7)),
       eval::SimpleSource(make_box_store(n, 8)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, Box>(
@@ -628,7 +628,7 @@ TEST_CASE("Benchmark boxed 16-source evaluation", "[boxed]") {
       eval::SimpleSource(make_box_store(n, 14)),
       eval::SimpleSource(make_box_store(n, 15)),
       eval::SimpleSource(make_box_store(n, 16)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, Box>(
@@ -721,7 +721,7 @@ TEST_CASE("Benchmark mixed 2-source evaluation", "[mixed]") {
   auto sources = eval::make_pool<eval::MixSourceBase>(
       eval::MixSource<int>(make_store(n, 1)),
       eval::MixSource<int>(make_store(n, 2)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_mixed<int>(
@@ -756,7 +756,7 @@ TEST_CASE("Benchmark mixed 4-source evaluation", "[mixed]") {
       eval::MixSource<int>(make_store(n, 2)),
       eval::MixSource<int>(make_store(n, 3)),
       eval::MixSource<int>(make_store(n, 4)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_mixed<int>(
@@ -797,7 +797,7 @@ TEST_CASE("Benchmark mixed 8-source evaluation", "[mixed]") {
       eval::MixSource<int>(make_store(n, 6)),
       eval::MixSource<int>(make_store(n, 7)),
       eval::MixSource<int>(make_store(n, 8)));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_mixed<int>(
@@ -1065,7 +1065,7 @@ TEST_CASE("Benchmark cyclic 8-source evaluation", "[cyclic]") {
       S(make_store(n, 6), i0, i1, step_fn),
       S(make_store(n, 7), i0, i1, step_fn),
       S(make_store(n, 8), i0, i1, step_fn));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -1130,7 +1130,7 @@ TEST_CASE("Benchmark cyclic 16-source evaluation", "[cyclic]") {
       S(make_store(n, 14), i0, i1, step_fn),
       S(make_store(n, 15), i0, i1, step_fn),
       S(make_store(n, 16), i0, i1, step_fn));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
@@ -1195,7 +1195,7 @@ TEST_CASE("Benchmark boxed & cyclic 16-source evaluation", "[cyclic][boxed]") {
       eval::SimpleSource(make_box_store(n, 14), i0, i1, step_fn),
       eval::SimpleSource(make_box_store(n, 15), i0, i1, step_fn),
       eval::SimpleSource(make_box_store(n, 16), i0, i1, step_fn));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, Box>(
@@ -1247,7 +1247,7 @@ TEST_CASE("Benchmark lambda 16-source evaluation", "[lambda]") {
       S(make_store(n, 14), 0, n, step_fn),
       S(make_store(n, 15), 0, n, step_fn),
       S(make_store(n, 16), 0, n, step_fn));
-  static constexpr auto sources_size = decltype(sources)::size;
+  static constexpr auto sources_size = decltype(sources)::kSize;
 
   BENCHMARK("eval") {
     volatile auto x = eval::eval_simple<int, int>(
