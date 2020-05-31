@@ -128,6 +128,48 @@ struct HashTable {
   }
 };
 
+// Simplified version of eval routine (no tournament tree, no hash) for comparison
+template <int sources, typename Evaluator, typename Val>
+void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
+  Pos prev_end = 0;
+  Val prev_val;
+  while(true) {
+    int min_src = 0;
+    Pos min_end = evaluator.peek_end(0);
+    for (int src = 1; src < sources; src++) {
+      if (auto ep = evaluator.peek_end(src); ep < min_end) {
+        min_end = ep;
+        min_src = src;
+      }
+    }
+
+    if (prev_end != min_end) {
+      auto val = evaluator.eval();
+      if (prev_end && prev_val == val) {
+        output.rewind();
+      }
+
+      if (min_end < evaluator.stop()) {
+        output.emit(min_end, val);
+      } else {
+        output.emit(evaluator.stop(), val);
+        break;
+      }
+
+      prev_end = min_end;
+      prev_val = val;
+    }
+
+    for (int src = 0; src < sources; src++) {
+      if (auto src_end = evaluator.peek_end(src); src_end == prev_end) {
+        evaluator.next_val(src);
+        evaluator.next_end(src);
+      }
+    }
+  }
+}
+
+
 // Core evaluation routine. The evaluator is used to maintain the frontier of
 // values, iterate them forward on a per-source basis, and evaluate them into
 // an output value emitted into the output store. The implementation uses a
@@ -454,6 +496,10 @@ class SimpleEvaluator {
     return step_fns_[src](*iter_ends_[src]++);
   }
 
+  inline auto peek_end(int src) {
+    return step_fns_[src](*iter_ends_[src]);
+  }
+
   inline auto eval() const {
     return eval_fn_(&curr_vals_[0]);
   }
@@ -559,6 +605,8 @@ template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   CHECK_ARGUMENT(evaluator.pool().span() > 0);
 
+  const bool useAcceleratedEval = GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
+
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
   using Val = decltype(evaluator.eval());
 
@@ -567,7 +615,11 @@ auto eval_generic(Evaluator evaluator) {
 
   // Evaluate the output store.
   EvalOutput<Val> output(&store->ends[0], &store->vals[0]);
-  eval<size>(std::move(evaluator), output);
+  if (useAcceleratedEval) {
+    eval<size>(std::move(evaluator), output);
+  } else {
+    unaccelerated_eval<size>(std::move(evaluator), output);
+  }
 
   // Resize the output (due to compression).
   store->size = output.ends - &store->ends[0];
