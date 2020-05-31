@@ -322,26 +322,76 @@ class SkimpyImplementationBenchmark:
     pass
 
 
-class MinecraftConvolutionBenchmark:
-    pass
+class MinecraftConvolutionBenchmark(Benchmark):
+    def __init__(self, level, kernel_width, suite_kwargs=None):
+        self.level = level
+        self.megatensor = level.megatensor().eval()
+        self.kernel_width = kernel_width
+        self.kernel_shape = tuple([kernel_width] * 3)
+        self.suite_kwargs = suite_kwargs or {}
+        self.numpy_chunk_list = [e.tensor.to_numpy() for e in level.chunk_list]
+
+    def _numpy_kernel(self, dtype=np.int32):
+        return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+
+    def run_skimpy(self, num_threads=1):
+        kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
+
+        with num_threads_scope(num_threads):
+            t = Timer()
+            with t:
+                _ = skimpy.convolve.conv_3d(self.megatensor, kernel).eval()
+            return t.duration_ms
+
+    def run_torch(self, device="cpu"):
+        dtype = np.int32 if device == "cpu" else np.float32
+        kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+        torch_operands = [
+            torch.from_numpy(e).to(device).reshape((1, 1) + e.shape)
+            for e in self.numpy_chunk_list
+        ]
+
+        t = Timer()
+        with t:
+            for operand in torch_operands:
+                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+                # Force torch to materialize if it is on the GPU
+                tst = ret[0, 0, 0, 0, 0].item()
+        return t.duration_ms
+
+    def run_memory(self):
+        return memory.no_simd_int_cum_sum_write(
+            num_elements=len(self.megatensor), 
+            num_input_arrays=1,
+            num_threads=4,
+        ) * MICR_TO_MS
+
 
 
 class MNISTConvolutionBenchmark(Benchmark):
-    def __init__(self, mnist_path, kernel_width, num_kernels, suite_kwargs=None):
-        self.mnist_np_array = self.__class__._numpy_from_mnist(mnist_path)
+    def __init__(self, mnist_path, kernel_width, num_kernels, quantize_buckets=None, suite_kwargs=None):
+        self.mnist_np_array = self.__class__._numpy_from_mnist(mnist_path, quantize_buckets=quantize_buckets)
         self.kernel_width = kernel_width
         self.kernel_shape = tuple([kernel_width] * 2)
         self.num_kernels = num_kernels
         self.suite_kwargs = suite_kwargs or {}
 
     @classmethod
-    def _numpy_from_mnist(cls, path):
+    def _numpy_from_mnist(cls, path, quantize_buckets):
         csv = pd.read_csv(path)
         data_columns = [e for e in csv.columns if e != "label"]
         np_mnist = csv[data_columns].to_numpy()
         batch_size, example_size = np_mnist.shape
         digit_size = 28
         layout = np_mnist.reshape(digit_size, digit_size * batch_size).astype(np.int32)
+        if quantize_buckets is None:
+            return layout
+        else:
+            rng = 256 / quantize_buckets
+            for i in range(quantize_buckets):
+                start = i * rng  
+                end = (i + 1) * rng  
+                layout[(layout < end) & (layout >= start)] = i * quantize_buckets
         return layout
 
     def _numpy_kernels(self, dtype=np.int32):
