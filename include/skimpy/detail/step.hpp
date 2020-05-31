@@ -26,7 +26,7 @@ struct IdentityStepFn {
 namespace cyclic {
 
 template <Pos pos>
-static Pos kFixedPos = pos;
+static const Pos kFixedPos = pos;
 
 static constexpr auto kMaxExecDeps = 2;
 static constexpr auto kMaxLutSize = 1 << 8;
@@ -44,7 +44,7 @@ struct ExecNode {
       int bit_shift;
     } stack;
     struct {
-      Pos* lut;
+      const Pos* lut;
       int mask;
     } table;
   };
@@ -118,7 +118,7 @@ class StepFn {
 
  private:
   void search(Pos pos) const {
-    // TODO: Consider adding a stack to speed up the search for nearby nodes.
+    // TODO(taylorgordon): Add a stack to speed up the search for nearby nodes.
     auto node = graph_.root;
     auto base = 0, step = 0;
     auto stop = span_;
@@ -166,7 +166,7 @@ class StepFn {
     Pos base = 0;
     Pos stop = 0;
     Pos step = 0;
-    Pos* lut = nullptr;
+    const Pos* lut = nullptr;
     int mask = 0xFFFFFFFF;
   } cache_;
 };
@@ -181,7 +181,7 @@ struct ExprData {
       Pos loop_step;
     } stack;
     struct {
-      Pos* lut;
+      const Pos* lut;
       Pos mask;
     } table;
     struct {
@@ -297,7 +297,7 @@ inline auto clamp(Pos span, ExprNode::Ptr in) {
   return ret;
 }
 
-inline auto table(Pos span, Pos* lut, Pos mask = 0xFFFFFFFF) {
+inline auto table(Pos span, const Pos* lut, Pos mask = 0xFFFFFFFF) {
   CHECK_ARGUMENT(span > 0);
   CHECK_ARGUMENT((span & mask) <= kMaxLutSize);
   auto ret = ExprNode::make_ptr();
@@ -604,10 +604,10 @@ namespace composite {
 class StepFn {
  public:
   StepFn() = default;
-  StepFn(std::vector<cyclic::StepFn> fns) : fns_(std::move(fns)) {}
+  explicit StepFn(std::vector<cyclic::StepFn> fns) : fns_(std::move(fns)) {}
   explicit StepFn(cyclic::StepFn fn) : fns_({std::move(fn)}) {}
 
-  operator bool() const {
+  explicit operator bool() const {
     return !fns_.empty();
   }
 

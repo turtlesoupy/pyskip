@@ -1,10 +1,12 @@
 #pragma once
 
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
+#include <variant>
 
-namespace skimpy {
+// TODO(taylorgordon): Move this out of "detail" since it's external facing.
+namespace skimpy::detail::config {
 
 using ConfigTypes = std::variant<std::string, int64_t, double, bool>;
 
@@ -16,7 +18,7 @@ class GlobalConfig {
   }
 
   template <typename Val>
-  Val getConfigVal(const std::string &key, Val fallback) {
+  Val get_config_val(const std::string& key, Val fallback) {
     const std::lock_guard<std::mutex> lock(lock_);
     const auto val = config_map_.find(key);
     if (val == config_map_.end()) {
@@ -29,24 +31,24 @@ class GlobalConfig {
   }
 
   template <typename Val>
-  void setConfigVal(const std::string &key, Val val) {
-      const std::lock_guard<std::mutex> lock(lock_);
-      config_map_[key] = val;
+  void set_config_val(const std::string& key, Val val) {
+    const std::lock_guard<std::mutex> lock(lock_);
+    config_map_[key] = val;
   }
 
-  void clearConfigVal(const std::string &key) {
-      const std::lock_guard<std::mutex> lock(lock_);
-      config_map_.erase(key);
+  void clear_config_val(const std::string& key) {
+    const std::lock_guard<std::mutex> lock(lock_);
+    config_map_.erase(key);
   }
 
-  std::unordered_map<std::string, ConfigTypes> getConfigMap() {
+  std::unordered_map<std::string, ConfigTypes> get_config_map() {
     const std::lock_guard<std::mutex> lock(lock_);
     return config_map_;
   }
 
-  void setConfigMap(std::unordered_map<std::string, ConfigTypes> &map) {
+  void set_config_map(std::unordered_map<std::string, ConfigTypes> map) {
     const std::lock_guard<std::mutex> lock(lock_);
-    config_map_ = map;
+    config_map_ = std::move(map);
   }
 
  private:
@@ -55,4 +57,9 @@ class GlobalConfig {
   std::mutex lock_;
 };
 
-}  // namespace skimpy
+template <typename Val>
+inline auto get_or(const std::string& key, Val fallback) {
+  return GlobalConfig::get().get_config_val(key, fallback);
+}
+
+}  // namespace skimpy::detail::config

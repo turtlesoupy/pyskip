@@ -8,7 +8,7 @@
 
 namespace skimpy::detail::mask {
 
-// TODO: Add a cache to store frequently used masks.
+// TODO(taylorgordon): Add a cache to store frequently used masks.
 
 using Pos = core::Pos;
 
@@ -37,7 +37,7 @@ template <typename Val>
 struct Expr {
   typename ExprNode<Val>::Ptr node;
 
-  operator bool() const {
+  explicit operator bool() const {
     return !!node;
   }
 

@@ -42,20 +42,20 @@ struct EvalOutput {
 // Provides a priority queue to select the source with the lowest end position.
 template <int sources>
 struct TournamentTree {
-  static constexpr int base = util::round_up_to_power_of_two(sources);
-  uint64_t keys[2 * base];
+  static constexpr int kBase = util::round_up_to_power_of_two(sources);
+  uint64_t keys[2 * kBase];
 
   template <typename Evaluator>
-  TournamentTree(Evaluator& evaluator) {
-    for (int src = 0; src < base; src += 1) {
+  explicit TournamentTree(Evaluator& evaluator) {
+    for (int src = 0; src < kBase; src += 1) {
       if (src < sources) {
         auto end = evaluator.next_end(src);
-        keys[base + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
+        keys[kBase + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
       } else {
-        keys[base + src - 1] = std::numeric_limits<int64_t>::max();
+        keys[kBase + src - 1] = std::numeric_limits<int64_t>::max();
       }
     }
-    for (int h = base >> 1; h > 0; h >>= 1) {
+    for (int h = kBase >> 1; h > 0; h >>= 1) {
       for (int i = h; i < h << 1; i += 1) {
         auto l = (i << 1) - 1;
         auto r = (i << 1);
@@ -73,8 +73,8 @@ struct TournamentTree {
   }
 
   inline void push(int src, Pos end) {
-    keys[base + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
-    for (int i = (base + src) >> 1; i > 0; i >>= 1) {
+    keys[kBase + src - 1] = (static_cast<uint64_t>(end) << 32) | src;
+    for (int i = (kBase + src) >> 1; i > 0; i >>= 1) {
       auto l = (i << 1) - 1;
       auto r = (i << 1);
       if (keys[l] < keys[r]) {
@@ -95,21 +95,21 @@ struct HashTable {
     int size;
     int vals[sources];
   };
-  static constexpr auto buckets = 2 * util::round_up_to_power_of_two(sources);
-  Node nodes[buckets];
+  static constexpr auto kBuckets = 2 * util::round_up_to_power_of_two(sources);
+  Node nodes[kBuckets];
 
   HashTable() {
-    for (int i = 0; i < buckets; i += 1) {
+    for (int i = 0; i < kBuckets; i += 1) {
       nodes[i].key = 0;
     }
   }
 
   inline Node& lookup(Pos end) {
-    return nodes[end & (buckets - 1)];
+    return nodes[end & (kBuckets - 1)];
   }
 
   inline const Node& lookup(Pos end) const {
-    return nodes[end & (buckets - 1)];
+    return nodes[end & (kBuckets - 1)];
   }
 
   inline bool insert(int src, Pos end) {
@@ -128,12 +128,13 @@ struct HashTable {
   }
 };
 
-// Simplified version of eval routine (no tournament tree, no hash) for comparison
+// Simplified version of eval routine (no tournament tree, no hash) for
+// comparison
 template <int sources, typename Evaluator, typename Val>
 void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
   Pos prev_end = 0;
   Val prev_val;
-  while(true) {
+  while (true) {
     int min_src = 0;
     Pos min_end = evaluator.peek_end(0);
     for (int src = 1; src < sources; src++) {
@@ -168,7 +169,6 @@ void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
     }
   }
 }
-
 
 // Core evaluation routine. The evaluator is used to maintain the frontier of
 // values, iterate them forward on a per-source basis, and evaluate them into
@@ -238,7 +238,8 @@ class SimpleSource {
  public:
   SimpleSource() = delete;
 
-  SimpleSource(StorePtr<Val> store) : SimpleSource(store, 0, store->span()) {}
+  explicit SimpleSource(StorePtr<Val> store)
+      : SimpleSource(store, 0, store->span()) {}
 
   SimpleSource(StorePtr<Val> store, Pos start, Pos stop)
       : SimpleSource(std::move(store), start, stop, StepFn()) {}
@@ -327,7 +328,8 @@ struct MixSourceBase {
 template <typename Val, typename StepFn = step::IdentityStepFn>
 class MixSource : public MixSourceBase {
  public:
-  MixSource(StorePtr<Val> store) : MixSource(store, 0, store->span()) {}
+  explicit MixSource(StorePtr<Val> store)
+      : MixSource(store, 0, store->span()) {}
 
   MixSource(StorePtr<Val> store, Pos start, Pos stop)
       : MixSource(std::move(store), start, stop, StepFn()) {}
@@ -389,12 +391,12 @@ class MixSource : public MixSourceBase {
 template <typename Source, int pool_size>
 struct Pool {
   static_assert(pool_size > 0);
-  static constexpr auto size = pool_size;
+  static constexpr auto kSize = pool_size;
   using Val = decltype(std::declval<Source>().val(0));
 
   std::array<std::shared_ptr<Source>, pool_size> sources;
 
-  Pool(std::array<std::shared_ptr<Source>, size> sources)
+  explicit Pool(std::array<std::shared_ptr<Source>, kSize> sources)
       : sources(std::move(sources)) {
     for (int i = 1; i < pool_size; i += 1) {
       CHECK_ARGUMENT(this->sources[i - 1]->span() == this->sources[i]->span());
@@ -446,14 +448,14 @@ auto make_pool(Head&& head, Tail&&... tail) {
 
 template <typename Source, int size>
 auto partition_pool(const Pool<Source, size>& pool, int parts) {
-  // TODO: Instead of using uniform ranges, bisect for ranges with uniform
-  // capacity so that parallel work is distributed evenly across threads.
+  // TODO(taylorgordon): Instead of using uniform ranges, bisect for ranges with
+  // uniform capacity so that work is distributed evenly across threads.
   uint64_t span = pool.span();
   std::vector<Pool<Source, size>> ret(parts, pool);
   for (int i = 0; i < parts; i += 1) {
     auto l = static_cast<Pos>(i * span / parts);
     auto r = static_cast<Pos>((i + 1) * span / parts);
-    for (int j = 0; j < pool.size; j += 1) {
+    for (int j = 0; j < size; j += 1) {
       ret[i].sources[j] = ret[i][j].split(l, r);
     }
   }
@@ -547,6 +549,10 @@ class SourceEvaluator {
     return pool_[src].end(iter_ends_[src]++);
   }
 
+  inline auto peek_end(int src) {
+    return pool_[src].end(iter_ends_[src]);
+  }
+
   inline auto eval() const {
     return eval_fn_(&curr_vals_[0]);
   }
@@ -605,9 +611,7 @@ template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   CHECK_ARGUMENT(evaluator.pool().span() > 0);
 
-  const bool useAcceleratedEval = GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
-
-  static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
+  static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::kSize;
   using Val = decltype(evaluator.eval());
 
   // Allocate the output store.
@@ -615,7 +619,7 @@ auto eval_generic(Evaluator evaluator) {
 
   // Evaluate the output store.
   EvalOutput<Val> output(&store->ends[0], &store->vals[0]);
-  if (useAcceleratedEval) {
+  if (config::get_or("accelerated_eval", true)) {
     eval<size>(std::move(evaluator), output);
   } else {
     unaccelerated_eval<size>(std::move(evaluator), output);
@@ -629,8 +633,8 @@ auto eval_generic(Evaluator evaluator) {
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
   auto par_threshold =
-      GlobalConfig::get().getConfigVal<int64_t>("parallelize_threshold", 8 * 1024);
-  auto par_parts = GlobalConfig::get().getConfigVal<int64_t>(
+      config::get_or<int64_t>("parallelize_threshold", 8 * 1024);
+  auto par_parts = config::get_or<int64_t>(
       "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
@@ -668,15 +672,17 @@ auto eval_simple(
 
 template <typename Ret, int size>
 auto eval_mixed(EvalFn<Mix, Ret> eval_fn, Pool<MixSourceBase, size> pool) {
-  static constexpr auto kParallelizeThreshold = 8 * 1024;
-  static auto kParallelizeParts = std::thread::hardware_concurrency();
+  auto par_threshold =
+      config::get_or<int64_t>("parallelize_threshold", 8 * 1024);
+  auto par_parts = config::get_or<int64_t>(
+      "parallelize_parts", std::thread::hardware_concurrency());
 
   // Evaluate inline if the pool size is below the threshold.
-  if (pool.capacity() < kParallelizeThreshold) {
+  if (pool.capacity() < par_threshold || par_parts <= 1) {
     return eval_generic(SourceEvaluator(std::move(pool), std::move(eval_fn)));
   }
 
-  auto partition = partition_pool(pool, kParallelizeParts);
+  auto partition = partition_pool(pool, par_parts);
 
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;

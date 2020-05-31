@@ -35,7 +35,7 @@ inline constexpr uint32_t lg2(uint32_t x) {
 template <typename Fn>
 class Fix {
  public:
-  Fix(Fn&& fn) : fn_(std::forward<Fn>(fn)) {}
+  explicit Fix(Fn&& fn) : fn_(std::forward<Fn>(fn)) {}
 
   template <typename... Args>
   auto operator()(Args&&... args) const -> decltype(std::declval<Fn>()(

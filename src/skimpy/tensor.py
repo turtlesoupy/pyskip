@@ -117,7 +117,7 @@ class Tensor:
         return self
 
     @classmethod
-    def _cpp_class(self, shape, typ):
+    def _cpp_class(cls, shape, typ):
         name = f"Tensor{len(shape)}{_postfix_type_mapping[typ]}"
         return getattr(_skimpy_cpp_ext, name)
 
@@ -299,7 +299,7 @@ class Tensor:
         return f"{type_str}:{indented}"
 
     def rle_length(self):
-        return self._tensor.array().rle_length()
+        return len(self.to_runs()[0])
 
     def empty(self):
         return len(self) == 0

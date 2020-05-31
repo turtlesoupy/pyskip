@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "skimpy/detail/box.hpp"
+#include "skimpy/detail/config.hpp"
 #include "skimpy/skimpy.hpp"
 
 namespace box = skimpy::detail::box;
@@ -163,4 +164,23 @@ TEST_CASE("Benchmark tensor 2D convolutions", "[tensors][conv]") {
     auto kernel = skimpy::from_buffer<2>({5, 5}, 25, &sobel[0][0]);
     volatile auto ret = conv_2d(tensor, kernel, 2).eval();
   };
+}
+
+TEST_CASE("Benchmark evaluation options", "[tensors][config]") {
+  using skimpy::detail::config::GlobalConfig;
+  static constexpr auto kTensorNonZeroCount = 1000000;
+
+  auto make_tensors = [](size_t k) {
+    std::vector<skimpy::Tensor<1, int>> tensors;
+    for (int i = 1; i <= k, i += 1) {
+      auto t = skimpy::make_tensor<1>(k * kTensorNonZeroCount, 0);
+      t.set({{0, k * kTensorNonZeroCount, k}}) = k;
+      tensors.push_back(std::move(t));
+    }
+    return tensors;
+  };
+
+  BENCHMARK("mul(k=32); accelerated_eval=false") {
+    auto tensors = make_tensors(32);
+  }
 }

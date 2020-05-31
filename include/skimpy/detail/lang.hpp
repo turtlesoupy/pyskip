@@ -459,7 +459,7 @@ inline auto debug_str(ExprGraph::Handle in) {
 
 // Augments the given expression before scheduling to improve its efficiency.
 inline auto optimize(ExprGraph& graph, ExprGraph::Handle root) {
-  // TODO: Push down slice operations when doing so reduces "cost".
+  // TODO(taylorgrodon): Push down slice operations when doing so reduces cost.
 }
 
 // Schedules a sequence of nodes to materialize from the input graph.
@@ -748,11 +748,11 @@ inline auto make_pool(const EvalPlan& plan) -> EvalPool<size> {
 
 template <typename Val, int size>
 inline auto execute_plan_fixed(EvalPlan plan) {
-  static constexpr auto kStackCapacity = 128;
-  static constexpr auto kMaxBranchFactor = 3;
-  CHECK_ARGUMENT(kMaxBranchFactor * plan.depth <= kStackCapacity);
+  static constexpr auto stack_capacity = 128;
+  static constexpr auto max_branch_factor = 3;
+  CHECK_ARGUMENT(max_branch_factor * plan.depth <= stack_capacity);
   auto eval_fn = [&](const box::Box* b) {
-    thread_local box::Box stack[kStackCapacity];
+    thread_local box::Box stack[stack_capacity];
     auto sp = &stack[0];
     for (auto node : plan.nodes) {
       switch (node.kind) {

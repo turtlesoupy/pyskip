@@ -99,13 +99,12 @@ TEST_CASE("Benchmark 1-source evaluation", "[simple]") {
 
   BENCHMARK("lower_bound") {
     auto x = std::make_shared<core::Store<int>>(n);
-    partition(
-        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
-          for (int i = start; i < end; i += 1) {
-            x->ends[i] = sources[0].store()->ends[i];
-            x->vals[i] = 2 * sources[0].store()->vals[i];
-          }
-        });
+    partition(1, n, [&](int start, int end, ...) {
+      for (int i = start; i < end; i += 1) {
+        x->ends[i] = sources[0].store()->ends[i];
+        x->vals[i] = 2 * sources[0].store()->vals[i];
+      }
+    });
   };
 }
 

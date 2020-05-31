@@ -20,6 +20,7 @@
 namespace skimpy {
 
 namespace box = detail::box;
+namespace conf = detail::config;
 namespace conv = detail::conv;
 namespace core = detail::core;
 namespace lang = detail::lang;
@@ -58,7 +59,7 @@ struct TensorSlice {
 
   std::array<std::array<core::Pos, 3>, dim> components;
 
-  TensorSlice(std::array<std::array<core::Pos, 3>, dim> components)
+  explicit TensorSlice(std::array<std::array<core::Pos, 3>, dim> components)
       : components(std::move(components)) {
     for (auto [c_0, c_1, c_s] : components) {
       CHECK_ARGUMENT(0 <= c_0);
@@ -325,10 +326,9 @@ class Tensor {
     // choose an optimal coaslescing of sources and expression. The overhead of
     // managing too-large expressions however will eventually dominate the cost
     // of evaluation. We thus eagerly evaluate once expressions become too big.
-    // TODO: Run experiments to measure the ideal threshold here.
-    auto flush_tree_size_threshold =
-        GlobalConfig::get().getConfigVal<int64_t>("flush_tree_size_threshold", 32);
-    if (op_ && op_->data.size > flush_tree_size_threshold) {
+    // TODO(taylorgordon): Run experiments to measure the ideal threshold here.
+    auto threshold = conf::get_or<int64_t>("flush_tree_size_threshold", 32);
+    if (op_ && op_->data.size > threshold) {
       op_ = lang::evaluate(op_);
     }
   }

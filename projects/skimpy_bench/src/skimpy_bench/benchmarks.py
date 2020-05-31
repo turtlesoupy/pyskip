@@ -6,7 +6,7 @@ import functools
 import torch
 import torch.nn.functional
 import _skimpy_cpp_ext
-from _skimpy_bench_cpp_ext import taco, memory, run_length_array
+from _skimpy_bench_cpp_ext import memory, run_length_array
 from skimpy.config import num_threads_scope, set_value, config_scope, lazy_evaluation_scope, greedy_evaluation_scope, get_all_values
 import skimpy
 import skimpy.convolve
@@ -68,7 +68,9 @@ class Benchmark:
             if hasattr(self, 'run_skimpy'):
                 ret["skimpy"].append(self.run_skimpy(**self.suite_kwargs.get("skimpy", {})))
             if hasattr(self, 'run_skimpy_accelerated'):
-                ret["skimpy_accelerated"].append(self.run_skimpy_accelerated(**self.suite_kwargs.get("skimpy_accelerated", {})))
+                ret["skimpy_accelerated"].append(
+                    self.run_skimpy_accelerated(**self.suite_kwargs.get("skimpy_accelerated", {}))
+                )
             if hasattr(self, 'run_skimpy_lazy'):
                 ret["skimpy_lazy"].append(self.run_skimpy_lazy(**self.suite_kwargs.get("skimpy_lazy", {})))
             if hasattr(self, 'run_skimpy_greedy'):
@@ -256,7 +258,17 @@ class Dense3DConvolutionBenchmark(Benchmark):
 
 
 class RunLength3DConvolutionBenchmark(Benchmark):
-    def __init__(self, shape, kernel_width, num_non_zero, run_length, align_inputs, num_inputs, deterministic_run_length, suite_kwargs=None):
+    def __init__(
+        self,
+        shape,
+        kernel_width,
+        num_non_zero,
+        run_length,
+        align_inputs,
+        num_inputs,
+        deterministic_run_length,
+        suite_kwargs=None
+    ):
         assert len(shape) == 3
         assert kernel_width % 2 == 1
 
@@ -322,7 +334,7 @@ class DenseSkimpyImplementationBenchmark(Benchmark):
 
     def _numpy_inputs(self):
         return [np.random.randint(2**3, size=self.array_length, dtype=np.int32) for _ in range(self.num_inputs)]
-    
+
     def _run_skimpy(self):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
 
@@ -440,10 +452,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
     def run_torch(self, device="cpu"):
         dtype = np.int32 if device == "cpu" else np.float32
         kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
-        torch_operands = [
-            torch.from_numpy(e).to(device).reshape((1, 1) + e.shape)
-            for e in self.numpy_chunk_list
-        ]
+        torch_operands = [torch.from_numpy(e).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
 
         t = Timer()
         with t:
@@ -455,11 +464,10 @@ class MinecraftConvolutionBenchmark(Benchmark):
 
     def run_memory(self):
         return memory.no_simd_int_cum_sum_write(
-            num_elements=len(self.megatensor), 
+            num_elements=len(self.megatensor),
             num_input_arrays=1,
             num_threads=4,
         ) * MICR_TO_MS
-
 
 
 class MNISTConvolutionBenchmark(Benchmark):
@@ -483,8 +491,8 @@ class MNISTConvolutionBenchmark(Benchmark):
         else:
             rng = 256 / quantize_buckets
             for i in range(quantize_buckets):
-                start = i * rng  
-                end = (i + 1) * rng  
+                start = i * rng
+                end = (i + 1) * rng
                 layout[(layout < end) & (layout >= start)] = i * quantize_buckets
         return layout
 

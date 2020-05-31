@@ -126,7 +126,6 @@ inline void bind_array_class(py::module& m, const char* class_name) {
           .def("clone", &Array::clone)
           .def("eval", &Array::eval)
           .def("dumps", &Array::str)
-          .def("rle_length", &Array::rleLength)
           .def(
               "tensor",
               [](Array& self) { skimpy::make_tensor<1>({self.len()}, self); })
@@ -286,7 +285,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
         return skimpy::coalesce(self, other);
       });
 
-  // TODO: Add remaining operations.
+  // TODO(taylorgordon): Add remaining operations.
   cls.def(
          "min",
          [](const Array& self, Val val) { return skimpy::min(self, val); })

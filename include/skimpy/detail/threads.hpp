@@ -76,7 +76,7 @@ class MPMCQueue {
 
 class QueueExecutor {
  public:
-  QueueExecutor(size_t thread_count) : finished_workers_(0) {
+  explicit QueueExecutor(size_t thread_count) : finished_workers_(0) {
     CHECK_ARGUMENT(thread_count > 0);
     for (int i = 0; i < thread_count; i += 1) {
       workers_.emplace_back([&] {
@@ -112,13 +112,13 @@ class QueueExecutor {
     CHECK_STATE(task_queue_.is_open());
     auto promise = std::make_shared<std::promise<decltype(fn())>>();
     auto ret = promise->get_future();
-    task_queue_.push(makeTask(std::forward<Function>(fn), std::move(promise)));
+    task_queue_.push(make_task(std::forward<Function>(fn), std::move(promise)));
     return ret;
   }
 
  private:
   template <typename Function>
-  auto makeTask(Function&& fn, std::shared_ptr<std::promise<void>>&& promise) {
+  auto make_task(Function&& fn, std::shared_ptr<std::promise<void>>&& promise) {
     return [fn = std::forward<Function>(fn),
             promise = std::move(promise)]() mutable {
       try {
@@ -134,7 +134,7 @@ class QueueExecutor {
       typename Function,
       typename PromiseType,
       typename = std::enable_if_t<!std::is_void_v<PromiseType>>>
-  auto makeTask(
+  auto make_task(
       Function&& fn, std::shared_ptr<std::promise<PromiseType>>&& promise) {
     return [fn = std::forward<Function>(fn),
             promise = std::move(promise)]() mutable {
@@ -152,8 +152,7 @@ class QueueExecutor {
 };
 
 template <typename FnRange>
-void run_in_parallel(const FnRange& fns) {
-  // TODO: Move the executor to CPP.
+inline void run_in_parallel(const FnRange& fns) {
   static auto executor = [] {
     auto n = std::thread::hardware_concurrency();
     return std::make_unique<threads::QueueExecutor>(n);

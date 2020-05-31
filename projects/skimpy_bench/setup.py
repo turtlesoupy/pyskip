@@ -57,6 +57,7 @@ class CMakeBuild(build_ext):
                     ext.root_dir,
                     f"-DPYTHON_EXECUTABLE={sys.executable}",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}",
+                    f"-DSKIMPY_BENCH_ENABLE_TACO=OFF",
                 ],
                 windows_args=[
                     "-Ax64",

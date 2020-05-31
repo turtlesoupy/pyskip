@@ -4,3 +4,5 @@ AllowShortFunctionsOnASingleLine: Empty
 BinPackArguments: false
 BinPackParameters: false
 ColumnLimit: 80
+PointerAlignment: Left
+DerivePointerAlignment: false

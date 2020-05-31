@@ -18,6 +18,7 @@
 namespace skimpy {
 
 namespace box = detail::box;
+namespace conf = detail::config;
 namespace conv = detail::conv;
 namespace core = detail::core;
 namespace lang = detail::lang;
@@ -41,9 +42,10 @@ struct Slice {
   explicit Slice(core::Pos stop) : Slice(0, stop) {}
 
   // Array constructors
-  Slice(std::array<core::Pos, 3> array) : Slice(array[0], array[1], array[2]) {}
-  Slice(std::array<core::Pos, 2> array) : Slice(array[0], array[1]) {}
-  Slice(std::array<core::Pos, 1> array) : Slice(array[1]) {}
+  explicit Slice(std::array<core::Pos, 3> array)
+      : Slice(array[0], array[1], array[2]) {}
+  explicit Slice(std::array<core::Pos, 2> array) : Slice(array[0], array[1]) {}
+  explicit Slice(std::array<core::Pos, 1> array) : Slice(array[1]) {}
 
   auto len() const {
     return (stop - start + stride - 1) / stride;
@@ -66,7 +68,8 @@ template <typename Val>
 class Array {
  public:
   Array() : op_{nullptr} {}
-  Array(std::shared_ptr<box::BoxStore> store) : op_(lang::store<Val>(store)) {}
+  explicit Array(std::shared_ptr<box::BoxStore> store)
+      : op_(lang::store<Val>(store)) {}
 
   // Metadata methods
   auto len() const {
@@ -104,10 +107,6 @@ class Array {
   }
   auto eval() const {
     return Array<Val>(lang::evaluate(op_));
-  }
-
-  auto rleLength() const {
-    return store()->size;
   }
 
   // Value access methods
@@ -207,10 +206,9 @@ class Array {
     // choose an optimal coaslescing of sources and expression. The overhead of
     // managing too large expressions however will eventually dominate the cost
     // of evaluation. We thus eagerly evaluate once expressions become too big.
-    // TODO: Run experiments to measure the ideal threshold here.
-    auto flush_tree_size_threshold =
-        GlobalConfig::get().getConfigVal<int64_t>("flush_tree_size_threshold", 32);
-    if (op_ && op_->data.size > flush_tree_size_threshold) {
+    // TODO(taylorgordon): Run experiments to measure the ideal threshold here.
+    auto threshold = conf::get_or<int64_t>("flush_tree_size_threshold", 32);
+    if (op_ && op_->data.size > threshold) {
       op_ = lang::evaluate(op_);
     }
   }
