@@ -133,12 +133,18 @@ struct HashTable {
 template <int sources, typename Evaluator, typename Val>
 void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
   Pos prev_end = 0;
-  Val prev_val;
+  Val prev_val = 0;
   while (true) {
     int min_src = 0;
-    Pos min_end = evaluator.peek_end(0);
-    for (int src = 1; src < sources; src++) {
-      if (auto ep = evaluator.peek_end(src); ep < min_end) {
+    Pos min_end = 0;
+    for (int src = 0; src < sources; src++) {
+      auto ep = evaluator.peek_end(src);
+      if (ep == prev_end) {
+        evaluator.next_val(src);
+        ep = evaluator.next_end(src);
+      }
+
+      if (ep < min_end || min_end == 0) {
         min_end = ep;
         min_src = src;
       }
@@ -159,13 +165,6 @@ void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
 
       prev_end = min_end;
       prev_val = val;
-    }
-
-    for (int src = 0; src < sources; src++) {
-      if (auto src_end = evaluator.peek_end(src); src_end == prev_end) {
-        evaluator.next_val(src);
-        evaluator.next_end(src);
-      }
     }
   }
 }
