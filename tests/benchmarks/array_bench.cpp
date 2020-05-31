@@ -184,9 +184,9 @@ TEST_CASE("Benchmark evaluation options", "[arrays][config]") {
 
   auto make_arrays = [](auto k) {
     std::vector<skimpy::Array<int>> arrays;
-    for (int i = 1; i <= k; i += 1) {
+    for (int i = 0; i < k; i += 1) {
       auto a = skimpy::make_array(k * kArrayNonZeroCount, 0);
-      a.set({0, k * kArrayNonZeroCount, k}, k);
+      a.set({i, k * kArrayNonZeroCount, k}, 1);
       arrays.push_back(std::move(a));
     }
     return arrays;
@@ -200,23 +200,25 @@ TEST_CASE("Benchmark evaluation options", "[arrays][config]") {
 
   BENCHMARK("mul(k=32); accelerated_eval=false") {
     conf::set("accelerated_eval", false);
-    volatile auto ret = [&arrays] {
+    auto ret = [&arrays] {
       auto ret = arrays[0];
       for (int i = 1; i < 32; i += 1) {
-        ret = ret * arrays[i];
+        ret = ret + arrays[i];
       }
       return ret.eval();
     }();
+    REQUIRE(ret.str() == "32000000=>1");
   };
 
   BENCHMARK("mul(k=32); accelerated_eval=true") {
     conf::set("accelerated_eval", true);
-    volatile auto ret = [&arrays] {
+    auto ret = [&arrays] {
       auto ret = arrays[0];
       for (int i = 1; i < 32; i += 1) {
-        ret = ret * arrays[i];
+        ret = ret + arrays[i];
       }
       return ret.eval();
     }();
+    REQUIRE(ret.str() == "32000000=>1");
   };
 }
