@@ -136,9 +136,15 @@ void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
   Val prev_val;
   while (true) {
     int min_src = 0;
-    Pos min_end = evaluator.peek_end(0);
-    for (int src = 1; src < sources; src++) {
-      if (auto ep = evaluator.peek_end(src); ep < min_end) {
+    Pos min_end = 0;
+    for (int src = 0; src < sources; src++) {
+      auto ep = evaluator.peek_end(src);
+      if (ep == prev_end) {
+        evaluator.next_val(src);
+        ep = evaluator.next_end(src);
+      }
+
+      if (ep < min_end || min_end == 0) {
         min_end = ep;
         min_src = src;
       }
@@ -159,13 +165,6 @@ void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
 
       prev_end = min_end;
       prev_val = val;
-    }
-
-    for (int src = 0; src < sources; src++) {
-      if (auto src_end = evaluator.peek_end(src); src_end == prev_end) {
-        evaluator.next_val(src);
-        evaluator.next_end(src);
-      }
     }
   }
 }
@@ -611,7 +610,13 @@ template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   CHECK_ARGUMENT(evaluator.pool().span() > 0);
 
+<<<<<<< HEAD
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::kSize;
+  == == == = const bool useAcceleratedEval =
+               GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
+
+  static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
+>>>>>>> f175cd4924fe9107192cbfa3f51a45fb857fff30
   using Val = decltype(evaluator.eval());
 
   // Allocate the output store.

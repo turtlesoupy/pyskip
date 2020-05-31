@@ -49,6 +49,19 @@ auto make_store(int n, int seed) {
     store->ends[i] = i + 1;
     store->vals[i] = (7909 * seed * (i + 7703)) & 4095;
   }
+
+  return store;
+}
+
+auto make_shifted_store(int n, int scale, int shift) {
+  auto store = std::make_shared<core::Store<int>>(n);
+  for (int i = 0; i < n - 1; i += 1) {
+    store->ends[i] = scale * i + shift + 1;
+    store->vals[i] = (7909 * shift * (i + 7703)) & 4095;
+  }
+  store->ends[n - 1] = scale * (n - 1) + 1;
+  store->vals[n - 1] = (7909 * shift * (n - 1 + 7703)) & 4095;
+
   return store;
 }
 
@@ -290,6 +303,152 @@ TEST_CASE("Benchmark 32-source plan evaluation", "[simple]") {
       eval::SimpleSource(make_store(n, 30)),
       eval::SimpleSource(make_store(n, 31)),
       eval::SimpleSource(make_store(n, 32)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark shifted 2-source plan evaluation", "[shifted]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource<int>(make_shifted_store(n, 2, 0)),
+      eval::SimpleSource<int>(make_shifted_store(n, 2, 1)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < 2; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark shifted 4-source plan evaluation", "[shifted]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_shifted_store(n, 4, 0)),
+      eval::SimpleSource(make_shifted_store(n, 4, 1)),
+      eval::SimpleSource(make_shifted_store(n, 4, 2)),
+      eval::SimpleSource(make_shifted_store(n, 4, 3)));
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) { return v[0] * v[1] * v[2] * v[3]; }, sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < 4; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark shifted 8-source plan evaluation", "[shifted]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_shifted_store(n, 8, 0)),
+      eval::SimpleSource(make_shifted_store(n, 8, 1)),
+      eval::SimpleSource(make_shifted_store(n, 8, 2)),
+      eval::SimpleSource(make_shifted_store(n, 8, 3)),
+      eval::SimpleSource(make_shifted_store(n, 8, 4)),
+      eval::SimpleSource(make_shifted_store(n, 8, 5)),
+      eval::SimpleSource(make_shifted_store(n, 8, 6)),
+      eval::SimpleSource(make_shifted_store(n, 8, 7)));
+  static constexpr auto sources_size = decltype(sources)::size;
+
+  BENCHMARK("eval") {
+    volatile auto x = eval::eval_simple<int, int>(
+        [](const int* v) {
+          auto ret = v[0];
+          for (int i = 1; i < sources_size; i += 1) {
+            ret *= v[i];
+          }
+          return ret;
+        },
+        sources);
+  };
+
+  BENCHMARK("lower_bound") {
+    auto x = std::make_shared<core::Store<int>>(n);
+    partition(
+        std::thread::hardware_concurrency(), n, [&](int start, int end, ...) {
+          for (int i = start; i < end; i += 1) {
+            x->ends[i] = sources[0].store()->ends[i];
+            x->vals[i] = sources[0].store()->vals[i];
+            for (int j = 1; j < sources_size; j += 1) {
+              x->vals[i] *= sources[j].store()->vals[i];
+            }
+          }
+        });
+  };
+}
+
+TEST_CASE("Benchmark shifted 16-source plan evaluation", "[shifted]") {
+  static constexpr auto n = 1024 * 1024;  // size of input
+
+  auto sources = eval::make_pool(
+      eval::SimpleSource(make_shifted_store(n, 16, 0)),
+      eval::SimpleSource(make_shifted_store(n, 16, 1)),
+      eval::SimpleSource(make_shifted_store(n, 16, 2)),
+      eval::SimpleSource(make_shifted_store(n, 16, 3)),
+      eval::SimpleSource(make_shifted_store(n, 16, 4)),
+      eval::SimpleSource(make_shifted_store(n, 16, 5)),
+      eval::SimpleSource(make_shifted_store(n, 16, 6)),
+      eval::SimpleSource(make_shifted_store(n, 16, 7)),
+      eval::SimpleSource(make_shifted_store(n, 16, 8)),
+      eval::SimpleSource(make_shifted_store(n, 16, 9)),
+      eval::SimpleSource(make_shifted_store(n, 16, 10)),
+      eval::SimpleSource(make_shifted_store(n, 16, 11)),
+      eval::SimpleSource(make_shifted_store(n, 16, 12)),
+      eval::SimpleSource(make_shifted_store(n, 16, 13)),
+      eval::SimpleSource(make_shifted_store(n, 16, 14)),
+      eval::SimpleSource(make_shifted_store(n, 16, 15)));
   static constexpr auto sources_size = decltype(sources)::size;
 
   BENCHMARK("eval") {
