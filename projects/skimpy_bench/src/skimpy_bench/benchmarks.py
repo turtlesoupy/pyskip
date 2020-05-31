@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import numpy as np
 import functools
+import sys
 import torch
 import torch.nn.functional
 import _skimpy_cpp_ext
@@ -11,6 +12,14 @@ from skimpy.config import num_threads_scope, set_value, config_scope, lazy_evalu
 import skimpy
 import skimpy.convolve
 from collections import defaultdict
+
+try: 
+    from _skimpy_bench_cpp_ext import taco
+    TACO_ENABLED = True
+except ImportError:
+    print("Warning: disabling TACO support due to import error", file=sys.stderr)
+    TACO_ENABLED = False
+
 
 NANO_TO_MS = 1.0 / 1000000
 MICR_TO_MS = 1.0 / 1000
@@ -50,11 +59,11 @@ class Timer:
 
 class Benchmark:
     @classmethod
-    def run_against_axis(cls, varying_arg_name, varying_arg, repeats, verbose=False, **other_args):
+    def run_against_axis(cls, varying_arg_name, varying_arg, repeats, **other_args):
         ret = {}
         for val in varying_arg:
             args = {varying_arg_name: val, **other_args}
-            times = cls(**args).run(repeats=repeats, verbose=verbose)
+            times = cls(**args).run(repeats=repeats)
             for k, v in times.items():
                 if k in ret:
                     ret[k].append(v)
@@ -77,7 +86,7 @@ class Benchmark:
                 ret["skimpy_greedy"].append(self.run_skimpy_greedy(**self.suite_kwargs.get("skimpy_greedy", {})))
             if hasattr(self, 'run_skimpy_slow'):
                 ret["skimpy_slow"].append(self.run_skimpy_slow(**self.suite_kwargs.get("skimpy_slow", {})))
-            if hasattr(self, 'run_taco'):
+            if hasattr(self, 'run_taco') and TACO_ENABLED:
                 ret["taco"].append(self.run_taco(**self.suite_kwargs.get("taco", {})))
             if hasattr(self, 'run_memory'):
                 ret["memory"].append(self.run_memory(**self.suite_kwargs.get("memory", {})))
