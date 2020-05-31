@@ -128,12 +128,13 @@ struct HashTable {
   }
 };
 
-// Simplified version of eval routine (no tournament tree, no hash) for comparison
+// Simplified version of eval routine (no tournament tree, no hash) for
+// comparison
 template <int sources, typename Evaluator, typename Val>
 void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
   Pos prev_end = 0;
   Val prev_val;
-  while(true) {
+  while (true) {
     int min_src = 0;
     Pos min_end = evaluator.peek_end(0);
     for (int src = 1; src < sources; src++) {
@@ -168,7 +169,6 @@ void unaccelerated_eval(Evaluator evaluator, EvalOutput<Val>& output) {
     }
   }
 }
-
 
 // Core evaluation routine. The evaluator is used to maintain the frontier of
 // values, iterate them forward on a per-source basis, and evaluate them into
@@ -547,6 +547,10 @@ class SourceEvaluator {
     return pool_[src].end(iter_ends_[src]++);
   }
 
+  inline auto peek_end(int src) {
+    return pool_[src].end(iter_ends_[src]);
+  }
+
   inline auto eval() const {
     return eval_fn_(&curr_vals_[0]);
   }
@@ -605,7 +609,8 @@ template <typename Evaluator>
 auto eval_generic(Evaluator evaluator) {
   CHECK_ARGUMENT(evaluator.pool().span() > 0);
 
-  const bool useAcceleratedEval = GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
+  const bool useAcceleratedEval =
+      GlobalConfig::get().getConfigVal<bool>("accelerated_eval", true);
 
   static constexpr auto size = std::decay_t<decltype(evaluator.pool())>::size;
   using Val = decltype(evaluator.eval());
@@ -628,8 +633,8 @@ auto eval_generic(Evaluator evaluator) {
 
 template <typename Ret, typename Arg, typename StepFn, int size>
 auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
-  auto par_threshold =
-      GlobalConfig::get().getConfigVal<int64_t>("parallelize_threshold", 8 * 1024);
+  auto par_threshold = GlobalConfig::get().getConfigVal<int64_t>(
+      "parallelize_threshold", 8 * 1024);
   auto par_parts = GlobalConfig::get().getConfigVal<int64_t>(
       "parallelize_parts", std::thread::hardware_concurrency());
 
