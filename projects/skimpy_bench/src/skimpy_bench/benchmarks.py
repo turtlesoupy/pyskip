@@ -2,14 +2,12 @@ import gc
 import pandas as pd
 import time
 import numpy as np
-import random
 import functools
 import torch
 import torch.nn.functional
 import _skimpy_cpp_ext
 from _skimpy_bench_cpp_ext import taco, memory, run_length_array
-from tqdm.auto import tqdm
-from skimpy.config import num_threads_scope
+from skimpy.config import num_threads_scope, set_value, config_scope, lazy_evaluation_scope, greedy_evaluation_scope, get_all_values
 import skimpy
 import skimpy.convolve
 from collections import defaultdict
@@ -64,28 +62,26 @@ class Benchmark:
                     ret[k] = [v]
         return {k: np.array(v) for k, v in ret.items()}
 
-    def run(self, repeats=3, verbose=False):
+    def run(self, repeats=3):
         ret = defaultdict(list)
         for i in range(repeats):
             if hasattr(self, 'run_skimpy'):
-                if verbose:
-                    print(f"{self.__class__.__name__} running skimpy")
                 ret["skimpy"].append(self.run_skimpy(**self.suite_kwargs.get("skimpy", {})))
+            if hasattr(self, 'run_skimpy_accelerated'):
+                ret["skimpy_accelerated"].append(self.run_skimpy_accelerated(**self.suite_kwargs.get("skimpy_accelerated", {})))
+            if hasattr(self, 'run_skimpy_lazy'):
+                ret["skimpy_lazy"].append(self.run_skimpy_lazy(**self.suite_kwargs.get("skimpy_lazy", {})))
+            if hasattr(self, 'run_skimpy_greedy'):
+                ret["skimpy_greedy"].append(self.run_skimpy_greedy(**self.suite_kwargs.get("skimpy_greedy", {})))
+            if hasattr(self, 'run_skimpy_slow'):
+                ret["skimpy_slow"].append(self.run_skimpy_slow(**self.suite_kwargs.get("skimpy_slow", {})))
             if hasattr(self, 'run_taco'):
-                if verbose:
-                    print(f"{self.__class__.__name__} running taco")
                 ret["taco"].append(self.run_taco(**self.suite_kwargs.get("taco", {})))
             if hasattr(self, 'run_memory'):
-                if verbose:
-                    print(f"{self.__class__.__name__} running memory")
                 ret["memory"].append(self.run_memory(**self.suite_kwargs.get("memory", {})))
             if hasattr(self, 'run_numpy'):
-                if verbose:
-                    print(f"{self.__class__.__name__} running numpy")
                 ret["numpy"].append(self.run_numpy(**self.suite_kwargs.get("numpy", {})))
             if hasattr(self, 'run_torch'):
-                if verbose:
-                    print(f"{self.__class__.__name__} running torch")
                 ret["torch"].append(self.run_torch(**self.suite_kwargs.get("torch", {})))
         return {k: np.mean(np.array(v)) for k, v in ret.items()}
 
@@ -108,6 +104,7 @@ class DenseArrayBenchmark(Benchmark):
 
         return t.duration_ms
 
+    @torch.no_grad()
     def run_torch(self):
         inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
 
@@ -227,6 +224,7 @@ class Dense3DConvolutionBenchmark(Benchmark):
     def _numpy_kernel(self, dtype=np.int32):
         return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
 
+    @torch.no_grad()
     def run_torch(self, device="cpu"):
         dtype = np.int32 if device == "cpu" else np.float32
         operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
@@ -295,6 +293,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
             return t.duration_ms
 
+    @torch.no_grad()
     def run_torch(self, device="cpu"):
         dtype = np.int32 if device == "cpu" else np.float32
         operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
@@ -315,11 +314,44 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         ) * MICR_TO_MS
 
 
-class SkimpyImplementationBenchmark:
+class DenseSkimpyImplementationBenchmark(Benchmark):
     # Tournament tree Vs. min
     # Hashtable Vs. no hash-table
     # Maybe a lazyness one (greedy evaluation)
-    pass
+    def __init__(self, array_length, num_inputs, suite_kwargs=None):
+        self.array_length = array_length
+        self.num_inputs = num_inputs
+        self.suite_kwargs = suite_kwargs or {}
+
+    def _numpy_inputs(self):
+        return [np.random.randint(2**3, size=self.array_length, dtype=np.int32) for _ in range(self.num_inputs)]
+    
+    def _run_skimpy(self):
+        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+
+        t = Timer()
+        with t:
+            _ = functools.reduce(lambda x, y: x + y, inputs).eval()
+
+        return t.duration_ms
+
+    def run_skimpy_lazy(self):
+        with lazy_evaluation_scope():
+            return self._run_skimpy()
+
+    def run_skimpy_greedy(self):
+        with greedy_evaluation_scope():
+            return self._run_skimpy()
+
+    def run_skimpy_slow(self):
+        with config_scope():
+            set_value("accelerated_eval", False)
+            return self._run_skimpy()
+
+    def run_skimpy_accelerated(self):
+        with config_scope():
+            set_value("accelerated_eval", True)
+            return self._run_skimpy()
 
 
 class MinecraftConvolutionBenchmark(Benchmark):
@@ -343,6 +375,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
                 _ = skimpy.convolve.conv_3d(self.megatensor, kernel).eval()
             return t.duration_ms
 
+    @torch.no_grad()
     def run_torch(self, device="cpu"):
         dtype = np.int32 if device == "cpu" else np.float32
         kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)

@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from _skimpy_cpp_ext import config as _skimpy_config
 
+from . exceptions import TypeConversionError
+
 
 @contextmanager
 def config_scope():
@@ -39,3 +41,14 @@ def greedy_evaluation_scope():
 
 def get_all_values():
     return _skimpy_config.get_all_values()
+
+
+def set_value(name, val):
+    if isinstance(val, bool):
+        _skimpy_config.set_bool_value(name, val)
+    elif isinstance(val, int):
+        _skimpy_config.set_int_value(name, val)
+    elif isinstance(val, float):
+        _skimpy_config.set_float_value(name, val)
+    else:
+        raise TypeConversionError(f"Unsupported type for config map: {type(val)}")

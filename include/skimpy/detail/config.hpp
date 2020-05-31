@@ -17,13 +17,15 @@ class GlobalConfig {
 
   template <typename Val>
   Val getConfigVal(const std::string &key, Val fallback) {
-      const std::lock_guard<std::mutex> lock(lock_);
-      const auto val = config_map_.find(key);
-      if (val == config_map_.end()) {
-          return fallback;
-      } else {
-          return std::get<Val>(val->second);
-      }
+    const std::lock_guard<std::mutex> lock(lock_);
+    const auto val = config_map_.find(key);
+    if (val == config_map_.end()) {
+      return fallback;
+    } else if (!std::holds_alternative<Val>(val->second)) {
+      return fallback;
+    } else {
+      return std::get<Val>(val->second);
+    }
   }
 
   template <typename Val>
