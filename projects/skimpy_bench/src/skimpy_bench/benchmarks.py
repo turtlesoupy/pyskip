@@ -8,18 +8,19 @@ import torch
 import torch.nn.functional
 import _skimpy_cpp_ext
 from _skimpy_bench_cpp_ext import memory, run_length_array
-from skimpy.config import num_threads_scope, set_value, config_scope, lazy_evaluation_scope, greedy_evaluation_scope, get_all_values
+from skimpy.config import (
+    num_threads_scope, set_value, config_scope, lazy_evaluation_scope, greedy_evaluation_scope
+)
 import skimpy
 import skimpy.convolve
 from collections import defaultdict
 
-try: 
+try:
     from _skimpy_bench_cpp_ext import taco
     TACO_ENABLED = True
 except ImportError:
     print("Warning: disabling TACO support due to import error", file=sys.stderr)
     TACO_ENABLED = False
-
 
 NANO_TO_MS = 1.0 / 1000000
 MICR_TO_MS = 1.0 / 1000
@@ -58,6 +59,31 @@ class Timer:
 
 
 class Benchmark:
+    @classmethod
+    def run_suite_axis(cls, varying_arg_name, varying_arg, repeats, suite, **other_args):
+        ret = {k: {k1: v1 for k1, v1 in v.items() if k1 not in ("kwargs", "method")} for k, v in suite.items()}
+        for val in varying_arg:
+            args = {varying_arg_name: val, **other_args}
+            klass = cls(**args)
+            for k, v in suite.items():
+                kwargs = v.get("kwargs", {})
+                method = v["method"]
+                tot = 0
+                for i in range(repeats):
+                    tot += getattr(klass, method)(**kwargs)
+                out = tot / repeats
+
+                if "vals" not in ret[k]:
+                    ret[k]["vals"] = [out]
+                else:
+                    ret[k]["vals"].append(out)
+        
+        for k in ret.keys():
+            ret[k]["vals"] = np.array(ret[k]['vals'])
+        
+        return ret
+
+
     @classmethod
     def run_against_axis(cls, varying_arg_name, varying_arg, repeats, **other_args):
         ret = {}
@@ -407,7 +433,7 @@ class RunLengthSkimpyImplementationBenchmark(Benchmark):
                 seed += 1
 
         return inputs
-    
+
     def _run_skimpy(self):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
 
