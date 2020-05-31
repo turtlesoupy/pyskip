@@ -1,4 +1,5 @@
 import gc
+import pandas as pd
 import time
 import numpy as np
 import random
@@ -325,5 +326,56 @@ class MinecraftConvolutionBenchmark:
     pass
 
 
-class MNISTConvolutionBenchmark:
-    pass
+class MNISTConvolutionBenchmark(Benchmark):
+    def __init__(self, mnist_path, kernel_width, num_kernels, suite_kwargs=None):
+        self.mnist_np_array = self.__class__._numpy_from_mnist(mnist_path)
+        self.kernel_width = kernel_width
+        self.kernel_shape = tuple([kernel_width] * 2)
+        self.num_kernels = num_kernels
+        self.suite_kwargs = suite_kwargs or {}
+
+    @classmethod
+    def _numpy_from_mnist(cls, path):
+        csv = pd.read_csv(path)
+        data_columns = [e for e in csv.columns if e != "label"]
+        np_mnist = csv[data_columns].to_numpy()
+        batch_size, example_size = np_mnist.shape
+        digit_size = 28
+        layout = np_mnist.reshape(digit_size, digit_size * batch_size).astype(np.int32)
+        return layout
+
+    def _numpy_kernels(self, dtype=np.int32):
+        return [
+            np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+            for _ in range(self.num_kernels)
+        ]
+
+    def run_skimpy(self, num_threads=1):
+        operand = skimpy.Tensor.from_numpy(self.mnist_np_array)
+        kernels = [skimpy.Tensor.from_numpy(e) for e in self._numpy_kernels()]
+
+        with num_threads_scope(num_threads):
+            t = Timer()
+            with t:
+                for kernel in kernels:
+                    _ = skimpy.convolve.conv_2d(operand, kernel).eval()
+            return t.duration_ms
+
+    def run_torch(self, device="cpu"):
+        operand = torch.from_numpy(self.mnist_np_array).to(device).reshape((1, 1) + self.mnist_np_array.shape)
+        kernels = [torch.from_numpy(e).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
+
+        t = Timer()
+        with t:
+            for kernel in kernels:
+                ret = torch.nn.functional.conv2d(operand, kernel).cpu()
+            # Force torch to materialize if it is on the GPU
+            tst = ret[0, 0, 0, 0].item()
+        return t.duration_ms
+
+    def run_memory(self):
+        return memory.no_simd_int_cum_sum_write(
+            num_elements=self.mnist_np_array.size,  # Sparse is assumed to be a list of (pos, val)
+            num_input_arrays=1,
+            num_threads=4,
+        ) * MICR_TO_MS

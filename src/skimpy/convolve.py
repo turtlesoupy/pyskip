@@ -2,12 +2,16 @@ from skimpy.tensor import Tensor
 
 
 def conv_2d(tensor: Tensor, kernel: Tensor, padding: int = 0, fill: int = 0) -> Tensor:
-    pad_shape = (
-        tensor.shape[0] + 2 * padding,
-        tensor.shape[1] + 2 * padding,
-    )
-    pad = Tensor(shape=pad_shape, dtype=tensor.dtype, val=fill)
-    pad[padding:-padding, padding:-padding] = tensor
+    if padding == 0:
+        pad = tensor
+        pad_shape = tensor.shape
+    else:
+        pad_shape = (
+            tensor.shape[0] + 2 * padding,
+            tensor.shape[1] + 2 * padding,
+        )
+        pad = Tensor(shape=pad_shape, dtype=tensor.dtype, val=fill)
+        pad[padding:-padding, padding:-padding] = tensor
 
     out_shape = (
         pad_shape[0] - kernel.shape[0] + 1,
