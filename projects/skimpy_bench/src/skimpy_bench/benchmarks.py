@@ -134,6 +134,7 @@ class DenseArrayBenchmark(Benchmark):
 
     def run_numpy(self):
         inputs = self._numpy_inputs()
+        gc.collect()
 
         t = Timer()
         with t:
@@ -144,6 +145,7 @@ class DenseArrayBenchmark(Benchmark):
     @torch.no_grad()
     def run_torch(self):
         inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+        gc.collect()
 
         t = Timer()
         with t:
@@ -157,6 +159,7 @@ class DenseArrayBenchmark(Benchmark):
 
     def run_skimpy(self, num_threads=1):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+        gc.collect()
 
         with num_threads_scope(num_threads):
             t = Timer()
@@ -211,6 +214,7 @@ class RunLengthArrayBenchmark(Benchmark):
 
     def run_numpy(self):
         inputs = self._numpy_inputs()
+        gc.collect()
         t = Timer()
         with t:
             _ = functools.reduce(lambda x, y: x + y, inputs)
@@ -218,6 +222,7 @@ class RunLengthArrayBenchmark(Benchmark):
 
     def run_skimpy(self, num_threads=1):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+        gc.collect()
 
         with num_threads_scope(num_threads):
             t = Timer()
@@ -300,7 +305,6 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         num_non_zero,
         run_length,
         align_inputs,
-        num_inputs,
         deterministic_run_length,
         suite_kwargs=None
     ):
@@ -314,7 +318,6 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         self.num_non_zero = num_non_zero
         self.run_length = run_length
         self.align_inputs = align_inputs
-        self.num_inputs = num_inputs
         self.deterministic_run_length = deterministic_run_length
         self.suite_kwargs = suite_kwargs or {}
 
@@ -356,7 +359,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
     def run_memory(self):
         return memory.no_simd_int_cum_sum_write(
             num_elements=self.num_non_zero * 2,  # Sparse is assumed to be a list of (pos, val)
-            num_input_arrays=self.num_inputs,
+            num_input_arrays=1,
             num_threads=4,
         ) * MICR_TO_MS
 
@@ -372,6 +375,7 @@ class DenseSkimpyImplementationBenchmark(Benchmark):
 
     def _run_skimpy(self):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+        gc.collect()
 
         t = Timer()
         with t:
@@ -436,6 +440,7 @@ class RunLengthSkimpyImplementationBenchmark(Benchmark):
 
     def _run_skimpy(self):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+        gc.collect()
 
         t = Timer()
         with t:
