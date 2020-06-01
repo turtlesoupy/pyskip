@@ -1,3 +1,4 @@
+import gzip
 import nbt.chunk
 from itertools import permutations
 from nbt.world import WorldFolder
@@ -5,6 +6,7 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import numpy as np
 import tempfile
+import pickle
 
 import skimpy
 import skimpy.reduce
@@ -449,11 +451,29 @@ class SkimpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: skimpy.Tensor
 
+    def to_numpy(self):
+        return NumpyMinecraftChunk(
+            self.coord,
+            self.tensor.to_numpy(),
+        )
+
+    def to_skimpy(self):
+        return self
+
 
 @dataclass
 class NumpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: np.ndarray
+
+    def to_numpy(self):
+        return self
+    
+    def to_skimpy(self):
+        return SkimpyMinecraftChunk(
+            self.coord,
+            skimpy.Tensor.from_numpy(self.tensor),
+        )
 
 
 class SkimpyMinecraftLevel:
@@ -466,6 +486,22 @@ class SkimpyMinecraftLevel:
         self.chunk_list = chunk_list
         self.bbox = bbox
         self.column_order = column_order
+
+    def dump(self, path):
+        with gzip.open(path, "wb") as f:
+            dumpable = SkimpyMinecraftLevel(
+                chunk_list=[e.to_numpy() for e in tqdm(self.chunk_list)],
+                bbox=self.bbox,
+                column_order=self.column_order,
+            )
+            pickle.dump(dumpable, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load(self, path):
+        with gzip.open(path, "rb") as f:
+            ret = pickle.load(f)
+            ret.chunk_list = [e.to_skimpy() for e in ret.chunk_list]
+            return ret
 
     def sparse_compression_ratio(self):
         dense_size = 0
@@ -520,7 +556,8 @@ class SkimpyMinecraftLevel:
 
     @classmethod
     def from_world_infer_order(cls, world_folder, num_chunks=200):
-        best_order, _ = cls.approx_best_column_order(world_folder, num_chunks)
+        best_order, stats = cls.approx_best_column_order(world_folder, num_chunks)
+        print(stats)
         return cls.from_world(world_folder, column_order=best_order)
     
     @classmethod
