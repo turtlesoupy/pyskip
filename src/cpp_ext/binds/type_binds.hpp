@@ -1,3 +1,7 @@
+#if defined(__GNUC__) && defined(_WIN32)
+#define _hypot hypot
+#endif
+
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

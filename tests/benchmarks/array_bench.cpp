@@ -187,38 +187,82 @@ TEST_CASE("Benchmark evaluation options", "[arrays][config]") {
     for (int i = 0; i < k; i += 1) {
       auto a = skimpy::make_array(k * kArrayNonZeroCount, 0);
       a.set({i, k * kArrayNonZeroCount, k}, 1);
-      arrays.push_back(std::move(a));
+      arrays.push_back(std::move(a.eval()));
     }
     return arrays;
   };
 
   // Pre-compute a bunch of misaligned arrays.
-  auto arrays = make_arrays(32);
+  auto arrays = make_arrays(16);
 
   // Disable auto-materialization.
   conf::set("flush_tree_size_threshold", std::numeric_limits<int64_t>::max());
 
-  BENCHMARK("mul(k=32); accelerated_eval=false") {
-    conf::set("accelerated_eval", false);
-    auto ret = [&arrays] {
-      auto ret = arrays[0];
-      for (int i = 1; i < 32; i += 1) {
-        ret = ret + arrays[i];
-      }
-      return ret.eval();
+  BENCHMARK("mul(k=16); MT; accelerated_eval=false") {
+    [&](...) {
+      conf::set("accelerated_eval", false);
+      auto ret = [&arrays] {
+        auto ret = arrays[0];
+        for (int i = 1; i < 16; i += 1) {
+          ret = ret + arrays[i];
+        }
+        return ret.eval();
+      }();
+      REQUIRE(ret.str() == "16000000=>1");
     }();
-    REQUIRE(ret.str() == "32000000=>1");
   };
 
-  BENCHMARK("mul(k=32); accelerated_eval=true") {
-    conf::set("accelerated_eval", true);
-    auto ret = [&arrays] {
-      auto ret = arrays[0];
-      for (int i = 1; i < 32; i += 1) {
-        ret = ret + arrays[i];
-      }
-      return ret.eval();
+  BENCHMARK("mul(k=16); MT; accelerated_eval=true") {
+    [&](...) {
+      conf::set("accelerated_eval", true);
+      auto ret = [&arrays] {
+        auto ret = arrays[0];
+        for (int i = 1; i < 16; i += 1) {
+          ret = ret + arrays[i];
+        }
+        return ret.eval();
+      }();
+      REQUIRE(ret.str() == "16000000=>1");
     }();
-    REQUIRE(ret.str() == "32000000=>1");
   };
+
+  {
+    // Disable eval parallelism.
+    struct Scope {
+      Scope() {
+        conf::set("parallelize_threshold", std::numeric_limits<int64_t>::max());
+      }
+      ~Scope() {
+        conf::clear("parallelize_threshold");
+      }
+    } scope_guard;
+
+    BENCHMARK("mul(k=16); ST; accelerated_eval=false") {
+      [&](...) {
+        conf::set("accelerated_eval", false);
+        auto ret = [&arrays] {
+          auto ret = arrays[0];
+          for (int i = 1; i < 16; i += 1) {
+            ret = ret + arrays[i];
+          }
+          return ret.eval();
+        }();
+        REQUIRE(ret.str() == "16000000=>1");
+      }();
+    };
+
+    BENCHMARK("mul(k=16); ST; accelerated_eval=true") {
+      [&](...) {
+        conf::set("accelerated_eval", true);
+        auto ret = [&arrays] {
+          auto ret = arrays[0];
+          for (int i = 1; i < 16; i += 1) {
+            ret = ret + arrays[i];
+          }
+          return ret.eval();
+        }();
+        REQUIRE(ret.str() == "16000000=>1");
+      }();
+    };
+  }
 }

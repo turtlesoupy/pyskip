@@ -67,4 +67,8 @@ inline void set(const std::string& key, Val val) {
   GlobalConfig::get().set_config_val(key, val);
 }
 
+inline void clear(const std::string& key) {
+  GlobalConfig::get().clear_config_val(key);
+}
+
 }  // namespace skimpy::detail::config
