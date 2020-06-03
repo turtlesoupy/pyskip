@@ -28,7 +28,7 @@ using VoxelTensor = skimpy::Tensor<3, int32_t>;
 struct VoxelMesh {
   std::vector<float> positions;
   std::vector<uint8_t> colors;
-  std::vector<uint16_t> triangles;
+  std::vector<uint32_t> triangles;
 
   auto vertex_count() const {
     return positions.size() / 3;
