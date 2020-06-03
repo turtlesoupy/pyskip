@@ -93,7 +93,8 @@ class CMakeBuild(build_ext):
 
 
 # List of all public header files.
-HEADERS = glob.glob("include/**/*.hpp")
+# Disable for now since we need to decide whether to include detail/
+# HEADERS = glob.glob("include/**/*.hpp")
 
 setup(
     name="skimpy",
