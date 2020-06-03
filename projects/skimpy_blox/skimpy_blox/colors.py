@@ -1,4 +1,70 @@
-import nbt
+block_ids = {
+    0: 'air',
+    1: 'stone',
+    2: 'grass_block',
+    3: 'dirt',
+    4: 'cobblestone',
+    5: 'oak_planks',
+    6: 'sapling',
+    7: 'bedrock',
+    8: 'flowing_water',
+    9: 'water',
+    10: 'flowing_lava',
+    11: 'lava',
+    12: 'sand',
+    13: 'gravel',
+    14: 'gold_ore',
+    15: 'iron_ore',
+    16: 'coal_ore',
+    17: 'oak_log',
+    18: 'oak_leaves',
+    19: 'sponge',
+    20: 'glass',
+    21: 'lapis_ore',
+    24: 'sandstone',
+    30: 'cobweb',
+    31: 'grass',
+    32: 'dead_bush',
+    35: 'white_wool',
+    37: 'dandelion',
+    38: 'poppy',
+    39: 'brown_mushroom',
+    40: 'red_mushroom',
+    43: 'stone_slab',
+    44: 'stone_slab',
+    47: 'bookshelf',
+    48: 'mossy_cobblestone',
+    49: 'obsidian',
+    50: 'torch',
+    51: 'fire',
+    52: 'spawner',
+    53: 'oak_stairs',
+    54: 'chest',
+    56: 'diamond_ore',
+    58: 'crafting_table',
+    59: 'wheat',
+    60: 'farmland',
+    61: 'furnace',
+    62: 'furnace',
+    63: 'sign',  # will change to oak_sign in 1.14
+    64: 'oak_door',
+    65: 'ladder',
+    66: 'rail',
+    67: 'cobblestone_stairs',
+    72: 'oak_pressure_plate',
+    73: 'redstone_ore',
+    74: 'redstone_ore',
+    78: 'snow',
+    79: 'ice',
+    81: 'cactus',
+    82: 'clay',
+    83: 'sugar_cane',
+    85: 'oak_fence',
+    86: 'pumpkin',
+    91: 'lit_pumpkin',
+    101: 'iron_bars',
+    102: 'glass_pane',
+}
 
 block_colors = {
     'acacia_leaves': {
@@ -421,8 +487,8 @@ block_colors = {
 
 def color_for_id(block_id):
     if block_id is not None:
-        if block_id in nbt.chunk.block_ids:
-            name = nbt.chunk.block_ids[block_id]
+        if block_id in block_ids:
+            name = block_ids[block_id]
             color = block_colors[name] if name in block_colors else {'h': 0, 's': 0, 'l': 100}
         elif isinstance(block_id, str) and block_id in block_colors:
             color = block_colors[block_id]

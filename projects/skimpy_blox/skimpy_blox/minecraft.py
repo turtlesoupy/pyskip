@@ -1,8 +1,8 @@
 import gzip
 import struct
-import nbt.chunk
 from itertools import permutations
-from nbt.world import WorldFolder
+from .nbt_helper.world import WorldFolder
+from .nbt_helper.chunk import AnvilChunk, McRegionChunk
 from pathlib import Path
 from tqdm.auto import tqdm
 import numpy as np
@@ -17,14 +17,6 @@ from zipfile import ZipFile
 
 from PIL import Image
 from . import colors
-
-
-# Upstream library prints here and makes it impossible to access voxel
-def _monkey_patch_block_id_to_name(bid):
-    return bid
-
-
-nbt.chunk.block_id_to_name = _monkey_patch_block_id_to_name
 
 
 @dataclass
@@ -167,7 +159,7 @@ class SkimpyMinecraftLevel:
                     zippy.extractall(tmpdir)
                 world = WorldFolder(tmpdir)
 
-            world.chunkclass = nbt.chunk.AnvilChunk  # NBT library bug workaroun
+            world.chunkclass = AnvilChunk  # NBT library bug workaroun
 
             bb = world.get_boundingbox()
             bbox_x = (bb.minx * 16, bb.minx * 16 + bb.lenx() * 16)
@@ -200,7 +192,7 @@ class SkimpyMinecraftLevel:
 
     @classmethod
     def _block_at(cls, chunk, x, y, z) -> int:
-        if isinstance(chunk, nbt.chunk.AnvilChunk):
+        if isinstance(chunk, AnvilChunk):
             sy, by = divmod(y, 16)
             section = chunk.get_section(sy)
             if section is None:
@@ -209,7 +201,7 @@ class SkimpyMinecraftLevel:
             # block = section.get_block(x, by, z)
             i = by * 256 + z * 16 + x
             return section.names[section.indexes[i]]  # HACK: Due to monkey patch, this will be an integer
-        elif isinstance(chunk, nbt.chunk.McRegionChunk):
+        elif isinstance(chunk, McRegionChunk):
             return chunk.blocks.get_block(x, y, z)
 
     @classmethod
