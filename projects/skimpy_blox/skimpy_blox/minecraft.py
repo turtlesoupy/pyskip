@@ -1,5 +1,5 @@
 import gzip
-import functools
+import struct
 import nbt.chunk
 from itertools import permutations
 from nbt.world import WorldFolder
@@ -13,438 +13,18 @@ import skimpy
 import skimpy.reduce
 from typing import Tuple, List
 from dataclasses import dataclass
-import colorsys
 from zipfile import ZipFile
 
+from PIL import Image
+from . import colors
 
-# Upstream library prints here which causes overflow
+
+# Upstream library prints here and makes it impossible to access voxel
 def _monkey_patch_block_id_to_name(bid):
-    try:
-        name = nbt.chunk.block_ids[bid]
-    except KeyError:
-        name = 'unknown_%d' % (bid,)
-    return name
+    return bid
 
 
 nbt.chunk.block_id_to_name = _monkey_patch_block_id_to_name
-
-block_colors = {
-    "acacia_leaves": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "acacia_log": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "air": {
-        "h": 0,
-        "s": 0,
-        "l": 0
-    },
-    "andesite": {
-        "h": 0,
-        "s": 0,
-        "l": 32
-    },
-    "azure_bluet": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "bedrock": {
-        "h": 0,
-        "s": 0,
-        "l": 10
-    },
-    "birch_leaves": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "birch_log": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "blue_orchid": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "bookshelf": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "brown_mushroom": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "brown_mushroom_block": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "cactus": {
-        "h": 126,
-        "s": 61,
-        "l": 20
-    },
-    "cave_air": {
-        "h": 0,
-        "s": 0,
-        "l": 0
-    },
-    "chest": {
-        "h": 0,
-        "s": 100,
-        "l": 50
-    },
-    "clay": {
-        "h": 7,
-        "s": 62,
-        "l": 23
-    },
-    "coal_ore": {
-        "h": 0,
-        "s": 0,
-        "l": 10
-    },
-    "cobblestone": {
-        "h": 0,
-        "s": 0,
-        "l": 25
-    },
-    "cobblestone_stairs": {
-        "h": 0,
-        "s": 0,
-        "l": 25
-    },
-    "crafting_table": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "dandelion": {
-        "h": 60,
-        "s": 100,
-        "l": 60
-    },
-    "dark_oak_leaves": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "dark_oak_log": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "dark_oak_planks": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "dead_bush": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "diorite": {
-        "h": 0,
-        "s": 0,
-        "l": 32
-    },
-    "dirt": {
-        "h": 27,
-        "s": 51,
-        "l": 15
-    },
-    "end_portal_frame": {
-        "h": 0,
-        "s": 100,
-        "l": 50
-    },
-    "farmland": {
-        "h": 35,
-        "s": 93,
-        "l": 15
-    },
-    "fire": {
-        "h": 55,
-        "s": 100,
-        "l": 50
-    },
-    "flowing_lava": {
-        "h": 16,
-        "s": 100,
-        "l": 48
-    },
-    "flowing_water": {
-        "h": 228,
-        "s": 50,
-        "l": 23
-    },
-    "glass_pane": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "granite": {
-        "h": 0,
-        "s": 0,
-        "l": 32
-    },
-    "grass": {
-        "h": 94,
-        "s": 42,
-        "l": 25
-    },
-    "grass_block": {
-        "h": 94,
-        "s": 42,
-        "l": 32
-    },
-    "gravel": {
-        "h": 21,
-        "s": 18,
-        "l": 20
-    },
-    "ice": {
-        "h": 240,
-        "s": 10,
-        "l": 95
-    },
-    "infested_stone": {
-        "h": 320,
-        "s": 100,
-        "l": 50
-    },
-    "iron_ore": {
-        "h": 22,
-        "s": 65,
-        "l": 61
-    },
-    "iron_bars": {
-        "h": 22,
-        "s": 65,
-        "l": 61
-    },
-    "ladder": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "lava": {
-        "h": 16,
-        "s": 100,
-        "l": 48
-    },
-    "lilac": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "lily_pad": {
-        "h": 114,
-        "s": 64,
-        "l": 18
-    },
-    "lit_pumpkin": {
-        "h": 24,
-        "s": 100,
-        "l": 45
-    },
-    "mossy_cobblestone": {
-        "h": 115,
-        "s": 30,
-        "l": 50
-    },
-    "mushroom_stem": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "oak_door": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_fence": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_fence_gate": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_leaves": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "oak_log": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_planks": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_pressure_plate": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "oak_stairs": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "peony": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "pink_tulip": {
-        "h": 0,
-        "s": 0,
-        "l": 0
-    },
-    "poppy": {
-        "h": 0,
-        "s": 100,
-        "l": 50
-    },
-    "pumpkin": {
-        "h": 24,
-        "s": 100,
-        "l": 45
-    },
-    "rail": {
-        "h": 33,
-        "s": 81,
-        "l": 50
-    },
-    "red_mushroom": {
-        "h": 0,
-        "s": 50,
-        "l": 20
-    },
-    "red_mushroom_block": {
-        "h": 0,
-        "s": 50,
-        "l": 20
-    },
-    "rose_bush": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-    "sugar_cane": {
-        "h": 123,
-        "s": 70,
-        "l": 50
-    },
-    "sand": {
-        "h": 53,
-        "s": 22,
-        "l": 58
-    },
-    "sandstone": {
-        "h": 48,
-        "s": 31,
-        "l": 40
-    },
-    "seagrass": {
-        "h": 94,
-        "s": 42,
-        "l": 25
-    },
-    "sign": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "spruce_leaves": {
-        "h": 114,
-        "s": 64,
-        "l": 22
-    },
-    "spruce_log": {
-        "h": 35,
-        "s": 93,
-        "l": 30
-    },
-    "stone": {
-        "h": 0,
-        "s": 0,
-        "l": 32
-    },
-    "stone_slab": {
-        "h": 0,
-        "s": 0,
-        "l": 32
-    },
-    "tall_grass": {
-        "h": 94,
-        "s": 42,
-        "l": 25
-    },
-    "tall_seagrass": {
-        "h": 94,
-        "s": 42,
-        "l": 25
-    },
-    "torch": {
-        "h": 60,
-        "s": 100,
-        "l": 50
-    },
-    "snow": {
-        "h": 240,
-        "s": 10,
-        "l": 85
-    },
-    "spawner": {
-        "h": 180,
-        "s": 100,
-        "l": 50
-    },
-    "vine": {
-        "h": 114,
-        "s": 64,
-        "l": 18
-    },
-    "wall_torch": {
-        "h": 60,
-        "s": 100,
-        "l": 50
-    },
-    "water": {
-        "h": 228,
-        "s": 50,
-        "l": 23
-    },
-    "wheat": {
-        "h": 123,
-        "s": 60,
-        "l": 50
-    },
-    "white_wool": {
-        "h": 0,
-        "s": 0,
-        "l": 100
-    },
-}
 
 
 @dataclass
@@ -469,7 +49,7 @@ class NumpyMinecraftChunk:
 
     def to_numpy(self):
         return self
-    
+
     def to_skimpy(self):
         return SkimpyMinecraftChunk(
             self.coord,
@@ -515,14 +95,11 @@ class SkimpyMinecraftLevel:
             return ret
 
     def num_nonzero_voxels(self):
-        return sum(
-            (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
-            for chunk in self.chunk_list
-        )
+        return sum((len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int))) for chunk in self.chunk_list)
 
     def num_runs(self):
         return sum(chunk.tensor.rle_length() for chunk in self.chunk_list)
-    
+
     def minecraft_representation_size(self):
         return sum(len(chunk.tensor) for chunk in self.chunk_list)
 
@@ -547,25 +124,20 @@ class SkimpyMinecraftLevel:
         return dense_size / rle_size
 
     def megatensor(self):
-        dim_1, dim_2, dim_3 = self._column_remap(self.dense_dimensions(), self.column_order)
+        dim_1, dim_2, dim_3 = self._xyz_to_skimpy_col(self.dense_dimensions(), self.column_order)
         megatensor = skimpy.Tensor(shape=(dim_1, dim_2, dim_3), dtype=int)
         for chunk in self.chunk_list:
             start_x = chunk.coord[0] - self.bbox[0][0]
             start_y = chunk.coord[1] - self.bbox[1][0]
             start_z = chunk.coord[2] - self.bbox[2][0]
 
-            xyz_tensor_shape = self._column_to_xyz(chunk.tensor.shape, self.column_order)
+            xyz_tensor_shape = self._skimpy_col_to_xyz(chunk.tensor.shape, self.column_order)
             end_x = start_x + xyz_tensor_shape[0]
             end_y = start_y + xyz_tensor_shape[1]
             end_z = start_z + xyz_tensor_shape[2]
             rng = (slice(start_x, end_x, 1), slice(start_y, end_y, 1), slice(start_z, end_z, 1))
-            megatensor[self._column_remap(rng, self.column_order)] = chunk.tensor
+            megatensor[self._xyz_to_skimpy_col(rng, self.column_order)] = chunk.tensor
         return megatensor
-
-    @classmethod
-    def block_color(cls, id):
-        hsl = block_colors[nbt.chunk.block_id_to_name(id)]
-        return colorsys.hls_to_rgb(hsl["h"], hsl["l"], hsl["s"])
 
     @classmethod
     def approx_best_column_order(cls, world_folder, num_chunks):
@@ -582,7 +154,7 @@ class SkimpyMinecraftLevel:
         best_order, stats = cls.approx_best_column_order(world_folder, num_chunks)
         print(stats)
         return cls.from_world(world_folder, column_order=best_order)
-    
+
     @classmethod
     def from_world(cls, world_folder, as_numpy=False, column_order=(0, 1, 2), num_chunks=None):
         world_folder = Path(world_folder)
@@ -606,6 +178,8 @@ class SkimpyMinecraftLevel:
                 if num_chunks is not None and i >= num_chunks:
                     break
                 x, z = chunk.get_coords()
+                x *= 16
+                z *= 16
                 y = 0
                 bbox_y = (
                     min(bbox_y[0], 0),
@@ -634,23 +208,31 @@ class SkimpyMinecraftLevel:
 
             # block = section.get_block(x, by, z)
             i = by * 256 + z * 16 + x
-            return section.indexes[i]
+            return section.names[section.indexes[i]]  # HACK: Due to monkey patch, this will be an integer
         elif isinstance(chunk, nbt.chunk.McRegionChunk):
             return chunk.blocks.get_block(x, y, z)
 
     @classmethod
-    def _column_remap(cls, item, column_order):
+    def _xyz_to_skimpy_col(cls, item, column_order):
+        x_col = next(i for i, v in enumerate(column_order) if v == 0)
+        y_col = next(i for i, v in enumerate(column_order) if v == 1)
+        z_col = next(i for i, v in enumerate(column_order) if v == 2)
+        return (item[x_col], item[y_col], item[z_col])
+
+    @classmethod
+    def _xyz_to_numpy_col(cls, item, column_order):
+        return tuple(reversed(cls._xyz_to_skimpy_col(item, column_order)))
+
+    @classmethod
+    def _skimpy_col_to_xyz(cls, item, column_order):
         remap_x = item[column_order[0]]
         remap_y = item[column_order[1]]
         remap_z = item[column_order[2]]
         return (remap_x, remap_y, remap_z)
 
     @classmethod
-    def _column_to_xyz(cls, item, column_order):
-        x_col = next(i for i, v in enumerate(column_order) if v == 0)
-        y_col = next(i for i, v in enumerate(column_order) if v == 1)
-        z_col = next(i for i, v in enumerate(column_order) if v == 2)
-        return (item[x_col], item[y_col], item[z_col])
+    def _numpy_col_to_xyz(cls, item, column_order):
+        return tuple(reversed(cls._numpy_col_to_xyz(item, column_order)))
 
     @classmethod
     def chunk_to_numpy(cls, coord, chunk, column_order=(0, 1, 2)):
@@ -658,13 +240,13 @@ class SkimpyMinecraftLevel:
         max_z = 16
         max_y = chunk.get_max_height() + 1
 
-        arr = np.ndarray(shape=cls._column_remap((max_x, max_y, max_z), column_order))
+        arr = np.ndarray(shape=cls._xyz_to_numpy_col((max_x, max_y, max_z), column_order), dtype=np.int32)
 
         for z in range(max_z):
             for x in range(max_x):
                 for y in range(max_y):
                     block_int_id = cls._block_at(chunk, x, y, z) or 0
-                    arr[cls._column_remap((x, y, z), column_order)] = block_int_id
+                    arr[cls._xyz_to_numpy_col((x, y, z), column_order)] = block_int_id
 
         return NumpyMinecraftChunk(coord, arr)
 
@@ -673,3 +255,37 @@ class SkimpyMinecraftLevel:
         numpy_chunk = cls.chunk_to_numpy(coord, chunk, column_order)
         tensor = skimpy.Tensor.from_numpy(numpy_chunk.tensor)
         return SkimpyMinecraftChunk(numpy_chunk.coord, tensor)
+
+    @classmethod
+    def map_for_chunk(cls, chunk, column_order):
+        pixels = b""
+        max_x, max_y, max_z = cls._skimpy_col_to_xyz(chunk.tensor.shape, column_order)
+        chunk_numpy = chunk.to_numpy()
+
+        for z in range(max_z):
+            for x in range(max_x):
+                for y in range(max_y - 1, -1, -1):
+                    numpy_coords = cls._xyz_to_numpy_col((x, y, z), column_order)
+                    block_id = chunk_numpy.tensor[numpy_coords]
+                    if block_id is not None:
+                        if (block_id != 0 or y == 0):
+                            break
+
+                rgb = colors.color_for_id(block_id)
+                pixels += struct.pack("BBB", rgb[0], rgb[1], rgb[2])
+        im = Image.frombytes('RGB', (16, 16), pixels)
+        return im
+
+    def to_map_image(self):
+        width = self.bbox[0][1] - self.bbox[0][0]
+        depth = self.bbox[2][1] - self.bbox[2][0]
+        minx = self.bbox[0][0]
+        minz = self.bbox[2][0]
+
+        world_map = Image.new('RGB', (width, depth))
+        for chunk in tqdm(self.chunk_list):
+            chunkmap = self.map_for_chunk(chunk, self.column_order)
+            x, y, z = chunk.coord
+            world_map.paste(chunkmap, (x - minx, z - minz))
+
+        return world_map

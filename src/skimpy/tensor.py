@@ -123,7 +123,7 @@ class Tensor:
 
     @classmethod
     def _validate_or_cast(cls, a, b):
-        if a.shape != b.shape and b.shape != (1, ):
+        if a.shape != b.shape and b.shape != (1, ) and a.shape != (1,):
             raise IncompatibleTensorError(f"Incompatible shapes: {a.shape} and {b.shape}")
         return a, b
 
