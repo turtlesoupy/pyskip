@@ -271,6 +271,12 @@ class Tensor:
     def coalesce(self, other):
         return Tensor._forward_to_binary_array_op(self, other, "coalesce")
 
+    def max(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "max")
+
+    def min(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "min")
+
     def __setitem__(self, slices, value):
         slices = unify_slices(slices)
         if isinstance(value, Tensor):
