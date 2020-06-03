@@ -660,9 +660,9 @@ class SkimpyMinecraftLevel:
 
         arr = np.ndarray(shape=cls._column_remap((max_x, max_y, max_z), column_order))
 
-        for x in range(max_x):
-            for y in range(max_y):
-                for z in range(max_z):
+        for z in range(max_z):
+            for x in range(max_x):
+                for y in range(max_y):
                     block_int_id = cls._block_at(chunk, x, y, z) or 0
                     arr[cls._column_remap((x, y, z), column_order)] = block_int_id
 
