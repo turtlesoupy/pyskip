@@ -13,3 +13,6 @@ __pycache__/
 *.py[cod]
 *.so
 *.dll
+
+# Notebooks
+.ipynb_checkpoints/
