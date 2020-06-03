@@ -123,7 +123,7 @@ class Tensor:
 
     @classmethod
     def _validate_or_cast(cls, a, b):
-        if a.shape != b.shape and b.shape != (1, ):
+        if a.shape != b.shape and b.shape != (1, ) and a.shape != (1,):
             raise IncompatibleTensorError(f"Incompatible shapes: {a.shape} and {b.shape}")
         return a, b
 
@@ -270,6 +270,12 @@ class Tensor:
 
     def coalesce(self, other):
         return Tensor._forward_to_binary_array_op(self, other, "coalesce")
+
+    def max(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "max")
+
+    def min(self, other):
+        return Tensor._forward_to_binary_array_op(self, other, "min")
 
     def __setitem__(self, slices, value):
         slices = unify_slices(slices)
