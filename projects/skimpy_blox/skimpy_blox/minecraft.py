@@ -547,16 +547,19 @@ class SkimpyMinecraftLevel:
         return dense_size / rle_size
 
     def megatensor(self):
-        dim_x, dim_y, dim_z = self.dense_dimensions()
-        megatensor = skimpy.Tensor(shape=(dim_x, dim_y, dim_z), dtype=int)
+        dim_1, dim_2, dim_3 = self._column_remap(self.dense_dimensions(), self.column_order)
+        megatensor = skimpy.Tensor(shape=(dim_1, dim_2, dim_3), dtype=int)
         for chunk in self.chunk_list:
             start_x = chunk.coord[0] - self.bbox[0][0]
             start_y = chunk.coord[1] - self.bbox[1][0]
             start_z = chunk.coord[2] - self.bbox[2][0]
-            end_x = start_x + chunk.tensor.shape[0]
-            end_y = start_y + chunk.tensor.shape[1]
-            end_z = start_z + chunk.tensor.shape[2]
-            megatensor[start_x:end_x, start_y:end_y, start_z:end_z] = chunk.tensor
+
+            xyz_tensor_shape = self._column_to_xyz(chunk.tensor.shape, self.column_order)
+            end_x = start_x + xyz_tensor_shape[0]
+            end_y = start_y + xyz_tensor_shape[1]
+            end_z = start_z + xyz_tensor_shape[2]
+            rng = (slice(start_x, end_x, 1), slice(start_y, end_y, 1), slice(start_z, end_z, 1))
+            megatensor[self._column_remap(rng, self.column_order)] = chunk.tensor
         return megatensor
 
     @classmethod
@@ -641,6 +644,13 @@ class SkimpyMinecraftLevel:
         remap_y = item[column_order[1]]
         remap_z = item[column_order[2]]
         return (remap_x, remap_y, remap_z)
+
+    @classmethod
+    def _column_to_xyz(cls, item, column_order):
+        x_col = next(i for i, v in enumerate(column_order) if v == 0)
+        y_col = next(i for i, v in enumerate(column_order) if v == 1)
+        z_col = next(i for i, v in enumerate(column_order) if v == 2)
+        return (item[x_col], item[y_col], item[z_col])
 
     @classmethod
     def chunk_to_numpy(cls, coord, chunk, column_order=(0, 1, 2)):
