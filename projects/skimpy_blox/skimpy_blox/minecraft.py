@@ -204,6 +204,9 @@ class SkimpyMinecraftLevel:
         elif isinstance(chunk, McRegionChunk):
             return chunk.blocks.get_block(x, y, z)
 
+    def xyz_to_skimpy_col(self, item):
+        return self.__class__._xyz_to_skimpy_col(item, self.column_order)
+
     @classmethod
     def _xyz_to_skimpy_col(cls, item, column_order):
         x_col = next(i for i, v in enumerate(column_order) if v == 0)
@@ -211,9 +214,15 @@ class SkimpyMinecraftLevel:
         z_col = next(i for i, v in enumerate(column_order) if v == 2)
         return (item[x_col], item[y_col], item[z_col])
 
+    def xyz_to_numpy_col(self, item):
+        return self.__class__._xyz_to_numpy_col(item, self.column_order)
+
     @classmethod
     def _xyz_to_numpy_col(cls, item, column_order):
         return tuple(reversed(cls._xyz_to_skimpy_col(item, column_order)))
+
+    def skimpy_col_to_xyz(self, item):
+        return self.__class__._skimpy_col_to_xyz(item, self.column_order)
 
     @classmethod
     def _skimpy_col_to_xyz(cls, item, column_order):
@@ -221,6 +230,9 @@ class SkimpyMinecraftLevel:
         remap_y = item[column_order[1]]
         remap_z = item[column_order[2]]
         return (remap_x, remap_y, remap_z)
+
+    def numpy_col_to_xyz(self, item):
+        return self.__class__._numpy_col_to_xyz(item, self.column_order)
 
     @classmethod
     def _numpy_col_to_xyz(cls, item, column_order):
@@ -281,3 +293,28 @@ class SkimpyMinecraftLevel:
             world_map.paste(chunkmap, (x - minx, z - minz))
 
         return world_map
+
+    def to_map_image_mt(self):
+        mt_numpy = self.megatensor().to_numpy()
+        
+        max_z, max_y, max_x = mt_numpy.shape
+        np_img = np.zeros([max_z, max_x, 3], dtype=np.uint8)
+        for z in range(max_z):
+            for x in range(max_x):
+                for y in range(max_y - 1, -1, -1):
+                    block_id = mt_numpy[z, y, x]
+                    if block_id is not None:
+                        if (block_id != 0 or y == 0):
+                            break
+
+                r, g, b = colors.color_for_id(block_id)
+                np_img[z, x][0] = r
+                np_img[z, x][1] = g
+                np_img[z, x][2] = b
+
+        return Image.fromarray(np_img)
+
+
+
+
+
