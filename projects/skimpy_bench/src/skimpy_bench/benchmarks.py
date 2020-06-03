@@ -5,6 +5,7 @@ import numpy as np
 import functools
 import sys
 import torch
+import torch.sparse
 import torch.nn.functional
 import _skimpy_cpp_ext
 from _skimpy_bench_cpp_ext import memory, run_length_array
@@ -13,6 +14,7 @@ from skimpy.config import (
 )
 import skimpy
 import skimpy.convolve
+from contextlib import contextmanager
 from collections import defaultdict
 
 try:
@@ -24,6 +26,28 @@ except ImportError:
 
 NANO_TO_MS = 1.0 / 1000000
 MICR_TO_MS = 1.0 / 1000
+
+@contextmanager
+def torch_thread_scope(num_threads):
+    restore_num_threads = torch.get_num_threads()
+    torch.set_num_threads(num_threads)
+    assert torch.get_num_threads() == num_threads
+    try:
+        yield
+    finally:
+        torch.set_num_threads(restore_num_threads)
+
+
+def torch_to_sparse(x):
+    x_typename = torch.typename(x).split('.')[-1]
+    sparse_tensortype = getattr(torch.sparse, x_typename)
+
+    indices = torch.nonzero(x)
+    if len(indices.shape) == 0:  # if all elements are zeros
+        return sparse_tensortype(*x.shape)
+    indices = indices.t()
+    values = x[tuple(indices[i] for i in range(indices.shape[0]))]
+    return sparse_tensortype(indices, values, x.size())
 
 
 class Timer:
@@ -143,13 +167,14 @@ class DenseArrayBenchmark(Benchmark):
         return t.duration_ms
 
     @torch.no_grad()
-    def run_torch(self):
-        inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
-        gc.collect()
+    def run_torch(self, num_threads=1):
+        with torch_thread_scope(num_threads):
+            inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+            gc.collect()
 
-        t = Timer()
-        with t:
-            _ = functools.reduce(lambda x, y: x + y, inputs)
+            t = Timer()
+            with t:
+                _ = functools.reduce(lambda x, y: x + y, inputs)
         return t.duration_ms
 
     def run_taco(self):
@@ -231,6 +256,18 @@ class RunLengthArrayBenchmark(Benchmark):
 
         return t.duration_ms
 
+    def run_torch(self, num_threads=1, dense=True):
+        with torch_thread_scope(num_threads):
+            if dense:
+                inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+            else:
+                inputs = [torch_to_sparse(torch.from_numpy(t)).cpu() for t in self._numpy_inputs()]
+
+            t = Timer()
+            with t:
+                _ = functools.reduce(lambda x, y: x + y, inputs)
+        return t.duration_ms
+
     def run_taco(self):
         return taco.sparse_sum(
             num_elements=self.array_length,
@@ -267,17 +304,18 @@ class Dense3DConvolutionBenchmark(Benchmark):
         return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
 
     @torch.no_grad()
-    def run_torch(self, device="cpu"):
+    def run_torch(self, device="cpu", num_threads=1):
         dtype = np.int32 if device == "cpu" else np.float32
         operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
         kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
 
-        t = Timer()
-        with t:
-            ret = torch.nn.functional.conv3d(operand, kernel).cpu()
-            # Force torch to materialize if it is on the GPU
-            tst = ret[0, 0, 0, 0, 0].item()
-        return t.duration_ms
+        with torch_thread_scope(num_threads):
+            t = Timer()
+            with t:
+                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+                # Force torch to materialize if it is on the GPU
+                tst = ret[0, 0, 0, 0, 0].item()
+            return t.duration_ms
 
     def run_skimpy(self, num_threads=1):
         operand = skimpy.Tensor.from_numpy(self._numpy_input())
@@ -344,16 +382,17 @@ class RunLength3DConvolutionBenchmark(Benchmark):
             return t.duration_ms
 
     @torch.no_grad()
-    def run_torch(self, device="cpu"):
-        dtype = np.int32 if device == "cpu" else np.float32
-        operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
-        kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+    def run_torch(self, device="cpu", num_threads=1):
+        with torch_thread_scope(num_threads):
+            dtype = np.int32 if device == "cpu" else np.float32
+            operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
+            kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
 
-        t = Timer()
-        with t:
-            ret = torch.nn.functional.conv3d(operand, kernel).cpu()
-            # Force torch to materialize if it is on the GPU
-            tst = ret[0, 0, 0, 0, 0].item()
+            t = Timer()
+            with t:
+                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+                # Force torch to materialize if it is on the GPU
+                tst = ret[0, 0, 0, 0, 0].item()
         return t.duration_ms
 
     def run_memory(self):
@@ -489,18 +528,19 @@ class MinecraftConvolutionBenchmark(Benchmark):
             return t.duration_ms
 
     @torch.no_grad()
-    def run_torch(self, device="cpu"):
-        dtype = np.int32 if device == "cpu" else np.float32
-        kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
-        torch_operands = [torch.from_numpy(e).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
+    def run_torch(self, device="cpu", num_threads=1):
+        with torch_thread_scope(num_threads):
+            dtype = np.int32 if device == "cpu" else np.float32
+            kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+            torch_operands = [torch.from_numpy(e).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
 
-        t = Timer()
-        with t:
-            for operand in torch_operands:
-                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
-                # Force torch to materialize if it is on the GPU
-                tst = ret[0, 0, 0, 0, 0].item()
-        return t.duration_ms
+            t = Timer()
+            with t:
+                for operand in torch_operands:
+                    ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+                    # Force torch to materialize if it is on the GPU
+                    tst = ret[0, 0, 0, 0, 0].item()
+            return t.duration_ms
 
     def run_memory(self):
         return memory.no_simd_int_cum_sum_write(
@@ -553,16 +593,18 @@ class MNISTConvolutionBenchmark(Benchmark):
                     _ = skimpy.convolve.conv_2d(operand, kernel).eval()
             return t.duration_ms
 
-    def run_torch(self, device="cpu"):
-        operand = torch.from_numpy(self.mnist_np_array).to(device).reshape((1, 1) + self.mnist_np_array.shape)
-        kernels = [torch.from_numpy(e).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
+    @torch.no_grad()
+    def run_torch(self, device="cpu", num_threads=1):
+        with torch_thread_scope(num_threads):
+            operand = torch.from_numpy(self.mnist_np_array).to(device).reshape((1, 1) + self.mnist_np_array.shape)
+            kernels = [torch.from_numpy(e).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
 
-        t = Timer()
-        with t:
-            for kernel in kernels:
-                ret = torch.nn.functional.conv2d(operand, kernel).cpu()
-            # Force torch to materialize if it is on the GPU
-            tst = ret[0, 0, 0, 0].item()
+            t = Timer()
+            with t:
+                for kernel in kernels:
+                    ret = torch.nn.functional.conv2d(operand, kernel).cpu()
+                # Force torch to materialize if it is on the GPU
+                tst = ret[0, 0, 0, 0].item()
         return t.duration_ms
 
     def run_memory(self):

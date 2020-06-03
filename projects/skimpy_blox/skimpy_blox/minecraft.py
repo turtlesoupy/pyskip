@@ -1,3 +1,5 @@
+import gzip
+import functools
 import nbt.chunk
 from itertools import permutations
 from nbt.world import WorldFolder
@@ -5,6 +7,7 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import numpy as np
 import tempfile
+import pickle
 
 import skimpy
 import skimpy.reduce
@@ -449,11 +452,29 @@ class SkimpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: skimpy.Tensor
 
+    def to_numpy(self):
+        return NumpyMinecraftChunk(
+            self.coord,
+            self.tensor.to_numpy(),
+        )
+
+    def to_skimpy(self):
+        return self
+
 
 @dataclass
 class NumpyMinecraftChunk:
     coord: Tuple[int, int, int]
     tensor: np.ndarray
+
+    def to_numpy(self):
+        return self
+    
+    def to_skimpy(self):
+        return SkimpyMinecraftChunk(
+            self.coord,
+            skimpy.Tensor.from_numpy(self.tensor),
+        )
 
 
 class SkimpyMinecraftLevel:
@@ -467,13 +488,51 @@ class SkimpyMinecraftLevel:
         self.bbox = bbox
         self.column_order = column_order
 
+    def dense_dimensions(self):
+        width_span = self.bbox[0]
+        height_span = self.bbox[1]
+        depth_span = self.bbox[2]
+        return (
+            abs(width_span[1] - width_span[0]),
+            abs(height_span[1] - height_span[0]),
+            abs(depth_span[1] - depth_span[0]),
+        )
+
+    def dump(self, path):
+        with gzip.open(path, "wb") as f:
+            dumpable = SkimpyMinecraftLevel(
+                chunk_list=[e.to_numpy() for e in tqdm(self.chunk_list)],
+                bbox=self.bbox,
+                column_order=self.column_order,
+            )
+            pickle.dump(dumpable, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load(self, path):
+        with gzip.open(path, "rb") as f:
+            ret = pickle.load(f)
+            ret.chunk_list = [e.to_skimpy() for e in ret.chunk_list]
+            return ret
+
+    def num_nonzero_voxels(self):
+        return sum(
+            (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
+            for chunk in self.chunk_list
+        )
+
+    def num_runs(self):
+        return sum(chunk.tensor.rle_length() for chunk in self.chunk_list)
+    
+    def minecraft_representation_size(self):
+        return sum(len(chunk.tensor) for chunk in self.chunk_list)
+
     def sparse_compression_ratio(self):
         dense_size = 0
         sparse_size = 0
 
         for chunk in self.chunk_list:
             dense_size += len(chunk.tensor)
-            sparse_size += (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
+            sparse_size += 2 * (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
 
         return dense_size / sparse_size
 
@@ -488,19 +547,19 @@ class SkimpyMinecraftLevel:
         return dense_size / rle_size
 
     def megatensor(self):
-        dim_x = self.bbox[0][1] - self.bbox[0][0]
-        dim_y = self.bbox[1][1] - self.bbox[1][0]
-        dim_z = self.bbox[2][1] - self.bbox[2][0]
-
-        megatensor = skimpy.Tensor(shape=(dim_x, dim_y, dim_z), dtype=int)
+        dim_1, dim_2, dim_3 = self._column_remap(self.dense_dimensions(), self.column_order)
+        megatensor = skimpy.Tensor(shape=(dim_1, dim_2, dim_3), dtype=int)
         for chunk in self.chunk_list:
             start_x = chunk.coord[0] - self.bbox[0][0]
             start_y = chunk.coord[1] - self.bbox[1][0]
             start_z = chunk.coord[2] - self.bbox[2][0]
-            end_x = start_x + chunk.tensor.shape[0]
-            end_y = start_y + chunk.tensor.shape[1]
-            end_z = start_z + chunk.tensor.shape[2]
-            megatensor[start_x:end_x, start_y:end_y, start_z:end_z] = chunk.tensor
+
+            xyz_tensor_shape = self._column_to_xyz(chunk.tensor.shape, self.column_order)
+            end_x = start_x + xyz_tensor_shape[0]
+            end_y = start_y + xyz_tensor_shape[1]
+            end_z = start_z + xyz_tensor_shape[2]
+            rng = (slice(start_x, end_x, 1), slice(start_y, end_y, 1), slice(start_z, end_z, 1))
+            megatensor[self._column_remap(rng, self.column_order)] = chunk.tensor
         return megatensor
 
     @classmethod
@@ -520,7 +579,8 @@ class SkimpyMinecraftLevel:
 
     @classmethod
     def from_world_infer_order(cls, world_folder, num_chunks=200):
-        best_order, _ = cls.approx_best_column_order(world_folder, num_chunks)
+        best_order, stats = cls.approx_best_column_order(world_folder, num_chunks)
+        print(stats)
         return cls.from_world(world_folder, column_order=best_order)
     
     @classmethod
@@ -584,6 +644,13 @@ class SkimpyMinecraftLevel:
         remap_y = item[column_order[1]]
         remap_z = item[column_order[2]]
         return (remap_x, remap_y, remap_z)
+
+    @classmethod
+    def _column_to_xyz(cls, item, column_order):
+        x_col = next(i for i, v in enumerate(column_order) if v == 0)
+        y_col = next(i for i, v in enumerate(column_order) if v == 1)
+        z_col = next(i for i, v in enumerate(column_order) if v == 2)
+        return (item[x_col], item[y_col], item[z_col])
 
     @classmethod
     def chunk_to_numpy(cls, coord, chunk, column_order=(0, 1, 2)):
