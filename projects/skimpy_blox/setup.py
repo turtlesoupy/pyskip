@@ -6,5 +6,5 @@ setup(
     author="Taylor Gordon, Thomas Dimson",
     description="A skimpy wrapper library for loading and operating on Minecraft assets",
     packages=["skimpy_blox"],
-    install_requires=["skimpy>=0.0.1", "nbt", "tqdm"],
+    install_requires=["skimpy>=0.0.1", "nbt", "tqdm", "pillow"],
 )
