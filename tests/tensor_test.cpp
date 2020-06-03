@@ -159,6 +159,16 @@ TEST_CASE("Test tensor set functions", "[tensors]") {
     REQUIRE(step_fn(4) == 16);
     REQUIRE(step_fn(5) == 16);
   }
+  {
+    skimpy::TensorSlice<2> slice({{0, 1, 1}, {0, 3, 1}});
+    auto step_fn = slice.set_fn({3, 3});
+    REQUIRE(step::span(0, 9, step_fn) == 9);
+  }
+  {
+    skimpy::TensorSlice<3> slice({{0, 1, 1}, {0, 3, 1}, {0, 3, 1}});
+    auto step_fn = slice.set_fn({3, 3, 3});
+    REQUIRE(step::span(0, 27, step_fn) == 27);
+  }
 }
 
 TEST_CASE("Test large multi-dimensional tensor slice", "[tensors]") {

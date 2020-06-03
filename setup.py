@@ -58,6 +58,7 @@ class CMakeBuild(build_ext):
                     ext.root_dir,
                     f"-DPYTHON_EXECUTABLE={sys.executable}",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}",
+                    f"-DBUILD_TESTING=OFF",
                     f"-DSKIMPY_BUILD_BENCHMARKS=OFF",
                 ],
                 windows_args=[
