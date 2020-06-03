@@ -1,4 +1,5 @@
 import gzip
+import functools
 import nbt.chunk
 from itertools import permutations
 from nbt.world import WorldFolder
@@ -487,6 +488,16 @@ class SkimpyMinecraftLevel:
         self.bbox = bbox
         self.column_order = column_order
 
+    def dense_dimensions(self):
+        width_span = self.bbox[0]
+        height_span = self.bbox[1]
+        depth_span = self.bbox[2]
+        return (
+            abs(width_span[1] - width_span[0]),
+            abs(height_span[1] - height_span[0]),
+            abs(depth_span[1] - depth_span[0]),
+        )
+
     def dump(self, path):
         with gzip.open(path, "wb") as f:
             dumpable = SkimpyMinecraftLevel(
@@ -503,13 +514,25 @@ class SkimpyMinecraftLevel:
             ret.chunk_list = [e.to_skimpy() for e in ret.chunk_list]
             return ret
 
+    def num_nonzero_voxels(self):
+        return sum(
+            (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
+            for chunk in self.chunk_list
+        )
+
+    def num_runs(self):
+        return sum(chunk.tensor.rle_length() for chunk in self.chunk_list)
+    
+    def minecraft_representation_size(self):
+        return sum(len(chunk.tensor) for chunk in self.chunk_list)
+
     def sparse_compression_ratio(self):
         dense_size = 0
         sparse_size = 0
 
         for chunk in self.chunk_list:
             dense_size += len(chunk.tensor)
-            sparse_size += (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
+            sparse_size += 2 * (len(chunk.tensor) - skimpy.reduce.sum((chunk.tensor == 0).to(int)))
 
         return dense_size / sparse_size
 
@@ -524,10 +547,7 @@ class SkimpyMinecraftLevel:
         return dense_size / rle_size
 
     def megatensor(self):
-        dim_x = self.bbox[0][1] - self.bbox[0][0]
-        dim_y = self.bbox[1][1] - self.bbox[1][0]
-        dim_z = self.bbox[2][1] - self.bbox[2][0]
-
+        dim_x, dim_y, dim_z = self.dense_dimensions()
         megatensor = skimpy.Tensor(shape=(dim_x, dim_y, dim_z), dtype=int)
         for chunk in self.chunk_list:
             start_x = chunk.coord[0] - self.bbox[0][0]
