@@ -26,6 +26,7 @@ PYBIND11_MODULE(_skimpy_3d_cpp_ext, m) {
   py::class_<VoxelMesh>(m, "VoxelMesh")
       .def(py::init<>())
       .def_readwrite("positions", &VoxelMesh::positions)
+      .def_readwrite("normals", &VoxelMesh::normals)
       .def_readwrite("colors", &VoxelMesh::colors)
       .def_readwrite("triangles", &VoxelMesh::triangles);
 

@@ -102,5 +102,6 @@ setup(
     cmdclass={"build_ext": CMakeBuild},
     packages=find_namespace_packages(where="src", exclude="tests"),
     package_dir={"": "src"},
+    install_requires=[],
     zip_safe=False,
 )

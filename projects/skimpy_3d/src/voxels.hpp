@@ -11,9 +11,11 @@ namespace skimpy_3d {
 struct EmptyVoxel {};
 
 struct ColorVoxel {
-  int32_t rgb;
+  uint32_t rgba;
 
-  ColorVoxel(int32_t r, int32_t g, int32_t b) : rgb((r << 16) | (g << 8) | b) {}
+  ColorVoxel(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+      : rgba(pack_bytes(r, g, b, a)) {}
+  ColorVoxel(int8_t r, int8_t g, int8_t b) : ColorVoxel(r, g, b, 255) {}
 };
 
 using VoxelDef = std::variant<EmptyVoxel, ColorVoxel>;
@@ -27,6 +29,7 @@ using VoxelTensor = skimpy::Tensor<3, int32_t>;
 
 struct VoxelMesh {
   std::vector<float> positions;
+  std::vector<float> normals;
   std::vector<uint8_t> colors;
   std::vector<uint32_t> triangles;
 
@@ -136,6 +139,17 @@ auto generate_mesh(const VoxelConfig& config, const VoxelTensor& tensor) {
       return ret;
     }();
 
+    static auto normals = [] {
+      std::vector<Vec3i> ret;
+      ret.push_back({-1, 0, 0});  // X_NEG
+      ret.push_back({1, 0, 0});   // X_POS
+      ret.push_back({0, -1, 0});  // Y_NEG
+      ret.push_back({0, 1, 0});   // Y_POS
+      ret.push_back({0, 0, -1});  // Y_NEG
+      ret.push_back({0, 0, 1});   // Y_POS
+      return ret;
+    }();
+
     // Emit vertex indices for the two new triangles.
     auto base = mesh.vertex_count();
     mesh.triangles.push_back(base);
@@ -145,7 +159,7 @@ auto generate_mesh(const VoxelConfig& config, const VoxelTensor& tensor) {
     mesh.triangles.push_back(base + 2);
     mesh.triangles.push_back(base);
 
-    // Emit vertex positions for the 4 new vertices.
+    // Emit vertex positions and normals for the 4 new vertices.
     auto dir_index = lg2(static_cast<int>(dir));
     for (const auto& pos_vec : positions.at(dir_index)) {
       Vec3i out = add(origin, pos_vec);
@@ -153,19 +167,29 @@ auto generate_mesh(const VoxelConfig& config, const VoxelTensor& tensor) {
       mesh.positions.push_back(out[1]);
       mesh.positions.push_back(out[2]);
     }
+    for (int i = 0; i < 4; i += 1) {
+      Vec3i out = normals.at(dir_index);
+      mesh.normals.push_back(out[0]);
+      mesh.normals.push_back(out[1]);
+      mesh.normals.push_back(out[2]);
+    }
   };
 
   // Adds 4 vertex color attributes (for one cube face) to the output mesh.
-  auto emit_face_colors = [&](int32_t rgb) {
+  auto emit_face_colors = [&](int32_t rgba) {
     for (int i = 0; i < 4; i += 1) {
-      mesh.colors.push_back((rgb & 0xFF0000) >> 16);
-      mesh.colors.push_back((rgb & 0x00FF00) >> 8);
-      mesh.colors.push_back((rgb & 0x0000FF));
+      auto [r, g, b, a] = unpack_bytes(rgba);
+      mesh.colors.push_back(r);
+      mesh.colors.push_back(g);
+      mesh.colors.push_back(b);
+      mesh.colors.push_back(a);
     }
   };
 
   // Create a tensor of the adjacency bitmask at each non-empty tensor cell.
   auto adjacencies = compute_adjacency_mask(tensor).eval();
+
+  // TODO: Pre-allocate mesh vectors to fit the exact output.
 
   // Iterate over each boundary voxel and emit its mesh attributes.
   array_walk(
@@ -184,27 +208,27 @@ auto generate_mesh(const VoxelConfig& config, const VoxelTensor& tensor) {
                 [&](const ColorVoxel& v) {
                   if (adj & static_cast<int>(DirMask::X_NEG)) {
                     emit_face_geometry(origin, DirMask::X_NEG);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                   if (adj & static_cast<int>(DirMask::X_POS)) {
                     emit_face_geometry(origin, DirMask::X_POS);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                   if (adj & static_cast<int>(DirMask::Y_NEG)) {
                     emit_face_geometry(origin, DirMask::Y_NEG);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                   if (adj & static_cast<int>(DirMask::Y_POS)) {
                     emit_face_geometry(origin, DirMask::Y_POS);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                   if (adj & static_cast<int>(DirMask::Z_NEG)) {
                     emit_face_geometry(origin, DirMask::Z_NEG);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                   if (adj & static_cast<int>(DirMask::Z_POS)) {
                     emit_face_geometry(origin, DirMask::Z_POS);
-                    emit_face_colors(v.rgb);
+                    emit_face_colors(v.rgba);
                   }
                 },
             },

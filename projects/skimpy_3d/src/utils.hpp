@@ -89,4 +89,20 @@ inline void array_walk(Fn&& fn, Mask&& mask, Tensors&&... t) {
   }
 }
 
+auto pack_bytes(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+  uint32_t ret = static_cast<uint32_t>(d);
+  ret |= static_cast<uint32_t>(c) << 8;
+  ret |= static_cast<uint32_t>(b) << 16;
+  ret |= static_cast<uint32_t>(a) << 24;
+  return ret;
+}
+
+auto unpack_bytes(uint32_t bytes) {
+  uint8_t a = (bytes & 0xFF000000) >> 24;
+  uint8_t b = (bytes & 0x00FF0000) >> 16;
+  uint8_t c = (bytes & 0x0000FF00) >> 8;
+  uint8_t d = (bytes & 0x000000FF);
+  return std::tuple(a, b, c, d);
+}
+
 }  // namespace skimpy_3d
