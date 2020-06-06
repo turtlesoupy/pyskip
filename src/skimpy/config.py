@@ -5,9 +5,12 @@ from . exceptions import TypeConversionError
 
 
 @contextmanager
-def config_scope():
+def config_scope(**kwargs):
     vals = _skimpy_config.get_all_values()
     try:
+        if kwargs:
+            for k, v in kwargs.items():
+                set_value(k, v)
         yield
     finally:
         _skimpy_config.set_all_values(vals)
@@ -50,5 +53,7 @@ def set_value(name, val):
         _skimpy_config.set_int_value(name, val)
     elif isinstance(val, float):
         _skimpy_config.set_float_value(name, val)
+    elif isinstance(val, str):
+        _skimpy_config.set_string_value(name, val)
     else:
         raise TypeConversionError(f"Unsupported type for config map: {type(val)}")

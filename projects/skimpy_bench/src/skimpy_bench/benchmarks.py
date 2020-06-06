@@ -182,11 +182,13 @@ class DenseArrayBenchmark(Benchmark):
             num_elements=self.array_length, num_input_arrays=self.num_inputs, include_compile_time=False
         ) * MICR_TO_MS
 
-    def run_skimpy(self, num_threads=1):
+    def run_skimpy(self, num_threads=1, use_custom_kernel=False):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
         gc.collect()
 
         with num_threads_scope(num_threads):
+            if use_custom_kernel:
+                set_value("custom_eval_kernel", "add_int32")
             t = Timer()
             with t:
                 _ = functools.reduce(lambda x, y: x + y, inputs).eval()
@@ -245,11 +247,13 @@ class RunLengthArrayBenchmark(Benchmark):
             _ = functools.reduce(lambda x, y: x + y, inputs)
         return t.duration_ms
 
-    def run_skimpy(self, num_threads=1):
+    def run_skimpy(self, num_threads=1, use_custom_kernel=False):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
         gc.collect()
 
         with num_threads_scope(num_threads):
+            if use_custom_kernel:
+                set_value("custom_eval_kernel", "add_int32")
             t = Timer()
             with t:
                 _ = functools.reduce(lambda x, y: x + y, inputs).eval()

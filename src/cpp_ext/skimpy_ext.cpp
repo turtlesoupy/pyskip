@@ -53,6 +53,16 @@ PYBIND11_MODULE(_skimpy_cpp_ext, m) {
           GlobalConfig::get().clear_config_val(key);
         }
       });
+
+  config_module.def(
+      "set_string_value", [](std::string key, std::optional<std::string> val) {
+        if (val) {
+          GlobalConfig::get().set_config_val<std::string>(key, *val);
+        } else {
+          GlobalConfig::get().clear_config_val(key);
+        }
+      });
+
   config_module.def(
       "get_all_values", []() { return GlobalConfig::get().get_config_map(); });
 
