@@ -36,7 +36,7 @@ def stack(t1: Tensor, t2: Tensor) -> Tensor:
      range of indices are filled with t1, and the rest are filled with t2."""
     assert t1.ndim == t2.ndim
     assert t1.dtype == t2.dtype
-    t3 = Tensor(tuple(l1 + l2 for l1, l2 in zip(t1.shape, t2.shape)))
+    t3 = Tensor(tuple(l1 + l2 for l1, l2 in zip(t1.shape, t2.shape)), dtype=t1.dtype)
     t3[tuple(slice(None, l) for l in t1.shape)] = t1
     t3[tuple(slice(l, None) for l in t1.shape)] = t2
     return t3
