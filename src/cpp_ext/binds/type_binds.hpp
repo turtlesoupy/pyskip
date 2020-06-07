@@ -271,6 +271,17 @@ inline void bind_array_class(py::module& m, const char* class_name) {
         .def("__rshift__", [](const Array& self, const Array& other) {
           return self >> other;
         });
+  } else if constexpr (std::is_same_v<Val, bool>) {
+    cls.def("__and__", [](const Array& self, Val val) { return self && val; })
+        .def("__rand__", [](const Array& self, Val val) { return val && self; })
+        .def(
+            "__and__",
+            [](const Array& self, const Array& other) { return self && other; })
+        .def("__or__", [](const Array& self, Val val) { return self || val; })
+        .def("__ror__", [](const Array& self, Val val) { return val || self; })
+        .def("__or__", [](const Array& self, const Array& other) {
+          return self || other;
+        });
   }
 
   // Add logical operations.
@@ -313,6 +324,9 @@ inline void bind_array_class(py::module& m, const char* class_name) {
           "__gt__",
           [](const Array& self, const Array& other) { return self > other; })
       .def(
+          "__gt__",
+          [](const Array& self, const Array& other) { return self > other; })
+      .def(
           "coalesce",
           [](const Array& self, Val val) {
             return skimpy::coalesce(self, val);
@@ -321,7 +335,6 @@ inline void bind_array_class(py::module& m, const char* class_name) {
         return skimpy::coalesce(self, other);
       });
 
-  // TODO(taylorgordon): Add remaining operations.
   cls.def(
          "min",
          [](const Array& self, Val val) { return skimpy::min(self, val); })
