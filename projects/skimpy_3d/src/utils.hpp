@@ -54,12 +54,12 @@ inline constexpr void for_each(
 }
 
 // Provides efficient traversal over tensor cells via a boolean mask.
-template <typename Mask, typename... Tensors, typename Fn>
-inline void array_walk(Fn&& fn, Mask&& mask, Tensors&&... t) {
-  CHECK_ARGUMENT(((mask.len() == t.len()) && ...));
+template <typename Mask, typename... Arrays, typename Fn>
+inline void array_walk(Fn&& fn, Mask&& mask, Arrays&&... a) {
+  CHECK_ARGUMENT(((mask.len() == a.len()) && ...));
 
   auto store = mask.store();
-  auto iters = std::tuple(std::tuple(0, t.store())...);
+  auto iters = std::make_tuple(std::tuple(0, a.store())...);
 
   int pos = 0;
   auto advance = [&](auto& it) {

@@ -10,5 +10,6 @@ function(SKIMPY_TEST TEST_NAME TEST_FILE)
 endfunction()
 
 # Add each test target and register it for ctest.
+skimpy_test(marching_cubes_test marching_cubes_test.cpp)
 skimpy_test(utils_test utils_test.cpp)
 skimpy_test(voxels_test voxels_test.cpp)
