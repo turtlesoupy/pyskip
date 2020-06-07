@@ -754,7 +754,7 @@ inline auto execute_plan_fixed(EvalPlan plan) {
   auto eval_fn = [&](const box::Box* b) {
     thread_local box::Box stack[stack_capacity];
     auto sp = &stack[0];
-    for (auto node : plan.nodes) {
+    for (auto& node : plan.nodes) {
       switch (node.kind) {
         case EvalPlan::Node::SOURCE:
           *sp++ = b[node.index];
