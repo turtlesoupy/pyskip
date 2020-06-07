@@ -1,4 +1,5 @@
 import gc
+import asyncio
 import pandas as pd
 import time
 import numpy as np
@@ -48,6 +49,32 @@ def torch_to_sparse(x):
     indices = indices.t()
     values = x[tuple(indices[i] for i in range(indices.shape[0]))]
     return sparse_tensortype(indices, values, x.size())
+
+
+class cached_property(object):
+    def __init__(self, func):
+        self.__doc__ = getattr(func, "__doc__")
+        self.func = func
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self
+
+        if asyncio and asyncio.iscoroutinefunction(self.func):
+            return self._wrap_in_coroutine(obj)
+
+        value = obj.__dict__[self.func.__name__] = self.func(obj)
+        return value
+
+    def _wrap_in_coroutine(self, obj):
+        @functools.wraps(obj)
+        @asyncio.coroutine
+        def wrapper():
+            future = asyncio.ensure_future(self.func(obj))
+            obj.__dict__[self.func.__name__] = future
+            return future
+
+        return wrapper()
 
 
 class Timer:
@@ -107,6 +134,22 @@ class Benchmark:
         
         return ret
 
+    @classmethod
+    def run_suite(cls, repeats, suite, **other_args):
+        ret = {k: {k1: v1 for k1, v1 in v.items() if k1 not in ("kwargs", "method")} for k, v in suite.items()}
+
+        klass = cls(**other_args)
+        for k, v in suite.items():
+            kwargs = v.get("kwargs", {})
+            method = v["method"]
+            tot = 0
+            for i in range(repeats):
+                tot += getattr(klass, method)(**kwargs)
+            out = tot / repeats
+            ret[k]["val"] = out
+        
+        return ret
+
 
     @classmethod
     def run_against_axis(cls, varying_arg_name, varying_arg, repeats, **other_args):
@@ -153,11 +196,12 @@ class DenseArrayBenchmark(Benchmark):
         self.num_inputs = num_inputs
         self.suite_kwargs = suite_kwargs or {}
 
+    @cached_property
     def _numpy_inputs(self):
         return [np.random.randint(2**3, size=self.array_length, dtype=np.int32) for _ in range(self.num_inputs)]
 
     def run_numpy(self):
-        inputs = self._numpy_inputs()
+        inputs = self._numpy_inputs
         gc.collect()
 
         t = Timer()
@@ -169,7 +213,7 @@ class DenseArrayBenchmark(Benchmark):
     @torch.no_grad()
     def run_torch(self, num_threads=1):
         with torch_thread_scope(num_threads):
-            inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+            inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs]
             gc.collect()
 
             t = Timer()
@@ -182,11 +226,14 @@ class DenseArrayBenchmark(Benchmark):
             num_elements=self.array_length, num_input_arrays=self.num_inputs, include_compile_time=False
         ) * MICR_TO_MS
 
-    def run_skimpy(self, num_threads=1):
-        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+    def run_skimpy(self, num_threads=1, use_custom_kernel=False):
+        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs]
         gc.collect()
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False)
+            if use_custom_kernel:
+                set_value("custom_eval_kernel", "add_int32")
             t = Timer()
             with t:
                 _ = functools.reduce(lambda x, y: x + y, inputs).eval()
@@ -220,6 +267,7 @@ class RunLengthArrayBenchmark(Benchmark):
         self.deterministic_run_length = deterministic_run_length
         self.suite_kwargs = suite_kwargs or {}
 
+    @cached_property
     def _numpy_inputs(self):
         inputs = []
         seed = 42
@@ -236,20 +284,27 @@ class RunLengthArrayBenchmark(Benchmark):
                 seed += 1
 
         return inputs
+    
+    @cached_property
+    def _skimpy_inputs(self):
+        return [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs]
 
     def run_numpy(self):
-        inputs = self._numpy_inputs()
+        inputs = self._numpy_inputs
         gc.collect()
         t = Timer()
         with t:
             _ = functools.reduce(lambda x, y: x + y, inputs)
         return t.duration_ms
 
-    def run_skimpy(self, num_threads=1):
-        inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs()]
+    def run_skimpy(self, num_threads=1, use_custom_kernel=False):
+        inputs = self._skimpy_inputs
         gc.collect()
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False) # TODO: check me
+            if use_custom_kernel:
+                set_value("custom_eval_kernel", "add_int32")
             t = Timer()
             with t:
                 _ = functools.reduce(lambda x, y: x + y, inputs).eval()
@@ -259,9 +314,9 @@ class RunLengthArrayBenchmark(Benchmark):
     def run_torch(self, num_threads=1, dense=True):
         with torch_thread_scope(num_threads):
             if dense:
-                inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs()]
+                inputs = [torch.from_numpy(t).cpu() for t in self._numpy_inputs]
             else:
-                inputs = [torch_to_sparse(torch.from_numpy(t)).cpu() for t in self._numpy_inputs()]
+                inputs = [torch_to_sparse(torch.from_numpy(t)).cpu() for t in self._numpy_inputs]
 
             t = Timer()
             with t:
@@ -322,6 +377,7 @@ class Dense3DConvolutionBenchmark(Benchmark):
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False) # TODO: check me
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
@@ -376,6 +432,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False) # TODO: check me
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
@@ -522,6 +579,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False) # TODO: check me
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(self.megatensor, kernel).eval()
@@ -587,6 +645,7 @@ class MNISTConvolutionBenchmark(Benchmark):
         kernels = [skimpy.Tensor.from_numpy(e) for e in self._numpy_kernels()]
 
         with num_threads_scope(num_threads):
+            set_value("accelerated_eval", False) # TODO: check me
             t = Timer()
             with t:
                 for kernel in kernels:
