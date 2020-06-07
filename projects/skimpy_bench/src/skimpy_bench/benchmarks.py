@@ -15,6 +15,7 @@ from skimpy.config import (
 )
 import skimpy
 import skimpy.convolve
+import scipy.signal
 from contextlib import contextmanager
 from collections import defaultdict
 
@@ -373,6 +374,15 @@ class Dense3DConvolutionBenchmark(Benchmark):
                 tst = ret[0, 0, 0, 0, 0].item()
             return t.duration_ms
 
+    def run_numpy(self):
+        operand = self._numpy_input()
+        kernel = self._numpy_kernel()
+        t = Timer()
+        with t:
+            scipy.signal.convolve(operand, kernel)
+
+        return t.duration_ms
+
     def run_skimpy(self, num_threads=1):
         operand = skimpy.Tensor.from_numpy(self._numpy_input())
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
@@ -438,6 +448,15 @@ class RunLength3DConvolutionBenchmark(Benchmark):
             with t:
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
             return t.duration_ms
+
+    def run_numpy(self):
+        operand = self._numpy_input()
+        kernel = self._numpy_kernel()
+        t = Timer()
+        with t:
+            scipy.signal.convolve(operand, kernel)
+
+        return t.duration_ms
 
     @torch.no_grad()
     def run_torch(self, device="cpu", num_threads=1):
@@ -586,19 +605,40 @@ class MinecraftConvolutionBenchmark(Benchmark):
                 _ = skimpy.convolve.conv_3d(self.megatensor, kernel).eval()
             return t.duration_ms
 
+    def run_numpy(self, use_mt=False):
+        if use_mt:
+            operands = [self.megatensor.to_numpy()]
+        else:
+            operands = [torch.from_numpy(e) for e in self.numpy_chunk_list]
+
+        kernel = self._numpy_kernel()
+        t = Timer()
+        with t:
+            for operand in operands:
+                scipy.signal.convolve(operand, kernel)
+
+        return t.duration_ms
+
+
     @torch.no_grad()
-    def run_torch(self, device="cpu", num_threads=1):
+    def run_torch(self, device="cpu", num_threads=1, use_mt=False):
         with torch_thread_scope(num_threads):
             dtype = np.int32 if device == "cpu" else np.float32
             kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
-            torch_operands = [torch.from_numpy(e).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
+            if use_mt:
+                np_mt = self.megatensor.to_numpy()
+                torch_operands = [torch.from_numpy(np_mt.astype(dtype)).to(device).reshape((1, 1) + np_mt.shape)]
+            else:
+                torch_operands = [torch.from_numpy(e.astype(dtype)).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
 
+            rets = []
             t = Timer()
             with t:
                 for operand in torch_operands:
-                    ret = torch.nn.functional.conv3d(operand, kernel).cpu()
+                    rets.append(torch.nn.functional.conv3d(operand, kernel))
+                for ret in rets:
                     # Force torch to materialize if it is on the GPU
-                    tst = ret[0, 0, 0, 0, 0].item()
+                    tst = ret[0, 0, 0, 0, 0].cpu().item()
             return t.duration_ms
 
     def run_memory(self):
@@ -641,6 +681,17 @@ class MNISTConvolutionBenchmark(Benchmark):
             for _ in range(self.num_kernels)
         ]
 
+    def run_numpy(self, use_mt=False):
+        operand = self.mnist_np_array
+        kernels = self._numpy_kernels()
+
+        t = Timer()
+        with t:
+            for kernel in kernels:
+                scipy.signal.convolve(operand, kernel)
+
+        return t.duration_ms
+
     def run_skimpy(self, num_threads=1):
         operand = skimpy.Tensor.from_numpy(self.mnist_np_array)
         kernels = [skimpy.Tensor.from_numpy(e) for e in self._numpy_kernels()]
@@ -656,15 +707,18 @@ class MNISTConvolutionBenchmark(Benchmark):
     @torch.no_grad()
     def run_torch(self, device="cpu", num_threads=1):
         with torch_thread_scope(num_threads):
-            operand = torch.from_numpy(self.mnist_np_array).to(device).reshape((1, 1) + self.mnist_np_array.shape)
-            kernels = [torch.from_numpy(e).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
+            dtype = np.int32 if device == "cpu" else np.float32
+            operand = torch.from_numpy(self.mnist_np_array.astype(dtype)).to(device).reshape((1, 1) + self.mnist_np_array.shape)
+            kernels = [torch.from_numpy(e.astype(dtype)).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
 
+            rets = []
             t = Timer()
             with t:
                 for kernel in kernels:
-                    ret = torch.nn.functional.conv2d(operand, kernel).cpu()
-                # Force torch to materialize if it is on the GPU
-                tst = ret[0, 0, 0, 0].item()
+                    rets.append(torch.nn.functional.conv2d(operand, kernel))
+                for ret in rets:
+                    # Force torch to materialize if it is on the GPU
+                    tst = ret[0, 0, 0, 0].cpu().item()
         return t.duration_ms
 
     def run_memory(self):
