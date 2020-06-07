@@ -294,7 +294,8 @@ class RunLengthArrayBenchmark(Benchmark):
         gc.collect()
         t = Timer()
         with t:
-            _ = functools.reduce(lambda x, y: x + y, inputs)
+            b = functools.reduce(lambda x, y: x + y, inputs)
+            print(b[-1])
         return t.duration_ms
 
     def run_skimpy(self, num_threads=1, use_custom_kernel=False):
