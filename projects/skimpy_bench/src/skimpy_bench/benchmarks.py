@@ -207,7 +207,8 @@ class DenseArrayBenchmark(Benchmark):
 
         t = Timer()
         with t:
-            _ = functools.reduce(lambda x, y: x + y, inputs)
+            res = functools.reduce(lambda x, y: x + y, inputs)
+            print(res[-1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -233,6 +234,7 @@ class DenseArrayBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False)
+            set_value("flush_tree_size_threshold", 2 ** 30)
             if use_custom_kernel:
                 set_value("custom_eval_kernel", "add_int32")
             t = Timer()
@@ -295,8 +297,8 @@ class RunLengthArrayBenchmark(Benchmark):
         gc.collect()
         t = Timer()
         with t:
-            b = functools.reduce(lambda x, y: x + y, inputs)
-            print(b[-1])
+            res = functools.reduce(lambda x, y: x + y, inputs)
+            print(res[-1])  # Numpy can be asynchronous, this forces an eval
         return t.duration_ms
 
     def run_skimpy(self, num_threads=1, use_custom_kernel=False):
@@ -305,6 +307,7 @@ class RunLengthArrayBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
+            set_value("flush_tree_size_threshold", 2 ** 30)
             if use_custom_kernel:
                 set_value("custom_eval_kernel", "add_int32")
             t = Timer()
@@ -379,7 +382,8 @@ class Dense3DConvolutionBenchmark(Benchmark):
         kernel = self._numpy_kernel()
         t = Timer()
         with t:
-            scipy.signal.convolve(operand, kernel)
+            res = scipy.signal.convolve(operand, kernel)
+            print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -389,6 +393,7 @@ class Dense3DConvolutionBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
+            set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
@@ -444,6 +449,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
+            set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(operand, kernel).eval()
@@ -454,7 +460,8 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         kernel = self._numpy_kernel()
         t = Timer()
         with t:
-            scipy.signal.convolve(operand, kernel)
+            res = scipy.signal.convolve(operand, kernel)
+            print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -600,6 +607,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
+            set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
                 _ = skimpy.convolve.conv_3d(self.megatensor, kernel).eval()
@@ -615,7 +623,8 @@ class MinecraftConvolutionBenchmark(Benchmark):
         t = Timer()
         with t:
             for operand in operands:
-                scipy.signal.convolve(operand, kernel)
+                res = scipy.signal.convolve(operand, kernel)
+                print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -688,7 +697,8 @@ class MNISTConvolutionBenchmark(Benchmark):
         t = Timer()
         with t:
             for kernel in kernels:
-                scipy.signal.convolve(operand, kernel)
+                res = scipy.signal.convolve(operand, kernel)
+                print(res[-1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -698,6 +708,7 @@ class MNISTConvolutionBenchmark(Benchmark):
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
+            set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
                 for kernel in kernels:
