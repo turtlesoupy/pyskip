@@ -515,6 +515,58 @@ class SimpleEvaluator {
   Arg curr_vals_[size];
 };
 
+// Provides evaluation over a pool of simple sources via an eval function.
+template <typename Ret, typename Arg, typename StepFn, int size>
+class ThomasAdditionEvaluator {
+ public:
+  ThomasAdditionEvaluator(SimplePool<Arg, StepFn, size> pool)
+      : stop_(pool.stop()),
+        pool_(std::move(pool)) {
+    for (int src = 0; src < size; src += 1) {
+      step_fns_[src] = pool_[src].step_fn();
+      iter_ends_[src] = pool_[src].iter_ends();
+      iter_vals_[src] = pool_[src].iter_vals();
+      next_val(src);
+    }
+  }
+
+  inline auto stop() const {
+    return stop_;
+  }
+
+  inline const auto& pool() const {
+    return pool_;
+  }
+
+  inline auto next_val(int src) {
+    return curr_vals_[src] = *iter_vals_[src]++;
+  }
+
+  inline auto next_end(int src) {
+    return step_fns_[src](*iter_ends_[src]++);
+  }
+
+  inline auto peek_end(int src) {
+    return step_fns_[src](*iter_ends_[src]);
+  }
+
+  inline Ret eval() const {
+    int32_t accum = 0;
+    for (int i = 0; i < size; i++) {
+      accum += curr_vals_[i].template get<int32_t>();
+    }
+    return accum;
+  }
+
+ private:
+  Pos stop_;
+  SimplePool<Arg, StepFn, size> pool_;
+  StepFn step_fns_[size];
+  Pos* iter_ends_[size];
+  Arg* iter_vals_[size];
+  Arg curr_vals_[size];
+};
+
 // Provides evaluation over a pool of input sources via an eval function.
 template <typename Ret, typename Source, int size>
 class SourceEvaluator {
@@ -638,6 +690,11 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
 
   // Evaluate inline if the pool size is below the threshold.
   if (pool.capacity() < par_threshold || par_parts <= 1) {
+    if (auto kernel = config::get_or<std::string>("custom_eval_kernel", ""); kernel == "add_int32") {
+      fmt::print("Using custom add int32 kernel with size {}\n", size);
+      ThomasAdditionEvaluator<Ret, Arg, StepFn, size> evaluator(std::move(pool));
+      return eval_generic(std::move(evaluator));
+    }
     return eval_generic(SimpleEvaluator(std::move(pool), std::move(eval_fn)));
   }
 
@@ -646,11 +703,22 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
   // Evaluate each part in parallel.
   std::vector<std::function<void()>> tasks;
   std::vector<StorePtr<Ret>> stores(partition.size());
-  for (int i = 0; i < partition.size(); i += 1) {
-    tasks.emplace_back([&, i] {
-      SimpleEvaluator evaluator(std::move(partition[i]), eval_fn);
-      stores[i] = eval_generic(std::move(evaluator));
-    });
+  if (auto kernel = config::get_or<std::string>("custom_eval_kernel", ""); kernel == "add_int32") {
+    fmt::print("Using custom add int32 kernel with size {}\n", size);
+    for (int i = 0; i < partition.size(); i += 1) {
+      tasks.emplace_back([&, i] {
+        ThomasAdditionEvaluator<Ret, Arg, StepFn, size> evaluator(std::move(partition[i]));
+        stores[i] = eval_generic(std::move(evaluator));
+      });
+    }
+  } else {
+    fmt::print("Using int32 ernel with size {}\n", size);
+      for (int i = 0; i < partition.size(); i += 1) {
+        tasks.emplace_back([&, i] {
+        SimpleEvaluator evaluator(std::move(partition[i]), eval_fn);
+        stores[i] = eval_generic(std::move(evaluator));
+      });
+    }
   }
   threads::run_in_parallel(tasks);
 
