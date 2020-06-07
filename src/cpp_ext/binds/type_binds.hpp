@@ -249,7 +249,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
             "__or__",
             [](const Array& self, const Array& other) { return self | other; })
         .def("__xor__", [](const Array& self, Val val) { return self ^ val; })
-        .def("__xor__", [](const Array& self, Val val) { return val ^ self; })
+        .def("__rxor__", [](const Array& self, Val val) { return val ^ self; })
         .def(
             "__xor__",
             [](const Array& self, const Array& other) { return self ^ other; })
@@ -257,7 +257,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
             "__lshift__",
             [](const Array& self, Val val) { return self << val; })
         .def(
-            "__lshift__",
+            "__rlshift__",
             [](const Array& self, Val val) { return val << self; })
         .def(
             "__lshift__",
@@ -266,37 +266,66 @@ inline void bind_array_class(py::module& m, const char* class_name) {
             "__rshift__",
             [](const Array& self, Val val) { return self >> val; })
         .def(
-            "__rshift__",
+            "__rrshift__",
             [](const Array& self, Val val) { return val >> self; })
         .def("__rshift__", [](const Array& self, const Array& other) {
           return self >> other;
         });
   } else if constexpr (std::is_same_v<Val, bool>) {
     cls.def("__and__", [](const Array& self, Val val) { return self && val; })
-       .def("__rand__", [](const Array& self, Val val) { return val && self; })
-       .def(
+        .def("__rand__", [](const Array& self, Val val) { return val && self; })
+        .def(
             "__and__",
             [](const Array& self, const Array& other) { return self && other; })
-       .def("__or__", [](const Array& self, Val val) { return self || val; })
-       .def("__ror__", [](const Array& self, Val val) { return val || self; })
-       .def(
-            "__or__",
-            [](const Array& self, const Array& other) { return self || other; });
-    }
+        .def("__or__", [](const Array& self, Val val) { return self || val; })
+        .def("__ror__", [](const Array& self, Val val) { return val || self; })
+        .def("__or__", [](const Array& self, const Array& other) {
+          return self || other;
+        });
+  }
 
-  // Add logical comparison operations.
+  // Add logical operations.
+  if constexpr (std::is_same_v<Val, bool>) {
+    cls.def("__and__", [](const Array& self, Val val) { return self && val; })
+        .def("__rand__", [](const Array& self, Val val) { return val && self; })
+        .def(
+            "__and__",
+            [](const Array& self, const Array& other) { return self && other; })
+        .def("__or__", [](const Array& self, Val val) { return self || val; })
+        .def("__ror__", [](const Array& self, Val val) { return val || self; })
+        .def("__or__", [](const Array& self, const Array& other) {
+          return self || other;
+        });
+  }
+
+  // Add comparison operations.
   cls.def("__eq__", [](const Array& self, Val val) { return self == val; })
-      .def("__eq__", [](const Array&self, const Array &other) { return self == other; })
+      .def(
+          "__eq__",
+          [](const Array& self, const Array& other) { return self == other; })
       .def("__ne__", [](const Array& self, Val val) { return self != val; })
-      .def("__ne__", [](const Array&self, const Array &other) { return self != other; })
+      .def(
+          "__ne__",
+          [](const Array& self, const Array& other) { return self != other; })
       .def("__le__", [](const Array& self, Val val) { return self <= val; })
-      .def("__le__", [](const Array&self, const Array &other) { return self <= other; })
+      .def(
+          "__le__",
+          [](const Array& self, const Array& other) { return self <= other; })
       .def("__lt__", [](const Array& self, Val val) { return self < val; })
-      .def("__lt__", [](const Array&self, const Array &other) { return self < other; })
+      .def(
+          "__lt__",
+          [](const Array& self, const Array& other) { return self < other; })
       .def("__ge__", [](const Array& self, Val val) { return self >= val; })
-      .def("__ge__", [](const Array&self, const Array &other) { return self >= other; })
+      .def(
+          "__ge__",
+          [](const Array& self, const Array& other) { return self >= other; })
       .def("__gt__", [](const Array& self, Val val) { return self > val; })
-      .def("__gt__", [](const Array& self, const Array &other) { return self > other; })
+      .def(
+          "__gt__",
+          [](const Array& self, const Array& other) { return self > other; })
+      .def(
+          "__gt__",
+          [](const Array& self, const Array& other) { return self > other; })
       .def(
           "coalesce",
           [](const Array& self, Val val) {
