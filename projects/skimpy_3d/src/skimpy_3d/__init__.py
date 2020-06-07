@@ -1,6 +1,14 @@
 import numpy as np
 import skimpy
-from _skimpy_3d_cpp_ext import generate_mesh, VoxelConfig, VoxelMesh, EmptyVoxel, ColorVoxel
+from _skimpy_3d_cpp_ext import (
+    generate_mesh,
+    VoxelConfig,
+    VoxelMesh,
+    EmptyVoxel,
+    ColorVoxel,
+    marching_cubes,
+    SurfaceMesh,
+)
 
 
 class VoxelTensor:

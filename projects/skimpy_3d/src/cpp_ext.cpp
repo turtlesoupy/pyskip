@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "marching_cubes.hpp"
 #include "voxels.hpp"
 
 namespace py = pybind11;
@@ -32,4 +33,13 @@ PYBIND11_MODULE(_skimpy_3d_cpp_ext, m) {
 
   // Bind the mesh generation routine.
   m.def("generate_mesh", generate_mesh);
+
+  // Bind the SurfaceMesh class.
+  py::class_<SurfaceMesh>(m, "SurfaceMesh")
+      .def(py::init<>())
+      .def_readwrite("positions", &SurfaceMesh::positions)
+      .def_readwrite("triangles", &SurfaceMesh::triangles);
+
+  // Bind the marching cubes routine.
+  m.def("marching_cubes", marching_cubes);
 };
