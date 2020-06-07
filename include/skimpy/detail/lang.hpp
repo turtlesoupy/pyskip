@@ -754,7 +754,7 @@ inline auto execute_plan_fixed(EvalPlan plan) {
   auto eval_fn = [&](const box::Box* b) {
     thread_local box::Box stack[stack_capacity];
     auto sp = &stack[0];
-    for (auto node : plan.nodes) {
+    for (auto& node : plan.nodes) {
       switch (node.kind) {
         case EvalPlan::Node::SOURCE:
           *sp++ = b[node.index];
@@ -775,6 +775,28 @@ inline auto execute_plan_fixed(EvalPlan plan) {
 
     return (sp - 1)->template get<Val>();
   };
+
+  if (auto kernel = config::get_or<std::string>("custom_eval_kernel", ""); kernel != "") {
+    if (kernel == "add_int32") {
+      fmt::print("Using custom add int32 kernel with size {}\n", size);
+      auto eval_fn2 = [&](const box::Box* b) {
+        int32_t accum = 0;
+        for (int i = 0; i < size; i++) {
+          accum += b[i].template get<int32_t>();
+        }
+        return accum;
+      };
+      return std::visit(
+          [&](auto&& pool) {
+            return eval::eval_simple<Val, box::Box>(std::move(eval_fn2), pool);
+          },
+          make_pool<size>(plan));
+    } else {
+      fmt::print("Custom kernel '{}' not found\n", kernel);
+    }
+  } else {
+    fmt::print("No kernel specified\n");
+  }
 
   return std::visit(
       [&](auto&& pool) {
