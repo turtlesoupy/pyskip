@@ -136,7 +136,7 @@ class Benchmark:
         return ret
 
     @classmethod
-    def run_suite(cls, repeats, suite, **other_args):
+    def run_suite(cls, repeats, suite, do_extra=False, **other_args):
         ret = {k: {k1: v1 for k1, v1 in v.items() if k1 not in ("kwargs", "method")} for k, v in suite.items()}
 
         klass = cls(**other_args)
@@ -148,6 +148,9 @@ class Benchmark:
                 tot += getattr(klass, method)(**kwargs)
             out = tot / repeats
             ret[k]["val"] = out
+
+        if do_extra and hasattr(klass, "extra_description"):
+            ret["extra"] = klass.extra_description()
         
         return ret
 
@@ -192,9 +195,10 @@ class Benchmark:
 
 
 class DenseArrayBenchmark(Benchmark):
-    def __init__(self, array_length, num_inputs, suite_kwargs=None):
+    def __init__(self, array_length, num_inputs, override_skimpy_threads=None, suite_kwargs=None):
         self.array_length = array_length
         self.num_inputs = num_inputs
+        self.override_skimpy_threads = override_skimpy_threads
         self.suite_kwargs = suite_kwargs or {}
 
     @cached_property
@@ -228,12 +232,12 @@ class DenseArrayBenchmark(Benchmark):
             num_elements=self.array_length, num_input_arrays=self.num_inputs, include_compile_time=False
         ) * MICR_TO_MS
 
-    def run_skimpy(self, num_threads=1, use_custom_kernel=False):
+    def run_skimpy(self, num_threads=1, use_custom_kernel=False, use_accelerated=False):
         inputs = [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs]
         gc.collect()
 
-        with num_threads_scope(num_threads):
-            set_value("accelerated_eval", False)
+        with num_threads_scope(self.override_skimpy_threads or num_threads):
+            set_value("accelerated_eval", use_accelerated)
             set_value("flush_tree_size_threshold", 2 ** 30)
             if use_custom_kernel:
                 set_value("custom_eval_kernel", "add_int32")
@@ -291,6 +295,28 @@ class RunLengthArrayBenchmark(Benchmark):
     @cached_property
     def _skimpy_inputs(self):
         return [_skimpy_cpp_ext.from_numpy(t) for t in self._numpy_inputs]
+
+    def extra_description(self):
+        n_elements = 0
+        n_nonzero = 0
+        n_runs = 0
+        for numpy_input, skimpy_input in zip(self._numpy_inputs, self._skimpy_inputs):
+            n_elements += len(numpy_input)
+            n_nonzero += sum(numpy_input != 0)
+            n_runs += len(skimpy_input.runs()[0])
+
+        res = functools.reduce(lambda x, y: x + y, self._numpy_inputs)
+        n_nonzero_result = sum(res != 0)
+        n_runs_result = skimpy.Tensor.from_numpy(res).rle_length()
+
+        return {
+            "dense_bytes": 4 * n_elements / self.num_inputs,
+            "sparse_bytes": 8 * n_nonzero / self.num_inputs,
+            "run_bytes": 8 * n_runs / self.num_inputs,
+            "output_dense_bytes": 4 * n_elements,
+            "output_sparse_bytes": 8 * n_nonzero_result,
+            "output_run_bytes": 8 * n_runs_result,
+        }
 
     def run_numpy(self):
         inputs = self._numpy_inputs
