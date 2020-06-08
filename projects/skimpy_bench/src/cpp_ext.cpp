@@ -18,11 +18,12 @@ using Pos = int32_t;
 #else
 using Pos = size_t;
 #define NO_TREE_VECTORIZE __attribute__((optimize("no-tree-vectorize")))
+#define NO_INLINE __attribute__ ((noinline))
 #endif
 
 static constexpr int kMaxInputs = 1024;
 
-std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
+NO_INLINE std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   std::unique_ptr<int32_t[]> space(new int32_t[size]);
   int32_t* spacePtr = space.get();
 
@@ -40,7 +41,7 @@ std::unique_ptr<int32_t[]> newRandIntArray(const Pos size) {
   return space;
 }
 
-std::vector<int32_t> randRunLengthArray(
+NO_INLINE std::vector<int32_t> randRunLengthArray(
     const Pos size,
     const int32_t numNonZero,
     const int32_t runLength,
