@@ -510,7 +510,7 @@ inline auto schedule(ExprGraph::Handle root) {
         }
       }
 
-      if (width <= 16 && depth < 128) {
+      if (width <= 32 && depth < 128) {
         width_map[step] = width;
         depth_map[step] = depth;
       } else {
@@ -852,6 +852,70 @@ inline auto execute_plan(EvalPlan plan) {
       return execute_plan_fixed<Val, 31>(std::move(plan));
     case 32:
       return execute_plan_fixed<Val, 32>(std::move(plan));
+    case 33:
+      return execute_plan_fixed<Val, 33>(std::move(plan));
+    case 34:
+      return execute_plan_fixed<Val, 34>(std::move(plan));
+    case 35:
+      return execute_plan_fixed<Val, 35>(std::move(plan));
+    case 36:
+      return execute_plan_fixed<Val, 36>(std::move(plan));
+    case 37:
+      return execute_plan_fixed<Val, 37>(std::move(plan));
+    case 38:
+      return execute_plan_fixed<Val, 38>(std::move(plan));
+    case 39:
+      return execute_plan_fixed<Val, 39>(std::move(plan));
+    case 40:
+      return execute_plan_fixed<Val, 40>(std::move(plan));
+    case 41:
+      return execute_plan_fixed<Val, 41>(std::move(plan));
+    case 42:
+      return execute_plan_fixed<Val, 42>(std::move(plan));
+    case 43:
+      return execute_plan_fixed<Val, 43>(std::move(plan));
+    case 44:
+      return execute_plan_fixed<Val, 44>(std::move(plan));
+    case 45:
+      return execute_plan_fixed<Val, 45>(std::move(plan));
+    case 46:
+      return execute_plan_fixed<Val, 46>(std::move(plan));
+    case 47:
+      return execute_plan_fixed<Val, 47>(std::move(plan));
+    case 48:
+      return execute_plan_fixed<Val, 48>(std::move(plan));
+    case 49:
+      return execute_plan_fixed<Val, 49>(std::move(plan));
+    case 50:
+      return execute_plan_fixed<Val, 50>(std::move(plan));
+    case 51:
+      return execute_plan_fixed<Val, 51>(std::move(plan));
+    case 52:
+      return execute_plan_fixed<Val, 52>(std::move(plan));
+    case 53:
+      return execute_plan_fixed<Val, 53>(std::move(plan));
+    case 54:
+      return execute_plan_fixed<Val, 54>(std::move(plan));
+    case 55:
+      return execute_plan_fixed<Val, 55>(std::move(plan));
+    case 56:
+      return execute_plan_fixed<Val, 56>(std::move(plan));
+    case 57:
+      return execute_plan_fixed<Val, 57>(std::move(plan));
+    case 58:
+      return execute_plan_fixed<Val, 58>(std::move(plan));
+    case 59:
+      return execute_plan_fixed<Val, 59>(std::move(plan));
+    case 60:
+      return execute_plan_fixed<Val, 60>(std::move(plan));
+    case 61:
+      return execute_plan_fixed<Val, 61>(std::move(plan));
+    case 62:
+      return execute_plan_fixed<Val, 62>(std::move(plan));
+    case 63:
+      return execute_plan_fixed<Val, 63>(std::move(plan));
+    case 64:
+      return execute_plan_fixed<Val, 64>(std::move(plan));
     default:
       CHECK_UNREACHABLE("Invalid number of sources.");
   }
