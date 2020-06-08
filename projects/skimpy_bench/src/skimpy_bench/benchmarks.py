@@ -120,6 +120,10 @@ class Benchmark:
             for k, v in suite.items():
                 kwargs = v.get("kwargs", {})
                 method = v["method"]
+
+                if method == "run_taco" and not TACO_ENABLED:
+                    continue
+
                 tot = 0
                 for i in range(repeats):
                     tot += getattr(klass, method)(**kwargs)
@@ -143,6 +147,9 @@ class Benchmark:
         for k, v in suite.items():
             kwargs = v.get("kwargs", {})
             method = v["method"]
+            if method == "run_taco" and not TACO_ENABLED:
+                continue
+
             tot = 0
             for i in range(repeats):
                 tot += getattr(klass, method)(**kwargs)
