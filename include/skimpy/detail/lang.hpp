@@ -510,7 +510,7 @@ inline auto schedule(ExprGraph::Handle root) {
         }
       }
 
-      if (width <= 32 && depth < 128) {
+      if (width <= 128 && depth < 128) {
         width_map[step] = width;
         depth_map[step] = depth;
       } else {
@@ -916,6 +916,390 @@ inline auto execute_plan(EvalPlan plan) {
       return execute_plan_fixed<Val, 63>(std::move(plan));
     case 64:
       return execute_plan_fixed<Val, 64>(std::move(plan));
+    case 65:
+      return execute_plan_fixed<Val, 65>(std::move(plan));
+    case 66:
+      return execute_plan_fixed<Val, 66>(std::move(plan));
+    case 67:
+      return execute_plan_fixed<Val, 67>(std::move(plan));
+    case 68:
+      return execute_plan_fixed<Val, 68>(std::move(plan));
+    case 69:
+      return execute_plan_fixed<Val, 69>(std::move(plan));
+    case 70:
+      return execute_plan_fixed<Val, 70>(std::move(plan));
+    case 71:
+      return execute_plan_fixed<Val, 71>(std::move(plan));
+    case 72:
+      return execute_plan_fixed<Val, 72>(std::move(plan));
+    case 73:
+      return execute_plan_fixed<Val, 73>(std::move(plan));
+    case 74:
+      return execute_plan_fixed<Val, 74>(std::move(plan));
+    case 75:
+      return execute_plan_fixed<Val, 75>(std::move(plan));
+    case 76:
+      return execute_plan_fixed<Val, 76>(std::move(plan));
+    case 77:
+      return execute_plan_fixed<Val, 77>(std::move(plan));
+    case 78:
+      return execute_plan_fixed<Val, 78>(std::move(plan));
+    case 79:
+      return execute_plan_fixed<Val, 79>(std::move(plan));
+    case 80:
+      return execute_plan_fixed<Val, 80>(std::move(plan));
+    case 81:
+      return execute_plan_fixed<Val, 81>(std::move(plan));
+    case 82:
+      return execute_plan_fixed<Val, 82>(std::move(plan));
+    case 83:
+      return execute_plan_fixed<Val, 83>(std::move(plan));
+    case 84:
+      return execute_plan_fixed<Val, 84>(std::move(plan));
+    case 85:
+      return execute_plan_fixed<Val, 85>(std::move(plan));
+    case 86:
+      return execute_plan_fixed<Val, 86>(std::move(plan));
+    case 87:
+      return execute_plan_fixed<Val, 87>(std::move(plan));
+    case 88:
+      return execute_plan_fixed<Val, 88>(std::move(plan));
+    case 89:
+      return execute_plan_fixed<Val, 89>(std::move(plan));
+    case 90:
+      return execute_plan_fixed<Val, 90>(std::move(plan));
+    case 91:
+      return execute_plan_fixed<Val, 91>(std::move(plan));
+    case 92:
+      return execute_plan_fixed<Val, 92>(std::move(plan));
+    case 93:
+      return execute_plan_fixed<Val, 93>(std::move(plan));
+    case 94:
+      return execute_plan_fixed<Val, 94>(std::move(plan));
+    case 95:
+      return execute_plan_fixed<Val, 95>(std::move(plan));
+    case 96:
+      return execute_plan_fixed<Val, 96>(std::move(plan));
+    case 97:
+      return execute_plan_fixed<Val, 97>(std::move(plan));
+    case 98:
+      return execute_plan_fixed<Val, 98>(std::move(plan));
+    case 99:
+      return execute_plan_fixed<Val, 99>(std::move(plan));
+    case 100:
+      return execute_plan_fixed<Val, 100>(std::move(plan));
+    case 101:
+      return execute_plan_fixed<Val, 101>(std::move(plan));
+    case 102:
+      return execute_plan_fixed<Val, 102>(std::move(plan));
+    case 103:
+      return execute_plan_fixed<Val, 103>(std::move(plan));
+    case 104:
+      return execute_plan_fixed<Val, 104>(std::move(plan));
+    case 105:
+      return execute_plan_fixed<Val, 105>(std::move(plan));
+    case 106:
+      return execute_plan_fixed<Val, 106>(std::move(plan));
+    case 107:
+      return execute_plan_fixed<Val, 107>(std::move(plan));
+    case 108:
+      return execute_plan_fixed<Val, 108>(std::move(plan));
+    case 109:
+      return execute_plan_fixed<Val, 109>(std::move(plan));
+    case 110:
+      return execute_plan_fixed<Val, 110>(std::move(plan));
+    case 111:
+      return execute_plan_fixed<Val, 111>(std::move(plan));
+    case 112:
+      return execute_plan_fixed<Val, 112>(std::move(plan));
+    case 113:
+      return execute_plan_fixed<Val, 113>(std::move(plan));
+    case 114:
+      return execute_plan_fixed<Val, 114>(std::move(plan));
+    case 115:
+      return execute_plan_fixed<Val, 115>(std::move(plan));
+    case 116:
+      return execute_plan_fixed<Val, 116>(std::move(plan));
+    case 117:
+      return execute_plan_fixed<Val, 117>(std::move(plan));
+    case 118:
+      return execute_plan_fixed<Val, 118>(std::move(plan));
+    case 119:
+      return execute_plan_fixed<Val, 119>(std::move(plan));
+    case 120:
+      return execute_plan_fixed<Val, 120>(std::move(plan));
+    case 121:
+      return execute_plan_fixed<Val, 121>(std::move(plan));
+    case 122:
+      return execute_plan_fixed<Val, 122>(std::move(plan));
+    case 123:
+      return execute_plan_fixed<Val, 123>(std::move(plan));
+    case 124:
+      return execute_plan_fixed<Val, 124>(std::move(plan));
+    case 125:
+      return execute_plan_fixed<Val, 125>(std::move(plan));
+    case 126:
+      return execute_plan_fixed<Val, 126>(std::move(plan));
+    case 127:
+      return execute_plan_fixed<Val, 127>(std::move(plan));
+    case 128:
+      return execute_plan_fixed<Val, 128>(std::move(plan));
+    case 129:
+      return execute_plan_fixed<Val, 129>(std::move(plan));
+    case 130:
+      return execute_plan_fixed<Val, 130>(std::move(plan));
+    case 131:
+      return execute_plan_fixed<Val, 131>(std::move(plan));
+    case 132:
+      return execute_plan_fixed<Val, 132>(std::move(plan));
+    case 133:
+      return execute_plan_fixed<Val, 133>(std::move(plan));
+    case 134:
+      return execute_plan_fixed<Val, 134>(std::move(plan));
+    case 135:
+      return execute_plan_fixed<Val, 135>(std::move(plan));
+    case 136:
+      return execute_plan_fixed<Val, 136>(std::move(plan));
+    case 137:
+      return execute_plan_fixed<Val, 137>(std::move(plan));
+    case 138:
+      return execute_plan_fixed<Val, 138>(std::move(plan));
+    case 139:
+      return execute_plan_fixed<Val, 139>(std::move(plan));
+    case 140:
+      return execute_plan_fixed<Val, 140>(std::move(plan));
+    case 141:
+      return execute_plan_fixed<Val, 141>(std::move(plan));
+    case 142:
+      return execute_plan_fixed<Val, 142>(std::move(plan));
+    case 143:
+      return execute_plan_fixed<Val, 143>(std::move(plan));
+    case 144:
+      return execute_plan_fixed<Val, 144>(std::move(plan));
+    case 145:
+      return execute_plan_fixed<Val, 145>(std::move(plan));
+    case 146:
+      return execute_plan_fixed<Val, 146>(std::move(plan));
+    case 147:
+      return execute_plan_fixed<Val, 147>(std::move(plan));
+    case 148:
+      return execute_plan_fixed<Val, 148>(std::move(plan));
+    case 149:
+      return execute_plan_fixed<Val, 149>(std::move(plan));
+    case 150:
+      return execute_plan_fixed<Val, 150>(std::move(plan));
+    case 151:
+      return execute_plan_fixed<Val, 151>(std::move(plan));
+    case 152:
+      return execute_plan_fixed<Val, 152>(std::move(plan));
+    case 153:
+      return execute_plan_fixed<Val, 153>(std::move(plan));
+    case 154:
+      return execute_plan_fixed<Val, 154>(std::move(plan));
+    case 155:
+      return execute_plan_fixed<Val, 155>(std::move(plan));
+    case 156:
+      return execute_plan_fixed<Val, 156>(std::move(plan));
+    case 157:
+      return execute_plan_fixed<Val, 157>(std::move(plan));
+    case 158:
+      return execute_plan_fixed<Val, 158>(std::move(plan));
+    case 159:
+      return execute_plan_fixed<Val, 159>(std::move(plan));
+    case 160:
+      return execute_plan_fixed<Val, 160>(std::move(plan));
+    case 161:
+      return execute_plan_fixed<Val, 161>(std::move(plan));
+    case 162:
+      return execute_plan_fixed<Val, 162>(std::move(plan));
+    case 163:
+      return execute_plan_fixed<Val, 163>(std::move(plan));
+    case 164:
+      return execute_plan_fixed<Val, 164>(std::move(plan));
+    case 165:
+      return execute_plan_fixed<Val, 165>(std::move(plan));
+    case 166:
+      return execute_plan_fixed<Val, 166>(std::move(plan));
+    case 167:
+      return execute_plan_fixed<Val, 167>(std::move(plan));
+    case 168:
+      return execute_plan_fixed<Val, 168>(std::move(plan));
+    case 169:
+      return execute_plan_fixed<Val, 169>(std::move(plan));
+    case 170:
+      return execute_plan_fixed<Val, 170>(std::move(plan));
+    case 171:
+      return execute_plan_fixed<Val, 171>(std::move(plan));
+    case 172:
+      return execute_plan_fixed<Val, 172>(std::move(plan));
+    case 173:
+      return execute_plan_fixed<Val, 173>(std::move(plan));
+    case 174:
+      return execute_plan_fixed<Val, 174>(std::move(plan));
+    case 175:
+      return execute_plan_fixed<Val, 175>(std::move(plan));
+    case 176:
+      return execute_plan_fixed<Val, 176>(std::move(plan));
+    case 177:
+      return execute_plan_fixed<Val, 177>(std::move(plan));
+    case 178:
+      return execute_plan_fixed<Val, 178>(std::move(plan));
+    case 179:
+      return execute_plan_fixed<Val, 179>(std::move(plan));
+    case 180:
+      return execute_plan_fixed<Val, 180>(std::move(plan));
+    case 181:
+      return execute_plan_fixed<Val, 181>(std::move(plan));
+    case 182:
+      return execute_plan_fixed<Val, 182>(std::move(plan));
+    case 183:
+      return execute_plan_fixed<Val, 183>(std::move(plan));
+    case 184:
+      return execute_plan_fixed<Val, 184>(std::move(plan));
+    case 185:
+      return execute_plan_fixed<Val, 185>(std::move(plan));
+    case 186:
+      return execute_plan_fixed<Val, 186>(std::move(plan));
+    case 187:
+      return execute_plan_fixed<Val, 187>(std::move(plan));
+    case 188:
+      return execute_plan_fixed<Val, 188>(std::move(plan));
+    case 189:
+      return execute_plan_fixed<Val, 189>(std::move(plan));
+    case 190:
+      return execute_plan_fixed<Val, 190>(std::move(plan));
+    case 191:
+      return execute_plan_fixed<Val, 191>(std::move(plan));
+    case 192:
+      return execute_plan_fixed<Val, 192>(std::move(plan));
+    case 193:
+      return execute_plan_fixed<Val, 193>(std::move(plan));
+    case 194:
+      return execute_plan_fixed<Val, 194>(std::move(plan));
+    case 195:
+      return execute_plan_fixed<Val, 195>(std::move(plan));
+    case 196:
+      return execute_plan_fixed<Val, 196>(std::move(plan));
+    case 197:
+      return execute_plan_fixed<Val, 197>(std::move(plan));
+    case 198:
+      return execute_plan_fixed<Val, 198>(std::move(plan));
+    case 199:
+      return execute_plan_fixed<Val, 199>(std::move(plan));
+    case 200:
+      return execute_plan_fixed<Val, 200>(std::move(plan));
+    case 201:
+      return execute_plan_fixed<Val, 201>(std::move(plan));
+    case 202:
+      return execute_plan_fixed<Val, 202>(std::move(plan));
+    case 203:
+      return execute_plan_fixed<Val, 203>(std::move(plan));
+    case 204:
+      return execute_plan_fixed<Val, 204>(std::move(plan));
+    case 205:
+      return execute_plan_fixed<Val, 205>(std::move(plan));
+    case 206:
+      return execute_plan_fixed<Val, 206>(std::move(plan));
+    case 207:
+      return execute_plan_fixed<Val, 207>(std::move(plan));
+    case 208:
+      return execute_plan_fixed<Val, 208>(std::move(plan));
+    case 209:
+      return execute_plan_fixed<Val, 209>(std::move(plan));
+    case 210:
+      return execute_plan_fixed<Val, 210>(std::move(plan));
+    case 211:
+      return execute_plan_fixed<Val, 211>(std::move(plan));
+    case 212:
+      return execute_plan_fixed<Val, 212>(std::move(plan));
+    case 213:
+      return execute_plan_fixed<Val, 213>(std::move(plan));
+    case 214:
+      return execute_plan_fixed<Val, 214>(std::move(plan));
+    case 215:
+      return execute_plan_fixed<Val, 215>(std::move(plan));
+    case 216:
+      return execute_plan_fixed<Val, 216>(std::move(plan));
+    case 217:
+      return execute_plan_fixed<Val, 217>(std::move(plan));
+    case 218:
+      return execute_plan_fixed<Val, 218>(std::move(plan));
+    case 219:
+      return execute_plan_fixed<Val, 219>(std::move(plan));
+    case 220:
+      return execute_plan_fixed<Val, 220>(std::move(plan));
+    case 221:
+      return execute_plan_fixed<Val, 221>(std::move(plan));
+    case 222:
+      return execute_plan_fixed<Val, 222>(std::move(plan));
+    case 223:
+      return execute_plan_fixed<Val, 223>(std::move(plan));
+    case 224:
+      return execute_plan_fixed<Val, 224>(std::move(plan));
+    case 225:
+      return execute_plan_fixed<Val, 225>(std::move(plan));
+    case 226:
+      return execute_plan_fixed<Val, 226>(std::move(plan));
+    case 227:
+      return execute_plan_fixed<Val, 227>(std::move(plan));
+    case 228:
+      return execute_plan_fixed<Val, 228>(std::move(plan));
+    case 229:
+      return execute_plan_fixed<Val, 229>(std::move(plan));
+    case 230:
+      return execute_plan_fixed<Val, 230>(std::move(plan));
+    case 231:
+      return execute_plan_fixed<Val, 231>(std::move(plan));
+    case 232:
+      return execute_plan_fixed<Val, 232>(std::move(plan));
+    case 233:
+      return execute_plan_fixed<Val, 233>(std::move(plan));
+    case 234:
+      return execute_plan_fixed<Val, 234>(std::move(plan));
+    case 235:
+      return execute_plan_fixed<Val, 235>(std::move(plan));
+    case 236:
+      return execute_plan_fixed<Val, 236>(std::move(plan));
+    case 237:
+      return execute_plan_fixed<Val, 237>(std::move(plan));
+    case 238:
+      return execute_plan_fixed<Val, 238>(std::move(plan));
+    case 239:
+      return execute_plan_fixed<Val, 239>(std::move(plan));
+    case 240:
+      return execute_plan_fixed<Val, 240>(std::move(plan));
+    case 241:
+      return execute_plan_fixed<Val, 241>(std::move(plan));
+    case 242:
+      return execute_plan_fixed<Val, 242>(std::move(plan));
+    case 243:
+      return execute_plan_fixed<Val, 243>(std::move(plan));
+    case 244:
+      return execute_plan_fixed<Val, 244>(std::move(plan));
+    case 245:
+      return execute_plan_fixed<Val, 245>(std::move(plan));
+    case 246:
+      return execute_plan_fixed<Val, 246>(std::move(plan));
+    case 247:
+      return execute_plan_fixed<Val, 247>(std::move(plan));
+    case 248:
+      return execute_plan_fixed<Val, 248>(std::move(plan));
+    case 249:
+      return execute_plan_fixed<Val, 249>(std::move(plan));
+    case 250:
+      return execute_plan_fixed<Val, 250>(std::move(plan));
+    case 251:
+      return execute_plan_fixed<Val, 251>(std::move(plan));
+    case 252:
+      return execute_plan_fixed<Val, 252>(std::move(plan));
+    case 253:
+      return execute_plan_fixed<Val, 253>(std::move(plan));
+    case 254:
+      return execute_plan_fixed<Val, 254>(std::move(plan));
+    case 255:
+      return execute_plan_fixed<Val, 255>(std::move(plan));
+    case 256:
+      return execute_plan_fixed<Val, 256>(std::move(plan));
     default:
       CHECK_UNREACHABLE("Invalid number of sources.");
   }
@@ -932,6 +1316,7 @@ inline auto materialize(TypedExpr<Val> in) {
 
   // Schedule the materialization steps for this DAG.
   auto steps = schedule(root);
+  fmt::print("Number of steps in materialization: {}\n", steps.size());
 
   // Helper to build an eval plan for an expression to be materialized.
   auto plan_step = [&](ExprGraph::Handle step) {

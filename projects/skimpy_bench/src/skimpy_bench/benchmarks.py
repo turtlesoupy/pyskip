@@ -115,7 +115,10 @@ class Benchmark:
     def run_suite_axis(cls, varying_arg_name, varying_arg, repeats, suite, **other_args):
         ret = {k: {k1: v1 for k1, v1 in v.items() if k1 not in ("kwargs", "method")} for k, v in suite.items()}
         for val in varying_arg:
-            args = {varying_arg_name: val, **other_args}
+            if isinstance(val, dict):
+                args = {**val, **other_args}
+            else:
+                args = {varying_arg_name: val, **other_args}
             klass = cls(**args)
             for k, v in suite.items():
                 kwargs = v.get("kwargs", {})
@@ -372,9 +375,16 @@ class RunLengthArrayBenchmark(Benchmark):
             include_compile_time=False,
         ) * MICR_TO_MS
 
-    def run_memory(self):
+    def run_memory(self, encoding='sparse'):
+        if encoding == 'sparse': 
+            num_elements = self.num_non_zero * 2 * self.run_length
+        elif encoding == 'dense':
+            num_elements = self.array_length
+        elif encoding == 'rle':
+            num_elements = self.num_non_zero * 2
+
         return memory.no_simd_int_cum_sum_write(
-            num_elements=self.num_non_zero * 2,  # Sparse is assumed to be a list of (pos, val)
+            num_elements=num_elements,
             num_input_arrays=self.num_inputs,
             num_threads=4,
         ) * MICR_TO_MS
@@ -383,7 +393,6 @@ class RunLengthArrayBenchmark(Benchmark):
 class Dense3DConvolutionBenchmark(Benchmark):
     def __init__(self, shape, kernel_width, suite_kwargs=None):
         assert len(shape) == 3
-        assert kernel_width % 2 == 1
 
         self.shape = shape
         self.kernel_shape = tuple([kernel_width] * 3)
@@ -415,7 +424,7 @@ class Dense3DConvolutionBenchmark(Benchmark):
         kernel = self._numpy_kernel()
         t = Timer()
         with t:
-            res = scipy.signal.convolve(operand, kernel)
+            res = scipy.signal.convolve(operand, kernel, method='direct')
             print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
@@ -449,10 +458,10 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         run_length,
         align_inputs,
         deterministic_run_length,
+        num_kernels=1,
         suite_kwargs=None
     ):
         assert len(shape) == 3
-        assert kernel_width % 2 == 1
 
         self.shape = shape
         self.kernel_shape = tuple([kernel_width] * 3)
@@ -462,6 +471,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         self.run_length = run_length
         self.align_inputs = align_inputs
         self.deterministic_run_length = deterministic_run_length
+        self.num_kernels = num_kernels
         self.suite_kwargs = suite_kwargs or {}
 
     def _numpy_input(self, dtype=np.int32):
@@ -473,28 +483,33 @@ class RunLength3DConvolutionBenchmark(Benchmark):
             random_seed=42,
         ).reshape(self.shape).astype(dtype)
 
-    def _numpy_kernel(self, dtype=np.int32):
-        return np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+    def _numpy_kernels(self, dtype=np.int32):
+        return [
+            np.random.randint(2**3, size=self.kernel_shape, dtype=np.int32).astype(dtype)
+            for i in range(self.num_kernels)
+        ]
 
     def run_skimpy(self, num_threads=1):
         operand = skimpy.Tensor.from_numpy(self._numpy_input())
-        kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
+        kernels = [skimpy.Tensor.from_numpy(e) for e in self._numpy_kernels()]
 
         with num_threads_scope(num_threads):
             set_value("accelerated_eval", False) # TODO: check me
             set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
-                _ = skimpy.convolve.conv_3d(operand, kernel).eval()
+                for kernel in kernels:
+                    _ = skimpy.convolve.conv_3d(operand, kernel).eval()
             return t.duration_ms
 
     def run_numpy(self):
         operand = self._numpy_input()
-        kernel = self._numpy_kernel()
+        kernels = self._numpy_kernels()
         t = Timer()
         with t:
-            res = scipy.signal.convolve(operand, kernel)
-            print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
+            for kernel in kernels:
+                res = scipy.signal.convolve(operand, kernel, method='direct')
+                print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms
 
@@ -503,7 +518,9 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         with torch_thread_scope(num_threads):
             dtype = np.int32 if device == "cpu" else np.float32
             operand = torch.from_numpy(self._numpy_input(dtype=dtype)).to(device).reshape((1, 1) + self.shape)
-            kernel = torch.from_numpy(self._numpy_kernel(dtype=dtype)).to(device).reshape((1, 1) + self.kernel_shape)
+            kernel = torch.from_numpy(
+                np.concatenate(self._numpy_kernels(dtype=dtype)).reshape((-1, 1) + self.kernel_shape)
+            ).to(device)
 
             t = Timer()
             with t:
@@ -639,7 +656,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
         kernel = skimpy.Tensor.from_numpy(self._numpy_kernel())
 
         with num_threads_scope(num_threads):
-            set_value("accelerated_eval", False) # TODO: check me
+            set_value("accelerated_eval", True) # TODO: check me
             set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
@@ -656,8 +673,7 @@ class MinecraftConvolutionBenchmark(Benchmark):
         t = Timer()
         with t:
             for operand in operands:
-                res = scipy.signal.convolve(operand, kernel)
-                print(res[-1, -1, -1])  # Numpy can be asynchronous, this forces an eval
+                scipy.signal.convolve(operand, kernel, method='direct')
 
         return t.duration_ms
 
@@ -673,14 +689,11 @@ class MinecraftConvolutionBenchmark(Benchmark):
             else:
                 torch_operands = [torch.from_numpy(e.astype(dtype)).to(device).reshape((1, 1) + e.shape) for e in self.numpy_chunk_list]
 
-            rets = []
             t = Timer()
             with t:
                 for operand in torch_operands:
-                    rets.append(torch.nn.functional.conv3d(operand, kernel))
-                for ret in rets:
-                    # Force torch to materialize if it is on the GPU
-                    tst = ret[0, 0, 0, 0, 0].cpu().item()
+                    torch.nn.functional.conv3d(operand, kernel)
+                torch.cuda.synchronize()
             return t.duration_ms
 
     def run_memory(self):
@@ -723,6 +736,17 @@ class MNISTConvolutionBenchmark(Benchmark):
             for _ in range(self.num_kernels)
         ]
 
+    def extra_description(self):
+        n_elements = functools.reduce(lambda x, y: x * y, self.mnist_np_array.shape)
+        n_nonzero = (self.mnist_np_array != 0).sum()
+        n_runs = skimpy.Tensor.from_numpy(self.mnist_np_array).rle_length()
+
+        return {
+            "dense_bytes": 4 * n_elements,
+            "sparse_bytes": 8 * n_nonzero,
+            "run_bytes": 8 * n_runs,
+        }
+
     def run_numpy(self, use_mt=False):
         operand = self.mnist_np_array
         kernels = self._numpy_kernels()
@@ -730,7 +754,7 @@ class MNISTConvolutionBenchmark(Benchmark):
         t = Timer()
         with t:
             for kernel in kernels:
-                res = scipy.signal.convolve(operand, kernel)
+                res = scipy.signal.convolve(operand, kernel, method='direct')
                 print(res[-1, -1])  # Numpy can be asynchronous, this forces an eval
 
         return t.duration_ms

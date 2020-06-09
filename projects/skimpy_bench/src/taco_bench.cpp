@@ -44,7 +44,7 @@ taco::Tensor<int32_t> randTacoSparse(
     if (!deterministicRunLength) {
       myRunLength = runLength <= 1 ? 1 : runLengthRandom(dre);
     }
-    for (int j = 1; j < runLength && (insertPosition + j) < size; j++) {
+    for (int j = 1; j < myRunLength && (insertPosition + j) < size; j++) {
       out.insert({insertPosition + j}, value);
     }
   }
@@ -87,10 +87,10 @@ auto tacoSparseSum(
 
   auto startTime = std::chrono::high_resolution_clock::now();
   out.compile();
-  out.assemble();
   if (!includeCompile) {
     startTime = std::chrono::high_resolution_clock::now();
   }
+  out.assemble();
   out.compute();
   auto duration = std::chrono::high_resolution_clock::now() - startTime;
 
@@ -125,10 +125,10 @@ auto tacoDenseSum(
 
   auto startTime = std::chrono::high_resolution_clock::now();
   out.compile();
-  out.assemble();
   if (!includeCompile) {
     startTime = std::chrono::high_resolution_clock::now();
   }
+  out.assemble();
   out.compute();
   auto duration = std::chrono::high_resolution_clock::now() - startTime;
 
