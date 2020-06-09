@@ -24,6 +24,18 @@ def conv_2d(tensor: Tensor, kernel: Tensor, padding=0, fill=0) -> Tensor:
     return out
 
 
+def pad_3d_tensor(tensor, padding, fill):
+    assert tensor.ndim == 3
+    tw, th, td = tensor.shape
+    pw, ph, pd = broadcast_shape(3, padding)
+
+    # Assign the input tensor into one that's padded with the fill value.
+    sw, sh, sd = tw + 2 * pw, th + 2 * ph, td + 2 * pd
+    s = Tensor(shape=(sw, sh, sd), dtype=tensor.dtype, val=fill)
+    s[pw:sw - pw, ph:sh - ph, pd:sd - pd] = tensor
+    return s
+
+
 def conv_3d(tensor: Tensor, kernel: Tensor, padding=0, fill=0) -> Tensor:
     assert tensor.ndim == 3
     assert kernel.ndim == 3
