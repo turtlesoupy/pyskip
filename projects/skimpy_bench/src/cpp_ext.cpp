@@ -52,8 +52,7 @@ NO_INLINE std::vector<int32_t> randRunLengthArray(
   std::uniform_int_distribution<int32_t> insertionRandom(0, size - 1);
   std::uniform_int_distribution<int32_t> valueRandom(0, INT16_MAX);
 
-  std::vector<int32_t> ret;
-  ret.resize(size);
+  std::vector<int32_t> ret(size, 0);
 
   for (int i = 0; i < numNonZero; i++) {
     auto insertPosition = insertionRandom(dre);
@@ -102,7 +101,7 @@ NO_TREE_VECTORIZE auto noSIMDIntCumSumWrite(
   auto duration = std::chrono::high_resolution_clock::now() - startTime;
   return std::make_tuple(
       std::chrono::duration_cast<std::chrono::microseconds>(duration).count(),
-      outputPtr[0]);
+      outputPtr[0] + outputPtr[num - 1]);
 }
 
 NO_TREE_VECTORIZE auto noSIMDIntSumMultiInput(
