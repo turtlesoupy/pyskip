@@ -414,9 +414,9 @@ class Dense3DConvolutionBenchmark(Benchmark):
         with torch_thread_scope(num_threads):
             t = Timer()
             with t:
-                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
-                # Force torch to materialize if it is on the GPU
-                tst = ret[0, 0, 0, 0, 0].item()
+                torch.nn.functional.conv3d(operand, kernel)
+                if device != "cpu":
+                    torch.cuda.synchronize()
             return t.duration_ms
 
     def run_numpy(self):
@@ -524,9 +524,9 @@ class RunLength3DConvolutionBenchmark(Benchmark):
 
             t = Timer()
             with t:
-                ret = torch.nn.functional.conv3d(operand, kernel).cpu()
-                # Force torch to materialize if it is on the GPU
-                tst = ret[0, 0, 0, 0, 0].item()
+                torch.nn.functional.conv3d(operand, kernel)
+                if device != "cpu":
+                    torch.cuda.synchronize()
         return t.duration_ms
 
     def run_memory(self):
@@ -693,12 +693,20 @@ class MinecraftConvolutionBenchmark(Benchmark):
             with t:
                 for operand in torch_operands:
                     torch.nn.functional.conv3d(operand, kernel)
-                torch.cuda.synchronize()
+                if device != "cpu":
+                    torch.cuda.synchronize()
             return t.duration_ms
 
-    def run_memory(self):
+    def run_memory(self, encoding='rle'):
+        if encoding == 'rle':
+            num_elements = 2 * self.megatensor.rle_length()
+        elif encoding == 'mixed':
+            num_elements = sum(e.size for e in self.numpy_chunk_list)
+        else:
+            raise RuntimeError("BAD")
+
         return memory.no_simd_int_cum_sum_write(
-            num_elements=len(self.megatensor),
+            num_elements=num_elements,
             num_input_arrays=1,
             num_threads=4,
         ) * MICR_TO_MS
@@ -779,14 +787,12 @@ class MNISTConvolutionBenchmark(Benchmark):
             operand = torch.from_numpy(self.mnist_np_array.astype(dtype)).to(device).reshape((1, 1) + self.mnist_np_array.shape)
             kernels = [torch.from_numpy(e.astype(dtype)).to(device).reshape((1, 1) + self.kernel_shape) for e in self._numpy_kernels()]
 
-            rets = []
             t = Timer()
             with t:
                 for kernel in kernels:
-                    rets.append(torch.nn.functional.conv2d(operand, kernel))
-                for ret in rets:
-                    # Force torch to materialize if it is on the GPU
-                    tst = ret[0, 0, 0, 0].cpu().item()
+                    torch.nn.functional.conv2d(operand, kernel)
+                if device != "cpu":
+                    torch.cuda.synchronize()
         return t.duration_ms
 
     def run_memory(self):

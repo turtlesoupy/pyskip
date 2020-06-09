@@ -128,7 +128,11 @@ class SkimpyMinecraftLevel:
             end_y = start_y + xyz_tensor_shape[1]
             end_z = start_z + xyz_tensor_shape[2]
             rng = (slice(start_x, end_x, 1), slice(start_y, end_y, 1), slice(start_z, end_z, 1))
-            megatensor[self._xyz_to_skimpy_col(rng, self.column_order)] = chunk.tensor
+            try:
+                megatensor[self._xyz_to_skimpy_col(rng, self.column_order)] = chunk.tensor
+            except ValueError:
+                print(rng)
+                raise
         return megatensor
 
     @classmethod
