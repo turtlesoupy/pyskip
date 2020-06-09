@@ -712,7 +712,7 @@ auto eval_simple(EvalFn<Arg, Ret> eval_fn, SimplePool<Arg, StepFn, size> pool) {
       });
     }
   } else {
-    fmt::print("Using int32 ernel with size {}\n", size);
+    fmt::print("Using normal kernel with size {}\n", size);
       for (int i = 0; i < partition.size(); i += 1) {
         tasks.emplace_back([&, i] {
         SimpleEvaluator evaluator(std::move(partition[i]), eval_fn);
