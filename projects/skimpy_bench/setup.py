@@ -57,15 +57,16 @@ class CMakeBuild(build_ext):
                     ext.root_dir,
                     f"-DPYTHON_EXECUTABLE={sys.executable}",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}",
-                    f"-DSKIMPY_BENCH_ENABLE_TACO=OFF",
                 ],
                 windows_args=[
                     "-Ax64",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{config.upper()}={output_dir}",
+                    f"-DSKIMPY_BENCH_ENABLE_TACO=OFF",
                 ],
                 posix_args=[
                     f"-DCMAKE_BUILD_TYPE={config}",
                     f"-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON",
+                    f"-DSKIMPY_BENCH_ENABLE_TACO=ON",
                 ],
             ),
             cwd=self.build_temp,
