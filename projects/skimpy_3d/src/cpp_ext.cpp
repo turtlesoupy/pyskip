@@ -19,6 +19,15 @@ PYBIND11_MODULE(_skimpy_3d_cpp_ext, m) {
           "__setitem__",
           [](VoxelConfig& config, VoxelConfig::Key key, VoxelDef def) {
             config.defs.emplace(key, def);
+          })
+      .def_static(
+          "from_dict",
+          [](const std::unordered_map<VoxelConfig::Key, VoxelDef>& dict) {
+            VoxelConfig config;
+            for (const auto& [key, def] : dict) {
+              config.defs.emplace(key, def);
+            }
+            return config;
           });
   py::class_<EmptyVoxel>(m, "EmptyVoxel").def(py::init<>());
   py::class_<ColorVoxel>(m, "ColorVoxel").def(py::init<int, int, int>());
