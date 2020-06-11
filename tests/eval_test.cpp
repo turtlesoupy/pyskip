@@ -3,13 +3,13 @@
 #include <fmt/format.h>
 
 #include <catch2/catch.hpp>
-#include <skimpy/detail/conv.hpp>
-#include <skimpy/detail/eval.hpp>
-#include <skimpy/detail/step.hpp>
+#include <pyskip/detail/conv.hpp>
+#include <pyskip/detail/eval.hpp>
+#include <pyskip/detail/step.hpp>
 
-using namespace skimpy::detail::conv;
-using namespace skimpy::detail::eval;
-using namespace skimpy::detail::step;
+using namespace pyskip::detail::conv;
+using namespace pyskip::detail::eval;
+using namespace pyskip::detail::step;
 
 TEST_CASE("Test simple eval routine", "[eval_simple]") {
   auto s = to_store({1, 2, 3});

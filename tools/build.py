@@ -42,7 +42,7 @@ def generate(config):
               f"-DPYTHON_EXECUTABLE={sys.executable}",
               f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={OUTPUT_DIR}",
               f"-DCMAKE_BUILD_TYPE={config}",
-              "-DSKIMPY_BUILD_BENCHMARKS=OFF",
+              "-DPYSKIP_BUILD_BENCHMARKS=OFF",
           ],
           windows_args = [
               "-Ax64",

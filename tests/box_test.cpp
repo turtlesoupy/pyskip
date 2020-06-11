@@ -1,9 +1,9 @@
 #define CATCH_CONFIG_MAIN
 
 #include <catch2/catch.hpp>
-#include <skimpy/detail/box.hpp>
+#include <pyskip/detail/box.hpp>
 
-using namespace skimpy::detail::box;
+using namespace pyskip::detail::box;
 
 TEST_CASE("Test box put and get of all types", "[box_basic]") {
   REQUIRE(Box(123).get<int>() == 123);

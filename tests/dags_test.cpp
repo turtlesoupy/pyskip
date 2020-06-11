@@ -3,9 +3,9 @@
 #include <fmt/format.h>
 
 #include <catch2/catch.hpp>
-#include <skimpy/detail/dags.hpp>
+#include <pyskip/detail/dags.hpp>
 
-using namespace skimpy::detail::dags;
+using namespace pyskip::detail::dags;
 
 TEST_CASE("Test rooted graph creation and allocation", "[dags]") {
   Graph<2, int> graph;

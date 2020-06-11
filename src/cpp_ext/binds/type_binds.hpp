@@ -6,11 +6,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <skimpy/skimpy.hpp>
+#include <pyskip/pyskip.hpp>
 
 namespace py = pybind11;
 
-using skimpy::Pos;
+using pyskip::Pos;
 
 inline auto convert_band(Pos length, py::slice slice) {
   CHECK_ARGUMENT(slice.attr("step").is_none());
@@ -36,7 +36,7 @@ inline auto convert_band(Pos length, py::slice slice) {
   // Truncate start and stop values before returning.
   stop = std::min(stop, length);
   start = std::min(start, stop);
-  return skimpy::Band(start, stop);
+  return pyskip::Band(start, stop);
 }
 
 inline auto convert_slice(Pos length, py::slice slice) {
@@ -67,12 +67,12 @@ inline auto convert_slice(Pos length, py::slice slice) {
   // Truncate start and stop values before returning.
   stop = std::min(stop, length);
   start = std::min(start, stop);
-  return skimpy::Slice(start, stop, stride);
+  return pyskip::Slice(start, stop, stride);
 }
 
 template <size_t dim>
 inline auto convert_tensor_slice(
-    skimpy::TensorShape<dim> shape, std::array<py::slice, dim> slices) {
+    pyskip::TensorShape<dim> shape, std::array<py::slice, dim> slices) {
   std::array<std::array<Pos, 3>, dim> components;
   for (int i = 0; i < dim; i += 1) {
     auto slice = convert_slice(shape[i], slices[i]);
@@ -80,11 +80,11 @@ inline auto convert_tensor_slice(
     components[i][1] = slice.stop;
     components[i][2] = slice.stride;
   }
-  return skimpy::TensorSlice<dim>(std::move(components));
+  return pyskip::TensorSlice<dim>(std::move(components));
 }
 
 template <size_t dim>
-inline auto get_tensor_shape(const skimpy::TensorShape<dim>& shape) {
+inline auto get_tensor_shape(const pyskip::TensorShape<dim>& shape) {
   std::array<int, dim> ret;
   for (int i = 0; i < dim; i += 1) {
     ret[i] = shape[i];
@@ -94,10 +94,10 @@ inline auto get_tensor_shape(const skimpy::TensorShape<dim>& shape) {
 
 template <typename Val>
 inline void bind_builder_class(py::module& m, const char* class_name) {
-  using Builder = skimpy::ArrayBuilder<Val>;
+  using Builder = pyskip::ArrayBuilder<Val>;
   py::class_<Builder>(m, class_name)
       .def(py::init<Pos, Val>())
-      .def(py::init<skimpy::Array<Val>>())
+      .def(py::init<pyskip::Array<Val>>())
       .def("__len__", &Builder::len)
       .def("__repr__", &Builder::repr)
       .def(
@@ -110,7 +110,7 @@ inline void bind_builder_class(py::module& m, const char* class_name) {
           })
       .def(
           "__setitem__",
-          [](Builder& self, py::slice slice, const skimpy::Array<Val>& other) {
+          [](Builder& self, py::slice slice, const pyskip::Array<Val>& other) {
             self.set(convert_band(self.len(), slice), other);
           })
       .def("dumps", &Builder::str)
@@ -119,11 +119,11 @@ inline void bind_builder_class(py::module& m, const char* class_name) {
 
 template <typename Val>
 inline void bind_array_class(py::module& m, const char* class_name) {
-  using Array = skimpy::Array<Val>;
+  using Array = pyskip::Array<Val>;
   auto& cls =
       py::class_<Array>(m, class_name)
           .def(py::init([](Pos span, Val fill) {
-            return skimpy::make_array<Val>(span, fill);
+            return pyskip::make_array<Val>(span, fill);
           }))
           .def("__len__", &Array::len)
           .def("__repr__", &Array::repr)
@@ -132,13 +132,13 @@ inline void bind_array_class(py::module& m, const char* class_name) {
           .def("dumps", &Array::str)
           .def(
               "tensor",
-              [](Array& self) { skimpy::make_tensor<1>({self.len()}, self); })
+              [](Array& self) { pyskip::make_tensor<1>({self.len()}, self); })
           .def(
               "to_numpy",
               [](Array& self) {
                 int size;
                 Val* buffer;
-                skimpy::to_buffer(self, &size, &buffer);
+                pyskip::to_buffer(self, &size, &buffer);
                 return py::array_t<Val>(size, buffer);
               })
           .def(
@@ -174,7 +174,7 @@ inline void bind_array_class(py::module& m, const char* class_name) {
   if constexpr (std::is_same_v<Val, float> || std::is_same_v<Val, int>) {
     cls.def("__neg__", [](const Array& self) { return -self; })
         .def("__pos__", [](const Array& self) { return +self; })
-        .def("__abs__", [](const Array& self) { return skimpy::abs(self); })
+        .def("__abs__", [](const Array& self) { return pyskip::abs(self); })
         .def("__add__", [](const Array& self, Val val) { return self + val; })
         .def("__radd__", [](const Array& self, Val val) { return val + self; })
         .def(
@@ -202,17 +202,17 @@ inline void bind_array_class(py::module& m, const char* class_name) {
         .def(
             "__truediv__",
             [](const Array& self, Val val) {
-              return skimpy::cast<float>(self) / static_cast<float>(val);
+              return pyskip::cast<float>(self) / static_cast<float>(val);
             })
         .def(
             "__rtruediv__",
             [](const Array& self, Val val) {
-              return static_cast<float>(val) / skimpy::cast<float>(self);
+              return static_cast<float>(val) / pyskip::cast<float>(self);
             })
         .def(
             "__truediv__",
             [](const Array& self, const Array& other) {
-              return skimpy::cast<float>(self) / skimpy::cast<float>(other);
+              return pyskip::cast<float>(self) / pyskip::cast<float>(other);
             })
         .def("__mod__", [](const Array& self, Val val) { return self % val; })
         .def("__rmod__", [](const Array& self, Val val) { return val % self; })
@@ -221,18 +221,18 @@ inline void bind_array_class(py::module& m, const char* class_name) {
             [](const Array& self, const Array& other) { return self % other; })
         .def(
             "__pow__",
-            [](const Array& self, Val val) { return skimpy::pow(self, val); })
+            [](const Array& self, Val val) { return pyskip::pow(self, val); })
         .def(
             "__pow__",
-            [](const Array& self, Val val) { return skimpy::pow(val, self); })
+            [](const Array& self, Val val) { return pyskip::pow(val, self); })
         .def(
             "__pow__",
             [](const Array& self, const Array& other) {
-              return skimpy::pow(self, other);
+              return pyskip::pow(self, other);
             })
-        .def("abs", [](const Array& self) { return skimpy::abs(self); })
-        .def("sqrt", [](const Array& self) { return skimpy::sqrt(self); })
-        .def("exp", [](const Array& self) { return skimpy::exp(self); });
+        .def("abs", [](const Array& self) { return pyskip::abs(self); })
+        .def("sqrt", [](const Array& self) { return pyskip::sqrt(self); })
+        .def("exp", [](const Array& self) { return pyskip::exp(self); });
   }
 
   // Add bitwise operations.
@@ -329,50 +329,50 @@ inline void bind_array_class(py::module& m, const char* class_name) {
       .def(
           "coalesce",
           [](const Array& self, Val val) {
-            return skimpy::coalesce(self, val);
+            return pyskip::coalesce(self, val);
           })
       .def("coalesce", [](const Array& self, const Array& other) {
-        return skimpy::coalesce(self, other);
+        return pyskip::coalesce(self, other);
       });
 
   cls.def(
          "min",
-         [](const Array& self, Val val) { return skimpy::min(self, val); })
+         [](const Array& self, Val val) { return pyskip::min(self, val); })
       .def(
           "min",
-          [](const Array& self, Val val) { return skimpy::min(val, self); })
+          [](const Array& self, Val val) { return pyskip::min(val, self); })
       .def(
           "min",
           [](const Array& self, const Array& other) {
-            return skimpy::min(self, other);
+            return pyskip::min(self, other);
           })
       .def(
           "max",
-          [](const Array& self, Val val) { return skimpy::max(self, val); })
+          [](const Array& self, Val val) { return pyskip::max(self, val); })
       .def(
           "max",
-          [](const Array& self, Val val) { return skimpy::max(val, self); })
+          [](const Array& self, Val val) { return pyskip::max(val, self); })
       .def("max", [](const Array& self, const Array& other) {
-        return skimpy::max(self, other);
+        return pyskip::max(self, other);
       });
 
   // Add conversion operations.
-  cls.def("int", [](const Array& self) { return skimpy::cast<int>(self); })
-      .def("char", [](const Array& self) { return skimpy::cast<char>(self); })
-      .def("float", [](const Array& self) { return skimpy::cast<float>(self); })
-      .def("bool", [](const Array& self) { return skimpy::cast<bool>(self); });
+  cls.def("int", [](const Array& self) { return pyskip::cast<int>(self); })
+      .def("char", [](const Array& self) { return pyskip::cast<char>(self); })
+      .def("float", [](const Array& self) { return pyskip::cast<float>(self); })
+      .def("bool", [](const Array& self) { return pyskip::cast<bool>(self); });
 }
 
 template <size_t dim, typename Val>
 inline void bind_tensor_class(py::module& m, const char* class_name) {
-  using Tensor = skimpy::Tensor<dim, Val>;
+  using Tensor = pyskip::Tensor<dim, Val>;
   py::class_<Tensor>(m, class_name)
       .def(py::init([](const std::array<Pos, dim>& s, Val v) {
-        return skimpy::make_tensor<dim, Val>(skimpy::make_shape<dim>(s), v);
+        return pyskip::make_tensor<dim, Val>(pyskip::make_shape<dim>(s), v);
       }))
       .def(py::init(
-          [](const std::array<Pos, dim> s, const skimpy::Array<Val>& v) {
-            return skimpy::make_tensor<dim, Val>(skimpy::make_shape<dim>(s), v);
+          [](const std::array<Pos, dim> s, const pyskip::Array<Val>& v) {
+            return pyskip::make_tensor<dim, Val>(pyskip::make_shape<dim>(s), v);
           }))
       .def("__len__", &Tensor::len)
       .def("__repr__", &Tensor::repr)
@@ -425,6 +425,6 @@ inline void type_binds(
   m.def(
       "from_numpy",
       [](py::array_t<Val, py::array::c_style | py::array::forcecast>& array) {
-        return skimpy::from_buffer(array.size(), array.data());
+        return pyskip::from_buffer(array.size(), array.data());
       });
 }

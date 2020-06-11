@@ -4,11 +4,11 @@
 #include <fmt/core.h>
 
 #include <catch2/catch.hpp>
-#include <skimpy/detail/eval.hpp>
+#include <pyskip/detail/eval.hpp>
 #include <unordered_map>
 #include <vector>
 
-using namespace skimpy::detail::step;
+using namespace pyskip::detail::step;
 
 TEST_CASE("Benchmark static lower bound", "[step_static_lower_bound]") {
   constexpr auto d = 256;

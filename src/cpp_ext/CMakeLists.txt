@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-# Add and configure the skimpy python extension target.
+# Add and configure the pyskip python extension target.
 SET(
   ALL_BINDS
   binds/bool_binds.cpp 
@@ -9,12 +9,12 @@ SET(
   binds/int_binds.cpp
 )
 
-add_library(skimpy_ext MODULE skimpy_ext.cpp ${ALL_BINDS})
-target_link_libraries(skimpy_ext PRIVATE pybind11::module skimpy)
+add_library(pyskip_ext MODULE pyskip_ext.cpp ${ALL_BINDS})
+target_link_libraries(pyskip_ext PRIVATE pybind11::module pyskip)
 set_target_properties(
-  skimpy_ext
+  pyskip_ext
   PROPERTIES
     PREFIX "${PYTHON_MODULE_PREFIX}"
     SUFFIX "${PYTHON_MODULE_EXTENSION}"
-    OUTPUT_NAME "_skimpy_cpp_ext"
+    OUTPUT_NAME "_pyskip_cpp_ext"
 )

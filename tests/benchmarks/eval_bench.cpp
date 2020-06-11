@@ -6,14 +6,14 @@
 #include <thread>
 #include <vector>
 
-#include "skimpy/detail/box.hpp"
-#include "skimpy/detail/conv.hpp"
-#include "skimpy/detail/core.hpp"
-#include "skimpy/detail/eval.hpp"
-#include "skimpy/detail/step.hpp"
-#include "skimpy/detail/threads.hpp"
+#include "pyskip/detail/box.hpp"
+#include "pyskip/detail/conv.hpp"
+#include "pyskip/detail/core.hpp"
+#include "pyskip/detail/eval.hpp"
+#include "pyskip/detail/step.hpp"
+#include "pyskip/detail/threads.hpp"
 
-using namespace skimpy::detail;
+using namespace pyskip::detail;
 using box::Box;
 
 template <typename FnRange>

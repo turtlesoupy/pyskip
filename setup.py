@@ -59,7 +59,7 @@ class CMakeBuild(build_ext):
                     f"-DPYTHON_EXECUTABLE={sys.executable}",
                     f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}",
                     f"-DBUILD_TESTING=OFF",
-                    f"-DSKIMPY_BUILD_BENCHMARKS=OFF",
+                    f"-DPYSKIP_BUILD_BENCHMARKS=OFF",
                 ],
                 windows_args=[
                     "-Ax64",
@@ -98,14 +98,14 @@ class CMakeBuild(build_ext):
 HEADERS = []
 
 setup(
-    name="skimpy",
+    name="pyskip",
     version="0.1.6",
     author="Taylor Gordon, Thomas Dimson",
     description="RLE-compressed tensor library",
     long_description="",
     headers=HEADERS,
     ext_modules=[
-        CMakeExtension("skimpy", "skimpy_ext"),
+        CMakeExtension("pyskip", "pyskip_ext"),
     ],
     cmdclass={"build_ext": CMakeBuild},
     package_dir={"": "src"},

@@ -49,7 +49,7 @@ qtconsole==4.7.1
 QtPy==1.9.0
 Send2Trash==1.5.0
 six==1.14.0
-skimpy==0.0.1
+pyskip==0.0.1
 termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4

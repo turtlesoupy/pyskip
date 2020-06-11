@@ -1,4 +1,4 @@
-# Skimpy
+# PySkip
 
 ## Summary
 A PyTorch-like tensor library which maintains end-to-end

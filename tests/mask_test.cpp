@@ -4,11 +4,11 @@
 
 #include <array>
 #include <catch2/catch.hpp>
-#include <skimpy/detail/conv.hpp>
-#include <skimpy/detail/mask.hpp>
+#include <pyskip/detail/conv.hpp>
+#include <pyskip/detail/mask.hpp>
 
-using namespace skimpy::detail::conv;
-using namespace skimpy::detail::mask;
+using namespace pyskip::detail::conv;
+using namespace pyskip::detail::mask;
 
 TEST_CASE("Test basic generation of a mask", "[mask]") {
   // Test all exclude case

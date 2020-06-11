@@ -1,13 +1,13 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/builder.hpp"
+#include "pyskip/builder.hpp"
 
 #include <catch2/catch.hpp>
 
-#include "skimpy/array.hpp"
+#include "pyskip/array.hpp"
 
 TEST_CASE("Test array builders", "[builders]") {
-  auto x = skimpy::make_array(5, 'x');
+  auto x = pyskip::make_array(5, 'x');
   x.set(0, 'a');
   x.set(1, 'b');
   x.set(2, 'c');
@@ -15,7 +15,7 @@ TEST_CASE("Test array builders", "[builders]") {
   x.set(4, 'e');
 
   x = [&] {
-    auto b = skimpy::make_builder(x);
+    auto b = pyskip::make_builder(x);
     b.set(4, 'f');
     b.set(3, 'g');
     b.set(2, 'h');
@@ -31,12 +31,12 @@ TEST_CASE("Test array builders", "[builders]") {
   REQUIRE(x.get(4) == 'f');
 
   auto y = [] {
-    return skimpy::make_builder(10, 1).set(1, 3).set(3, 4).build();
+    return pyskip::make_builder(10, 1).set(1, 3).set(3, 4).build();
   }();
   REQUIRE(y.get(1) == 3);
   REQUIRE(y.get(3) == 4);
 
-  auto z = y.get(skimpy::Slice(0, 10, 2));
+  auto z = y.get(pyskip::Slice(0, 10, 2));
   REQUIRE(z.get(0) == 1);
   REQUIRE(z.get(1) == 1);
   REQUIRE(z.get(2) == 1);
@@ -45,7 +45,7 @@ TEST_CASE("Test array builders", "[builders]") {
   REQUIRE(z.str() == "5=>1");
 
   auto big = [] {
-    auto b = skimpy::make_builder(1024 * 1024, 1);
+    auto b = pyskip::make_builder(1024 * 1024, 1);
     for (auto i = 0; i < 30; i += 1) {
       b.set(i, i);
     }

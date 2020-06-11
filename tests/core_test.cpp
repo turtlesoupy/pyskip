@@ -4,11 +4,11 @@
 
 #include <catch2/catch.hpp>
 #include <cmath>
-#include <skimpy/detail/conv.hpp>
-#include <skimpy/detail/core.hpp>
+#include <pyskip/detail/conv.hpp>
+#include <pyskip/detail/core.hpp>
 
-using namespace skimpy::detail::core;
-using namespace skimpy::detail::conv;
+using namespace pyskip::detail::core;
+using namespace pyskip::detail::conv;
 
 TEST_CASE("Test point sets into stores", "[core_set]") {
   auto store = make_store(9, 'a');

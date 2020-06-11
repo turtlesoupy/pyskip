@@ -5,10 +5,10 @@
 
 #include <array>
 #include <catch2/catch.hpp>
-#include <skimpy/detail/step.hpp>
+#include <pyskip/detail/step.hpp>
 #include <vector>
 
-using namespace skimpy::detail::step;
+using namespace pyskip::detail::step;
 
 template <typename Fn>
 auto gen(Fn&& fn, std::initializer_list<Pos> args) {

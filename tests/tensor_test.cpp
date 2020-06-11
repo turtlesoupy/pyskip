@@ -1,16 +1,16 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/tensor.hpp"
+#include "pyskip/tensor.hpp"
 
 #include <fmt/core.h>
 
 #include <catch2/catch.hpp>
 
-#include "skimpy/detail/box.hpp"
-#include "skimpy/detail/conv.hpp"
-#include "skimpy/detail/core.hpp"
+#include "pyskip/detail/box.hpp"
+#include "pyskip/detail/conv.hpp"
+#include "pyskip/detail/core.hpp"
 
-using namespace skimpy::detail;
+using namespace pyskip::detail;
 
 TEST_CASE("Test basic tensor access", "[tensors]") {
   auto store = std::make_shared<core::Store<box::Box>>(9);
@@ -19,7 +19,7 @@ TEST_CASE("Test basic tensor access", "[tensors]") {
     store->vals[i] = i;
   }
 
-  auto x = skimpy::Tensor<2, int>({3, 3}, store);
+  auto x = pyskip::Tensor<2, int>({3, 3}, store);
 
   // Test position access
   REQUIRE(x.get({0, 0}) == 0);
@@ -48,7 +48,7 @@ TEST_CASE("Test basic tensor access", "[tensors]") {
 }
 
 TEST_CASE("Test basic tensor assignments", "[tensors]") {
-  auto x = skimpy::make_tensor<2>({3, 3}, 0);
+  auto x = pyskip::make_tensor<2>({3, 3}, 0);
 
   // Do a bunch of point assignments
   x.set({0, 0}, 1);
@@ -110,27 +110,27 @@ TEST_CASE("Test basic tensor assignments", "[tensors]") {
 }
 
 TEST_CASE("Test complex tensor assignment", "[tensors]") {
-  auto t = skimpy::make_tensor<2>({4, 4}, 0);
+  auto t = pyskip::make_tensor<2>({4, 4}, 0);
   t.set({{0, 4, 2}, {0, 4, 2}}, 1);
   t.set({{1, 4, 2}, {0, 4, 2}}, 2);
   t.set({{0, 4, 2}, {1, 4, 2}}, 3);
   t.set({{1, 4, 2}, {1, 4, 2}}, 4);
 
   REQUIRE_THAT(
-      skimpy::to_vector(t),
+      pyskip::to_vector(t),
       Catch::Equals<int>({1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 3, 4, 3, 4}));
 
   REQUIRE_THAT(
-      skimpy::to_vector(t.get({{1, 4, 2}, {0, 4, 2}})),
+      pyskip::to_vector(t.get({{1, 4, 2}, {0, 4, 2}})),
       Catch::Equals<int>({2, 2, 2, 2}));
 }
 
 TEST_CASE("Test tensor set functions", "[tensors]") {
   // Test metadata
   {
-    skimpy::TensorSlice<2> slice({{1, 3, 1}, {1, 3, 1}});
+    pyskip::TensorSlice<2> slice({{1, 3, 1}, {1, 3, 1}});
     REQUIRE(slice.len() == 4);
-    REQUIRE(slice.shape() == skimpy::TensorShape<2>({2, 2}));
+    REQUIRE(slice.shape() == pyskip::TensorShape<2>({2, 2}));
     REQUIRE(slice.valid({4, 4}));
     REQUIRE(slice.valid({3, 4}));
     REQUIRE(slice.valid({4, 3}));
@@ -140,7 +140,7 @@ TEST_CASE("Test tensor set functions", "[tensors]") {
 
   // Test set fn generator
   {
-    skimpy::TensorSlice<2> slice({{1, 3, 1}, {1, 3, 1}});
+    pyskip::TensorSlice<2> slice({{1, 3, 1}, {1, 3, 1}});
     auto step_fn = slice.set_fn({4, 4});
     REQUIRE(step_fn(0) == 0);
     REQUIRE(step_fn(1) == 6);
@@ -150,7 +150,7 @@ TEST_CASE("Test tensor set functions", "[tensors]") {
     REQUIRE(step_fn(5) == 16);
   }
   {
-    skimpy::TensorSlice<2> slice({{1, 3, 1}, {1, 4, 2}});
+    pyskip::TensorSlice<2> slice({{1, 3, 1}, {1, 4, 2}});
     auto step_fn = slice.set_fn({4, 4});
     REQUIRE(step_fn(0) == 0);
     REQUIRE(step_fn(1) == 6);
@@ -160,12 +160,12 @@ TEST_CASE("Test tensor set functions", "[tensors]") {
     REQUIRE(step_fn(5) == 16);
   }
   {
-    skimpy::TensorSlice<2> slice({{0, 1, 1}, {0, 3, 1}});
+    pyskip::TensorSlice<2> slice({{0, 1, 1}, {0, 3, 1}});
     auto step_fn = slice.set_fn({3, 3});
     REQUIRE(step::span(0, 9, step_fn) == 9);
   }
   {
-    skimpy::TensorSlice<3> slice({{0, 1, 1}, {0, 3, 1}, {0, 3, 1}});
+    pyskip::TensorSlice<3> slice({{0, 1, 1}, {0, 3, 1}, {0, 3, 1}});
     auto step_fn = slice.set_fn({3, 3, 3});
     REQUIRE(step::span(0, 27, step_fn) == 27);
   }
@@ -173,7 +173,7 @@ TEST_CASE("Test tensor set functions", "[tensors]") {
 
 TEST_CASE("Test large multi-dimensional tensor slice", "[tensors]") {
   constexpr auto d = 512, r = d / 2;
-  auto disc = skimpy::make_tensor<2>({d, d}, 0);
+  auto disc = pyskip::make_tensor<2>({d, d}, 0);
   for (int y = 0; y < d; y += 1) {
     auto distance = (y - d / 2 + 0.5);
     auto discriminant = r * r - distance * distance;
@@ -185,10 +185,10 @@ TEST_CASE("Test large multi-dimensional tensor slice", "[tensors]") {
     disc.set({{x_0, x_1, 1}, {y, y + 1, 1}}, 1);
   }
 
-  REQUIRE(disc.shape() == skimpy::make_shape<2>({d, d}));
+  REQUIRE(disc.shape() == pyskip::make_shape<2>({d, d}));
   REQUIRE(
       disc.get({{1, d - 1, 1}, {1, d - 1, 1}}).shape() ==
-      skimpy::make_shape<2>({d - 2, d - 2}));
+      pyskip::make_shape<2>({d - 2, d - 2}));
   REQUIRE(
       disc.get({{1, d - 1, 1}, {1, d - 1, 1}}).eval().array().len() ==
       (d - 2) * (d - 2));

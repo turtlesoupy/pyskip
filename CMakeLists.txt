@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(
-  skimpy
+  pyskip
   VERSION 0.0.1
   DESCRIPTION "Space efficient arrays"
   LANGUAGES CXX
@@ -10,8 +10,8 @@ project(
 #== BUILD OPTIONS ==#
 
 # User options controlling what we build.
-option(SKIMPY_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
-option(SKIMPY_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
+option(PYSKIP_ENABLE_PYTHON "Whether to build the happy CPython extension" ON)
+option(PYSKIP_BUILD_BENCHMARKS "Whether to build performance benchmarks" ON)
 
 # Compiler settings.
 set(CMAKE_CXX_STANDARD 17)
@@ -44,11 +44,11 @@ endif()
 # Add third-party dependencies.
 add_subdirectory(third_party)
 
-# Add the skimpy library.
-add_library(skimpy INTERFACE)
-target_include_directories(skimpy INTERFACE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(skimpy INTERFACE fmt::fmt)
-target_compile_features(skimpy INTERFACE cxx_std_17)
+# Add the pyskip library.
+add_library(pyskip INTERFACE)
+target_include_directories(pyskip INTERFACE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(pyskip INTERFACE fmt::fmt)
+target_compile_features(pyskip INTERFACE cxx_std_17)
 
 # Add the src targets (e.g. the Python CPP extension).
 add_subdirectory(src)
@@ -56,13 +56,13 @@ add_subdirectory(src)
 # Build with OpenMP support if available.
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(skimpy INTERFACE OpenMP::OpenMP_CXX)
+    target_link_libraries(pyskip INTERFACE OpenMP::OpenMP_CXX)
 endif()
 
 # fmtlib has propensity to cause "Fatal Error C1128":
 # https://tinyurl.com/yaflrbx9
 if (MSVC)
-  target_compile_options(skimpy INTERFACE /bigobj)
+  target_compile_options(pyskip INTERFACE /bigobj)
 endif()
 
 #== BUILD TESTS ==#

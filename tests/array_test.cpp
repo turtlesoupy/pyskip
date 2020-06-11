@@ -1,13 +1,13 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/array.hpp"
+#include "pyskip/array.hpp"
 
 #include <catch2/catch.hpp>
 
-#include "skimpy/detail/conv.hpp"
+#include "pyskip/detail/conv.hpp"
 
 TEST_CASE("Test arrays", "[arrays]") {
-  auto x = skimpy::make_array(5, 0);
+  auto x = pyskip::make_array(5, 0);
 
   // Test initialization
   REQUIRE(x.get(0) == 0);
@@ -70,56 +70,56 @@ TEST_CASE("Test arrays", "[arrays]") {
 }
 
 TEST_CASE("Test arrays merge routines", "[arrays]") {
-  auto x = skimpy::make_array(5, 1);
-  auto y = skimpy::make_array(5, 2);
+  auto x = pyskip::make_array(5, 1);
+  auto y = pyskip::make_array(5, 2);
 
-  REQUIRE_THAT(skimpy::to_vector(x + y), Catch::Equals<int>({3, 3, 3, 3, 3}));
+  REQUIRE_THAT(pyskip::to_vector(x + y), Catch::Equals<int>({3, 3, 3, 3, 3}));
   REQUIRE_THAT(
-      skimpy::to_vector(2 * x + 3 * y), Catch::Equals<int>({8, 8, 8, 8, 8}));
+      pyskip::to_vector(2 * x + 3 * y), Catch::Equals<int>({8, 8, 8, 8, 8}));
 
   x.set({1, 2}, 3);
   x.set({2, 4}, 2);
   y.set(1, 3);
   y.set({2, 5, 2}, 4);
 
-  REQUIRE_THAT(skimpy::to_vector(x), Catch::Equals<int>({1, 3, 2, 2, 1}));
-  REQUIRE_THAT(skimpy::to_vector(y), Catch::Equals<int>({2, 3, 4, 2, 4}));
+  REQUIRE_THAT(pyskip::to_vector(x), Catch::Equals<int>({1, 3, 2, 2, 1}));
+  REQUIRE_THAT(pyskip::to_vector(y), Catch::Equals<int>({2, 3, 4, 2, 4}));
 
   x.set({2, 5, 2}, y.get({1, 4, 2}));
   y.set({2, 5, 2}, x.get({0, 2}) * y.get({1, 4, 2}));
 
-  REQUIRE_THAT(skimpy::to_vector(x), Catch::Equals<int>({1, 3, 3, 2, 2}));
-  REQUIRE_THAT(skimpy::to_vector(y), Catch::Equals<int>({2, 3, 3, 2, 6}));
+  REQUIRE_THAT(pyskip::to_vector(x), Catch::Equals<int>({1, 3, 3, 2, 2}));
+  REQUIRE_THAT(pyskip::to_vector(y), Catch::Equals<int>({2, 3, 3, 2, 6}));
   REQUIRE(x.str() == "1=>1, 3=>3, 5=>2");
   REQUIRE(y.str() == "1=>2, 3=>3, 4=>2, 5=>6");
 }
 
 TEST_CASE("Test float arrays", "[arrays]") {
-  auto x = skimpy::make_array(5, 1.0f);
-  auto y = skimpy::make_array(5, 2.0f);
+  auto x = pyskip::make_array(5, 1.0f);
+  auto y = pyskip::make_array(5, 2.0f);
 
   REQUIRE_THAT(
-      skimpy::to_vector(x + y),
+      pyskip::to_vector(x + y),
       Catch::Equals<float>({3.0f, 3.0f, 3.0f, 3.0f, 3.0f}));
 
   REQUIRE_THAT(
-      skimpy::to_vector((3.0f * x) % y),
+      pyskip::to_vector((3.0f * x) % y),
       Catch::Equals<float>({1.0f, 1.0f, 1.0f, 1.0f, 1.0f}));
 }
 
 TEST_CASE("Test empty arrays", "[arrays]") {
   {
-    auto x = skimpy::make_array(1, 0);
+    auto x = pyskip::make_array(1, 0);
     REQUIRE(x.get({1, 1}).len() == 0);
   }
 
   {
-    auto x = skimpy::from_buffer<int>(0, nullptr);
+    auto x = pyskip::from_buffer<int>(0, nullptr);
     REQUIRE(x.empty());
   }
 
   {
-    auto x = skimpy::from_vector<int>({});
+    auto x = pyskip::from_vector<int>({});
     REQUIRE(x.empty());
   }
 }

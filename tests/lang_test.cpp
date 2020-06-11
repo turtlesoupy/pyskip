@@ -3,13 +3,13 @@
 #include <fmt/format.h>
 
 #include <catch2/catch.hpp>
-#include <skimpy/detail/conv.hpp>
-#include <skimpy/detail/core.hpp>
-#include <skimpy/detail/lang.hpp>
-#include <skimpy/detail/step.hpp>
+#include <pyskip/detail/conv.hpp>
+#include <pyskip/detail/core.hpp>
+#include <pyskip/detail/lang.hpp>
+#include <pyskip/detail/step.hpp>
 
-using namespace skimpy::detail;
-using namespace skimpy::detail::lang;
+using namespace pyskip::detail;
+using namespace pyskip::detail::lang;
 
 std::string join() {
   return "";
@@ -146,7 +146,7 @@ TEST_CASE("Test evaluation with a multi-type case", "[lang]") {
 }
 
 TEST_CASE("Test evaluation with a complex step function", "[lang]") {
-  using namespace skimpy::detail::step;
+  using namespace pyskip::detail::step;
 
   static constexpr auto d = 8;
 

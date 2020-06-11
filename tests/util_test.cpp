@@ -1,13 +1,13 @@
 #define CATCH_CONFIG_MAIN
 
-#include "skimpy/detail/util.hpp"
+#include "pyskip/detail/util.hpp"
 
 #include <fmt/core.h>
 
 #include <catch2/catch.hpp>
 #include <unordered_map>
 
-using namespace skimpy::detail::util;
+using namespace pyskip::detail::util;
 
 TEST_CASE("Test power of two util functions", "[util_power_of_two]") {
   for (int i = 0; i < 31; i += 1) {
