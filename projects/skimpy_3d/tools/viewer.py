@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 import skimpy
-import skimpy_3d
+from skimpy_3d import voxels
 from skimpy_blox import minecraft, colors
 
 import tkinter as tk
@@ -139,13 +139,13 @@ class Viewer(ShowBase):
         t[1, 2, 0] = 2
 
         # Define the color of each voxel type.
-        config = skimpy_3d.VoxelConfig()
-        config[0] = skimpy_3d.EmptyVoxel()
-        config[1] = skimpy_3d.ColorVoxel(128, 0, 0)
-        config[2] = skimpy_3d.ColorVoxel(0, 0, 128)
+        config = voxels.VoxelConfig()
+        config[0] = voxels.EmptyVoxel()
+        config[1] = voxels.ColorVoxel(128, 0, 0)
+        config[2] = voxels.ColorVoxel(0, 0, 128)
 
         # Map the tensor onto a mesh.
-        mesh = skimpy_3d.generate_mesh(config, t._tensor)
+        mesh = voxels.to_mesh(t, config)
 
         # Load the mesh into a panda geometry node.
         self.model = GeomNode('mesh_node')
@@ -165,15 +165,15 @@ class Viewer(ShowBase):
         tensor = level.megatensor()
 
         # Create the corresponding color config.
-        config = skimpy_3d.VoxelConfig()
-        config[0] = skimpy_3d.EmptyVoxel()
+        config = voxels.VoxelConfig()
+        config[0] = voxels.EmptyVoxel()
         for i in range(1, 256):
             r, g, b = colors.color_for_id(i)
-            config[i] = skimpy_3d.ColorVoxel(r, g, b)
+            config[i] = voxels.ColorVoxel(r, g, b)
 
         # Map the tensor onto a mesh.
         print(f"Building geometry...")
-        mesh = skimpy_3d.generate_mesh(config, tensor._tensor)
+        mesh = voxels.to_mesh(tensor, config)
 
         # Load the mesh into a panda geometry node.
         self.model.removeAllGeoms()

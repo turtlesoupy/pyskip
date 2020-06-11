@@ -417,48 +417,6 @@ auto marching_cubes(
             auto key_i = make_vertex_key(xyz, i);
             auto key_j = make_vertex_key(xyz, j);
             auto key_k = make_vertex_key(xyz, k);
-
-            auto print_stuff = [&] {
-              auto [i, j, k] = triangle;
-
-              fmt::print("x={}, y={}, z={}\n", xyz[0], xyz[1], xyz[2]);
-              fmt::print("i={}, j={}, k={}\n", i, j, k);
-              fmt::print("mask={}\n", mask);
-              fmt::print("key_i={}\n", key_i);
-              fmt::print("key_j={}\n", key_j);
-              fmt::print("key_k={}\n", key_k);
-
-              auto v000 = lattice.get({xyz[0], xyz[1], xyz[2]});
-              auto v100 = lattice.get({xyz[0] + 1, xyz[1], xyz[2]});
-              auto v010 = lattice.get({xyz[0], xyz[1] + 1, xyz[2]});
-              auto v110 = lattice.get({xyz[0] + 1, xyz[1] + 1, xyz[2]});
-              auto v001 = lattice.get({xyz[0], xyz[1], xyz[2] + 1});
-              auto v101 = lattice.get({xyz[0] + 1, xyz[1], xyz[2] + 1});
-              auto v011 = lattice.get({xyz[0], xyz[1] + 1, xyz[2] + 1});
-              auto v111 = lattice.get({xyz[0] + 1, xyz[1] + 1, xyz[2] + 1});
-
-              fmt::print("v000={}\n", v000);
-              fmt::print("v100={}\n", v100);
-              fmt::print("v010={}\n", v010);
-              fmt::print("v110={}\n", v110);
-              fmt::print("v001={}\n", v001);
-              fmt::print("v101={}\n", v101);
-              fmt::print("v011={}\n", v011);
-              fmt::print("v111={}\n", v111);
-            };
-
-            if (!v_index.count(key_i)) {
-              fmt::print("C1\n");
-              print_stuff();
-            }
-            if (!v_index.count(key_j)) {
-              fmt::print("C2\n");
-              print_stuff();
-            }
-            if (!v_index.count(key_k)) {
-              fmt::print("C3\n");
-              print_stuff();
-            }
             mesh.triangles.push_back(v_index.at(key_i));
             mesh.triangles.push_back(v_index.at(key_j));
             mesh.triangles.push_back(v_index.at(key_k));
