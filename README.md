@@ -7,14 +7,8 @@ pressure. For example, highly compressible tensors
 like Minecraft voxel grids we achieve near-GPU like performance
 for convolutions.
 
-<<<<<<< HEAD
 ![Run Illustration](docs/images/voxel_runs.png)\
 *Highlighting compressible runs within a minecraft voxel grid*
-=======
-![Run Illustration](docs/images/voxel_runs.png)
-*Highlighting compressible runs within a minecraft voxel grid*
-
->>>>>>> a4e8077... Update readme
 
 ## To install as a Python extension
 ```bash
