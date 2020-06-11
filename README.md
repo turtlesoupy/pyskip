@@ -3,7 +3,7 @@
 ## Summary
 A PyTorch-like tensor library which maintains end-to-end
 run-length compression to reduce operator costs and memory
-pressure. For example, highly compressible tensors 
+pressure. With highly compressible tensors 
 like Minecraft voxel grids we achieve near-GPU like performance
 for convolutions.
 
