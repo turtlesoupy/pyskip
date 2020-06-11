@@ -14,6 +14,7 @@ namespace py = pybind11;
 
 #ifdef _MSC_VER
 #define NO_TREE_VECTORIZE
+#define NO_INLINE __declspec(noinline)
 using Pos = int32_t;
 #else
 using Pos = size_t;
