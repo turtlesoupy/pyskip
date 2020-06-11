@@ -1,7 +1,15 @@
 # Skimpy
 
 ## Summary
-A space-optimized array implementation with vectorized operators.
+A PyTorch-like tensor library which maintains end-to-end
+run-length compression to reduce operator costs and memory
+pressure. For example, highly compressible tensors 
+like Minecraft voxel grids we achieve near-GPU like performance
+for convolutions.
+
+![Run Illustration](docs/images/voxel_runs.png)
+*Highlighting compressible runs within a minecraft voxel grid*
+
 
 ## To install as a Python extension
 ```bash
