@@ -494,7 +494,7 @@ class RunLength3DConvolutionBenchmark(Benchmark):
         kernels = [skimpy.Tensor.from_numpy(e) for e in self._numpy_kernels()]
 
         with num_threads_scope(num_threads):
-            set_value("accelerated_eval", False) # TODO: check me
+            set_value("accelerated_eval", True) # TODO: check me
             set_value("flush_tree_size_threshold", 2 ** 30)
             t = Timer()
             with t:
